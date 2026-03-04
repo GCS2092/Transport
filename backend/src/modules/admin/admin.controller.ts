@@ -173,4 +173,272 @@ export class AdminController {
   activateUser(@Param('id') id: string) {
     return this.usersService.activate(id);
   }
+
+  @Get('clients')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async getClients(@Query('page') page?: string, @Query('limit') limit?: string) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 50;
+
+    const reservations = await this.reservationRepository.find({
+      order: { createdAt: 'DESC' },
+    });
+
+    const clientsMap = new Map<string, any>();
+
+    reservations.forEach(res => {
+      const key = res.clientEmail;
+      if (!clientsMap.has(key)) {
+        clientsMap.set(key, {
+          email: res.clientEmail,
+          firstName: res.clientFirstName,
+          lastName: res.clientLastName,
+          phone: res.clientPhone,
+          totalRides: 0,
+          completedRides: 0,
+          cancelledRides: 0,
+          totalSpent: 0,
+          lastRide: res.createdAt,
+        });
+      }
+
+      const client = clientsMap.get(key);
+      client.totalRides++;
+      if (res.status === ReservationStatus.TERMINEE) {
+        client.completedRides++;
+        client.totalSpent += Number(res.amount);
+      }
+      if (res.status === ReservationStatus.ANNULEE) {
+        client.cancelledRides++;
+      }
+      if (new Date(res.createdAt) > new Date(client.lastRide)) {
+        client.lastRide = res.createdAt;
+      }
+    });
+
+    const clients = Array.from(clientsMap.values())
+      .sort((a, b) => b.totalSpent - a.totalSpent);
+
+    const start = (pageNum - 1) * limitNum;
+    const end = start + limitNum;
+
+    return {
+      data: clients.slice(start, end),
+      total: clients.length,
+    };
+  }
+
+  @Get('clients/:email/history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async getClientHistory(@Param('email') email: string) {
+    const reservations = await this.reservationRepository.find({
+      where: { clientEmail: email },
+      relations: ['pickupZone', 'dropoffZone', 'driver'],
+      order: { createdAt: 'DESC' },
+    });
+
+    const totalSpent = reservations
+      .filter(r => r.status === ReservationStatus.TERMINEE)
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+
+    return {
+      client: reservations.length > 0 ? {
+        email: reservations[0].clientEmail,
+        firstName: reservations[0].clientFirstName,
+        lastName: reservations[0].clientLastName,
+        phone: reservations[0].clientPhone,
+      } : null,
+      stats: {
+        totalRides: reservations.length,
+        completedRides: reservations.filter(r => r.status === ReservationStatus.TERMINEE).length,
+        cancelledRides: reservations.filter(r => r.status === ReservationStatus.ANNULEE).length,
+        totalSpent,
+      },
+      reservations,
+    };
+  }
+
+  @Get('financial-stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async getFinancialStats() {
+    const allReservations = await this.reservationRepository.find({
+      relations: ['driver'],
+      order: { createdAt: 'ASC' },
+    });
+
+    const completedReservations = allReservations.filter(r => r.status === ReservationStatus.TERMINEE);
+    
+    // Revenus par jour (30 derniers jours)
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+
+    const dailyRevenue = [];
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(thirtyDaysAgo);
+      date.setDate(date.getDate() + i);
+      const dateStr = date.toISOString().split('T')[0];
+      
+      const dayRevenue = completedReservations
+        .filter(r => new Date(r.createdAt).toISOString().split('T')[0] === dateStr)
+        .reduce((sum, r) => sum + Number(r.amount), 0);
+      
+      dailyRevenue.push({ date: dateStr, revenue: dayRevenue });
+    }
+
+    // Revenus par mois (12 derniers mois)
+    const monthlyRevenue = [];
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      
+      const monthRev = completedReservations
+        .filter(r => {
+          const rDate = new Date(r.createdAt);
+          return rDate.getFullYear() === date.getFullYear() && rDate.getMonth() === date.getMonth();
+        })
+        .reduce((sum, r) => sum + Number(r.amount), 0);
+      
+      monthlyRevenue.push({ month: monthStr, revenue: monthRev });
+    }
+
+    // Top chauffeurs par revenu
+    const driverRevenue = new Map<string, { name: string; revenue: number }>();
+    completedReservations.forEach(r => {
+      if (r.driver) {
+        const key = r.driver.id;
+        if (!driverRevenue.has(key)) {
+          driverRevenue.set(key, {
+            name: `${r.driver.firstName} ${r.driver.lastName}`,
+            revenue: 0,
+          });
+        }
+        driverRevenue.get(key)!.revenue += Number(r.amount);
+      }
+    });
+
+    const topDrivers = Array.from(driverRevenue.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10);
+
+    // Statistiques de paiement
+    const paymentStats = {
+      completed: completedReservations.filter(r => r.paymentStatus === 'PAIEMENT_COMPLET').length,
+      pending: completedReservations.filter(r => r.paymentStatus === 'EN_ATTENTE').length,
+      totalCompleted: completedReservations
+        .filter(r => r.paymentStatus === 'PAIEMENT_COMPLET')
+        .reduce((sum, r) => sum + Number(r.amount), 0),
+      totalPending: completedReservations
+        .filter(r => r.paymentStatus === 'EN_ATTENTE')
+        .reduce((sum, r) => sum + Number(r.amount), 0),
+    };
+
+    return {
+      dailyRevenue,
+      monthlyRevenue,
+      topDrivers,
+      paymentStats,
+      totalRevenue: completedReservations.reduce((sum, r) => sum + Number(r.amount), 0),
+      totalRides: completedReservations.length,
+      averageRideValue: completedReservations.length > 0 
+        ? completedReservations.reduce((sum, r) => sum + Number(r.amount), 0) / completedReservations.length 
+        : 0,
+    };
+  }
+
+  @Get('analytics')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async getAnalytics() {
+    const reservations = await this.reservationRepository.find({
+      relations: ['pickupZone', 'dropoffZone'],
+    });
+
+    // Zones les plus populaires (départ)
+    const pickupZoneCount = new Map<string, { name: string; count: number; revenue: number }>();
+    reservations.forEach(r => {
+      if (r.pickupZone) {
+        const key = r.pickupZone.id;
+        if (!pickupZoneCount.has(key)) {
+          pickupZoneCount.set(key, { name: r.pickupZone.name, count: 0, revenue: 0 });
+        }
+        const zone = pickupZoneCount.get(key)!;
+        zone.count++;
+        if (r.status === ReservationStatus.TERMINEE) {
+          zone.revenue += Number(r.amount);
+        }
+      }
+    });
+
+    const topPickupZones = Array.from(pickupZoneCount.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // Zones les plus populaires (arrivée)
+    const dropoffZoneCount = new Map<string, { name: string; count: number; revenue: number }>();
+    reservations.forEach(r => {
+      if (r.dropoffZone) {
+        const key = r.dropoffZone.id;
+        if (!dropoffZoneCount.has(key)) {
+          dropoffZoneCount.set(key, { name: r.dropoffZone.name, count: 0, revenue: 0 });
+        }
+        const zone = dropoffZoneCount.get(key)!;
+        zone.count++;
+        if (r.status === ReservationStatus.TERMINEE) {
+          zone.revenue += Number(r.amount);
+        }
+      }
+    });
+
+    const topDropoffZones = Array.from(dropoffZoneCount.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // Heures de pointe
+    const hourlyDistribution = new Array(24).fill(0);
+    reservations.forEach(r => {
+      const hour = new Date(r.pickupDateTime).getHours();
+      hourlyDistribution[hour]++;
+    });
+
+    const peakHours = hourlyDistribution
+      .map((count, hour) => ({ hour, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    // Distribution par jour de la semaine
+    const weekdayDistribution = new Array(7).fill(0);
+    const weekdayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+    reservations.forEach(r => {
+      const day = new Date(r.pickupDateTime).getDay();
+      weekdayDistribution[day]++;
+    });
+
+    const weekdayStats = weekdayDistribution.map((count, idx) => ({
+      day: weekdayNames[idx],
+      count,
+    }));
+
+    // Taux de conversion par statut
+    const statusDistribution = {
+      total: reservations.length,
+      completed: reservations.filter(r => r.status === ReservationStatus.TERMINEE).length,
+      cancelled: reservations.filter(r => r.status === ReservationStatus.ANNULEE).length,
+      pending: reservations.filter(r => r.status === ReservationStatus.EN_ATTENTE).length,
+      assigned: reservations.filter(r => r.status === ReservationStatus.ASSIGNEE).length,
+      inProgress: reservations.filter(r => r.status === ReservationStatus.EN_COURS).length,
+    };
+
+    return {
+      topPickupZones,
+      topDropoffZones,
+      peakHours,
+      hourlyDistribution,
+      weekdayStats,
+      statusDistribution,
+    };
+  }
 }

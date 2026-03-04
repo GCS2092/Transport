@@ -9,6 +9,17 @@ export const api = axios.create({
   },
 })
 
+// Intercepteur pour ajouter le token JWT
+api.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('vtc_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+  }
+  return config
+})
+
 // Types
 export interface Zone {
   id: string
@@ -79,16 +90,103 @@ export interface Driver {
   vehiclePlate: string
   email: string
   status: 'DISPONIBLE' | 'EN_COURSE' | 'HORS_LIGNE'
+  isActive: boolean
+  userId: string
+}
+
+export interface User {
+  id: string
+  email: string
+  role: 'ADMIN' | 'DRIVER'
+  firstName: string
+  lastName: string
+  isActive: boolean
+  createdAt: string
+}
+
+export interface AdminStats {
+  total: number
+  byStatus: Record<string, number>
+  revenue: {
+    total: number
+    thisMonth: number
+  }
+  thisMonth: number
+  drivers: {
+    DISPONIBLE: number
+    EN_COURSE: number
+    HORS_LIGNE: number
+    total: number
+    actifs: number
+  }
+  alerts: {
+    failedEmails: number
+  }
+}
+
+export interface EmailLog {
+  id: string
+  to: string
+  subject: string
+  notificationType: string
+  status: 'ENVOYE' | 'ECHEC'
+  sentAt: string
+  errorMessage?: string
+}
+
+export interface AuditLog {
+  id: string
+  userId: string
+  user: User
+  action: string
+  entityType: string
+  entityId: string
+  oldData: any
+  newData: any
+  description: string
+  ipAddress?: string
+  createdAt: string
+}
+
+export interface CreateDriverUserDto {
+  email: string
+  password: string
+  firstName: string
+  lastName: string
+  phone: string
+  vehicleType: string
+  vehiclePlate?: string
+}
+
+export interface CreateZoneDto {
+  name: string
+  description: string
+  isActive: boolean
+}
+
+export interface CreateTariffDto {
+  zoneFromId: string
+  zoneToId: string
+  price: number
+  isActive: boolean
 }
 
 // API Calls
 export const zonesApi = {
   getActive: () => api.get<Zone[]>('/zones/active'),
+  getAll: () => api.get<Zone[]>('/zones'),
+  create: (data: CreateZoneDto) => api.post<Zone>('/zones', data),
+  update: (id: string, data: Partial<CreateZoneDto>) => api.put<Zone>(`/zones/${id}`, data),
+  delete: (id: string) => api.delete(`/zones/${id}`),
 }
 
 export const tariffsApi = {
   getPrice: (from: string, to: string) => 
     api.get<Tariff>('/tariffs/price', { params: { from, to } }),
+  getAll: () => api.get<Tariff[]>('/tariffs'),
+  create: (data: CreateTariffDto) => api.post<Tariff>('/tariffs', data),
+  update: (id: string, data: Partial<CreateTariffDto>) => api.put<Tariff>(`/tariffs/${id}`, data),
+  delete: (id: string) => api.delete(`/tariffs/${id}`),
 }
 
 export const reservationsApi = {
@@ -106,6 +204,24 @@ export const reservationsApi = {
 
   updateStatus: (id: string, status: string) =>
     api.put<Reservation>(`/reservations/${id}/status`, { status }),
+
+  getAll: (params?: { page?: number; limit?: number; status?: string; driverId?: string; dateFrom?: string; dateTo?: string }) =>
+    api.get<{ data: Reservation[]; total: number }>('/reservations', { params }),
+
+  assignDriver: (id: string, driverId: string) =>
+    api.put<Reservation>(`/reservations/${id}/assign`, { driverId }),
+
+  cancelByAdmin: (id: string) =>
+    api.put<Reservation>(`/reservations/${id}/cancel`, {}),
+
+  exportCsv: (params?: { status?: string; driverId?: string; dateFrom?: string; dateTo?: string }) =>
+    api.get('/reservations/export/csv', { params, responseType: 'blob' }),
+
+  archiveCompleted: (olderThanDays?: number) =>
+    api.delete<{ archived: number }>('/reservations/archive/completed', { params: { olderThanDays } }),
+  
+  updateReservation: (id: string, updates: Partial<CreateReservationDto>) =>
+    api.patch<Reservation>(`/reservations/${id}`, updates),
 }
 
 export const driverApi = {
@@ -115,4 +231,122 @@ export const driverApi = {
   updateMyStatus: (status: 'DISPONIBLE' | 'EN_COURSE' | 'HORS_LIGNE') =>
     api.put<Driver>('/drivers/me/status', { status }),
   getMyRides: () => api.get<Reservation[]>('/reservations/driver/my'),
+  getAll: () => api.get<Driver[]>('/drivers'),
+  getAvailable: () => api.get<Driver[]>('/drivers/available'),
+  getStats: (id: string) => api.get<{
+    driver: Driver;
+    stats: {
+      totalRides: number;
+      completedRides: number;
+      cancelledRides: number;
+      totalRevenue: number;
+      todayRides: number;
+      todayRevenue: number;
+      monthRides: number;
+      monthRevenue: number;
+      averageRideValue: number;
+      completionRate: number;
+    };
+    recentRides: Reservation[];
+  }>(`/drivers/${id}/stats`),
+}
+
+export interface Client {
+  email: string
+  firstName: string
+  lastName: string
+  phone: string
+  totalRides: number
+  completedRides: number
+  cancelledRides: number
+  totalSpent: number
+  lastRide: string
+}
+
+export interface PromoCode {
+  id: string
+  code: string
+  description: string
+  type: 'PERCENTAGE' | 'FIXED'
+  value: number
+  minAmount: number | null
+  maxDiscount: number | null
+  usageLimit: number | null
+  usageCount: number
+  validFrom: string | null
+  validUntil: string | null
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreatePromoCodeDto {
+  code: string
+  description: string
+  type: 'PERCENTAGE' | 'FIXED'
+  value: number
+  minAmount?: number
+  maxDiscount?: number
+  usageLimit?: number
+  validFrom?: string
+  validUntil?: string
+}
+
+export const adminApi = {
+  getStats: () => api.get<AdminStats>('/admin/stats'),
+  getUsers: (params?: { page?: number; limit?: number; role?: string }) =>
+    api.get<{ data: User[]; total: number }>('/admin/users', { params }),
+  createDriverUser: (dto: CreateDriverUserDto) =>
+    api.post<User>('/admin/users/driver', dto),
+  deactivateUser: (id: string) =>
+    api.post(`/admin/users/${id}/deactivate`),
+  activateUser: (id: string) =>
+    api.put(`/admin/users/${id}/activate`),
+  getEmailLogs: (params?: { page?: number; limit?: number; status?: string }) =>
+    api.get<{ data: EmailLog[]; total: number }>('/admin/email-logs', { params }),
+  getClients: (params?: { page?: number; limit?: number }) =>
+    api.get<{ data: Client[]; total: number }>('/admin/clients', { params }),
+  getClientHistory: (email: string) =>
+    api.get<{
+      client: { email: string; firstName: string; lastName: string; phone: string } | null;
+      stats: { totalRides: number; completedRides: number; cancelledRides: number; totalSpent: number };
+      reservations: Reservation[];
+    }>(`/admin/clients/${encodeURIComponent(email)}/history`),
+  getFinancialStats: () =>
+    api.get<{
+      dailyRevenue: { date: string; revenue: number }[];
+      monthlyRevenue: { month: string; revenue: number }[];
+      topDrivers: { name: string; revenue: number }[];
+      paymentStats: { completed: number; pending: number; totalCompleted: number; totalPending: number };
+      totalRevenue: number;
+      totalRides: number;
+      averageRideValue: number;
+    }>('/admin/financial-stats'),
+  getAnalytics: () =>
+    api.get<{
+      topPickupZones: { name: string; count: number; revenue: number }[];
+      topDropoffZones: { name: string; count: number; revenue: number }[];
+      peakHours: { hour: number; count: number }[];
+      hourlyDistribution: number[];
+      weekdayStats: { day: string; count: number }[];
+      statusDistribution: { total: number; completed: number; cancelled: number; pending: number; assigned: number; inProgress: number };
+    }>('/admin/analytics'),
+}
+
+export const auditApi = {
+  getAll: (params?: { page?: number; limit?: number; userId?: string; entityType?: string; entityId?: string; action?: string }) =>
+    api.get<{ data: AuditLog[]; total: number }>('/audit', { params }),
+  getByEntity: (entityType: string, entityId: string) =>
+    api.get<AuditLog[]>('/audit/entity', { params: { entityType, entityId } }),
+}
+
+export const promoCodesApi = {
+  getAll: () => api.get<PromoCode[]>('/promo-codes'),
+  getById: (id: string) => api.get<PromoCode>(`/promo-codes/${id}`),
+  create: (dto: CreatePromoCodeDto) => api.post<PromoCode>('/promo-codes', dto),
+  update: (id: string, dto: Partial<CreatePromoCodeDto>) => api.put<PromoCode>(`/promo-codes/${id}`, dto),
+  toggleActive: (id: string) => api.put<PromoCode>(`/promo-codes/${id}/toggle`),
+  delete: (id: string) => api.delete(`/promo-codes/${id}`),
+  validate: (code: string, amount: number) => 
+    api.post<{ valid: boolean; discount: number; message?: string }>('/promo-codes/validate', { code, amount }),
 }

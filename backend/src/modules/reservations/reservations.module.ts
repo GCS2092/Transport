@@ -7,9 +7,10 @@ import { TariffsModule } from '../tariffs/tariffs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { DriversModule } from '../drivers/drivers.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Reservation]), TariffsModule, NotificationsModule, PdfModule, DriversModule],
+  imports: [TypeOrmModule.forFeature([Reservation]), TariffsModule, NotificationsModule, PdfModule, DriversModule, AuditModule],
   controllers: [ReservationsController],
   providers: [ReservationsService],
   exports: [ReservationsService],

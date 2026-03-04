@@ -37,6 +37,17 @@ const inputCls = [
 ].join(' ')
 const selectCls = inputCls + ' cursor-pointer appearance-none'
 
+/* ── Composant Field (hors du parent pour éviter le remontage) ── */
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{label}</label>
+      {children}
+      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
+    </div>
+  )
+}
+
 export function ReservationForm() {
   const [step, setStep] = useState(1)
   const [zones, setZones] = useState<Zone[]>([])
@@ -144,15 +155,6 @@ export function ReservationForm() {
     setEstimatedPrice(null)
     setFormData({ clientFirstName: '', clientLastName: '', clientEmail: '', clientPhone: '', pickupZoneId: '', dropoffZoneId: '', pickupDateTime: '', returnDateTime: '', passengers: 1, flightNumber: '', notes: '' })
   }
-
-  /* ── Composant Field ─────────────────────────────────────────── */
-  const Field = ({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) => (
-    <div>
-      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{label}</label>
-      {children}
-      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
-    </div>
-  )
 
   /* ══════════════════════════════════════════════════════════════
      ÉCRAN DE SUCCÈS

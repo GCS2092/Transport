@@ -104,7 +104,7 @@ export function Navbar() {
 
           {/* Horloge */}
           {time && (
-            <span className="text-white/60 text-xs font-mono tabular-nums flex-shrink-0">{time}</span>
+            <span className={`text-white/60 text-xs font-mono tabular-nums flex-shrink-0 ${lastCode ? 'hidden sm:inline' : ''}`}>{time}</span>
           )}
 
           {/* Toggle langue */}

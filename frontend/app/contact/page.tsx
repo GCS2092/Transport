@@ -7,7 +7,7 @@ export default function ContactPage() {
   const c = t.contact
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] pb-10">
+    <div className="bg-[var(--bg)] pb-6">
       <div className="max-w-lg mx-auto px-4 pt-6">
 
         <div className="mb-6">

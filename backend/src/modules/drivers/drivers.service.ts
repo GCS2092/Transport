@@ -2,14 +2,18 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Driver } from './entities/driver.entity';
+import { Reservation } from '../reservations/entities/reservation.entity';
 import { CreateDriverDto } from './dto/create-driver.dto';
 import { DriverStatus } from '../../common/enums/driver-status.enum';
+import { ReservationStatus } from '../../common/enums/reservation-status.enum';
 
 @Injectable()
 export class DriversService {
   constructor(
     @InjectRepository(Driver)
     private driversRepository: Repository<Driver>,
+    @InjectRepository(Reservation)
+    private reservationsRepository: Repository<Reservation>,
   ) {}
 
   async findAll(): Promise<Driver[]> {
@@ -57,5 +61,52 @@ export class DriversService {
   async deactivate(id: string): Promise<void> {
     await this.findById(id);
     await this.driversRepository.update(id, { isActive: false });
+  }
+
+  async getDriverStats(id: string) {
+    const driver = await this.findById(id);
+    
+    const reservations = await this.reservationsRepository.find({
+      where: { driverId: id },
+      relations: ['pickupZone', 'dropoffZone'],
+    });
+
+    const totalRides = reservations.length;
+    const completedRides = reservations.filter(r => r.status === ReservationStatus.TERMINEE).length;
+    const cancelledRides = reservations.filter(r => r.status === ReservationStatus.ANNULEE).length;
+    const totalRevenue = reservations
+      .filter(r => r.status === ReservationStatus.TERMINEE)
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    const todayRides = reservations.filter(r => new Date(r.createdAt) >= today);
+    const monthRides = reservations.filter(r => new Date(r.createdAt) >= thisMonth);
+
+    const todayRevenue = todayRides
+      .filter(r => r.status === ReservationStatus.TERMINEE)
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+    const monthRevenue = monthRides
+      .filter(r => r.status === ReservationStatus.TERMINEE)
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+
+    return {
+      driver,
+      stats: {
+        totalRides,
+        completedRides,
+        cancelledRides,
+        totalRevenue,
+        todayRides: todayRides.length,
+        todayRevenue,
+        monthRides: monthRides.length,
+        monthRevenue,
+        averageRideValue: completedRides > 0 ? totalRevenue / completedRides : 0,
+        completionRate: totalRides > 0 ? (completedRides / totalRides) * 100 : 0,
+      },
+      recentRides: reservations.slice(0, 10),
+    };
   }
 }

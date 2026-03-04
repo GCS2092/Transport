@@ -15,6 +15,7 @@ import { TariffsService } from '../tariffs/tariffs.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
 import { DriversService } from '../drivers/drivers.service';
+import { AuditService } from '../audit/audit.service';
 import { ReservationStatus } from '../../common/enums/reservation-status.enum';
 import { DriverStatus } from '../../common/enums/driver-status.enum';
 import { Language } from '../../common/enums/language.enum';
@@ -39,6 +40,7 @@ export class ReservationsService {
     private notificationsService: NotificationsService,
     private pdfService: PdfService,
     private driversService: DriversService,
+    private auditService: AuditService,
   ) {}
 
   private generateCode(): string {
@@ -172,6 +174,17 @@ export class ReservationsService {
     await this.driversService.updateStatus(driverId, DriverStatus.EN_COURSE);
     const updated = await this.findById(id);
 
+    // Audit log
+    await this.auditService.log({
+      userId: null,
+      action: 'ASSIGN_DRIVER',
+      entityType: 'Reservation',
+      entityId: id,
+      oldData: { driverId: reservation.driverId, status: reservation.status },
+      newData: { driverId, status: ReservationStatus.ASSIGNEE },
+      description: `Driver ${driver.firstName} ${driver.lastName} assigned to reservation ${reservation.code}`,
+    });
+
     setImmediate(async () => {
       try {
         await this.notificationsService.sendDriverAssigned(updated);
@@ -200,6 +213,17 @@ export class ReservationsService {
     }
 
     await this.reservationsRepository.update(id, updates);
+
+    // Audit log
+    await this.auditService.log({
+      userId: null,
+      action: 'UPDATE_STATUS',
+      entityType: 'Reservation',
+      entityId: id,
+      oldData: { status: reservation.status, paymentStatus: reservation.paymentStatus },
+      newData: { status: dto.status, paymentStatus: dto.paymentStatus },
+      description: `Reservation ${reservation.code} status updated`,
+    });
 
     if (
       (dto.status === ReservationStatus.TERMINEE || dto.status === ReservationStatus.ANNULEE) &&
@@ -277,6 +301,18 @@ export class ReservationsService {
       throw new BadRequestException('Already cancelled');
     }
     await this.reservationsRepository.update(id, { status: ReservationStatus.ANNULEE });
+    
+    // Audit log
+    await this.auditService.log({
+      userId: null,
+      action: 'CANCEL',
+      entityType: 'Reservation',
+      entityId: id,
+      oldData: { status: reservation.status },
+      newData: { status: ReservationStatus.ANNULEE },
+      description: `Reservation ${reservation.code} cancelled by admin`,
+    });
+    
     if (reservation.driverId) {
       await this.driversService.updateStatus(reservation.driverId, DriverStatus.DISPONIBLE);
     }
@@ -313,5 +349,108 @@ export class ReservationsService {
         statuses: [ReservationStatus.EN_ATTENTE, ReservationStatus.ASSIGNEE],
       })
       .getMany();
+  }
+
+  async exportToCsv(filters: Omit<FindAllFilters, 'page' | 'limit'>): Promise<string> {
+    const qb = this.reservationsRepository
+      .createQueryBuilder('r')
+      .leftJoinAndSelect('r.pickupZone', 'pickupZone')
+      .leftJoinAndSelect('r.dropoffZone', 'dropoffZone')
+      .leftJoinAndSelect('r.driver', 'driver')
+      .orderBy('r.createdAt', 'DESC');
+
+    if (filters.status) qb.andWhere('r.status = :status', { status: filters.status });
+    if (filters.driverId) qb.andWhere('r.driverId = :driverId', { driverId: filters.driverId });
+    if (filters.dateFrom) qb.andWhere('r.pickupDateTime >= :dateFrom', { dateFrom: new Date(filters.dateFrom) });
+    if (filters.dateTo) qb.andWhere('r.pickupDateTime <= :dateTo', { dateTo: new Date(filters.dateTo) });
+
+    const reservations = await qb.getMany();
+
+    const headers = [
+      'Code',
+      'Date création',
+      'Date pickup',
+      'Statut',
+      'Client nom',
+      'Client email',
+      'Client téléphone',
+      'Zone départ',
+      'Zone arrivée',
+      'Montant',
+      'Passagers',
+      'Chauffeur',
+      'Type véhicule',
+      'Paiement',
+      'Notes',
+    ];
+
+    const rows = reservations.map(r => [
+      r.code,
+      new Date(r.createdAt).toLocaleString('fr-FR'),
+      new Date(r.pickupDateTime).toLocaleString('fr-FR'),
+      r.status,
+      `${r.clientFirstName} ${r.clientLastName}`,
+      r.clientEmail,
+      r.clientPhone,
+      r.pickupZone?.name || '',
+      r.dropoffZone?.name || '',
+      r.amount.toString(),
+      r.passengers.toString(),
+      r.driver ? `${r.driver.firstName} ${r.driver.lastName}` : '',
+      r.driver?.vehicleType || '',
+      r.paymentStatus,
+      r.notes || '',
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
+    ].join('\n');
+
+    return csvContent;
+  }
+
+  async archiveCompleted(olderThanDays: number): Promise<{ archived: number }> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+
+    const result = await this.reservationsRepository
+      .createQueryBuilder()
+      .delete()
+      .where('status IN (:...statuses)', {
+        statuses: [ReservationStatus.TERMINEE, ReservationStatus.ANNULEE],
+      })
+      .andWhere('createdAt < :cutoffDate', { cutoffDate })
+      .execute();
+
+    return { archived: result.affected || 0 };
+  }
+
+  async updateReservation(id: string, updates: Partial<CreateReservationDto>): Promise<Reservation> {
+    const reservation = await this.findById(id);
+    
+    const updateData: any = { ...updates };
+    
+    if (updates.pickupZoneId && updates.dropoffZoneId) {
+      const tariff = await this.tariffsService.findByZones(updates.pickupZoneId, updates.dropoffZoneId);
+      if (tariff) {
+        updateData.amount = tariff.price;
+      }
+    }
+
+    await this.reservationsRepository.update(id, updateData);
+    
+    // Audit log
+    await this.auditService.log({
+      userId: null,
+      action: 'UPDATE',
+      entityType: 'Reservation',
+      entityId: id,
+      oldData: reservation,
+      newData: updateData,
+      description: `Reservation ${reservation.code} updated by admin`,
+    });
+    
+    return this.findById(id);
   }
 }

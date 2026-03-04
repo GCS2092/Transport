@@ -59,6 +59,13 @@ export class DriversController {
     return this.driversService.updateStatus(driver.id, dto.status);
   }
 
+  @Get(':id/stats')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  getDriverStats(@Param('id') id: string) {
+    return this.driversService.getDriverStats(id);
+  }
+
   @Get(':id')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)

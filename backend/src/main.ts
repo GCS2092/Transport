@@ -15,12 +15,21 @@ async function bootstrap() {
 
   app.use(helmet.default());
 
+  const allowedOrigin = process.env.FRONTEND_URL;
   app.enableCors({
-    origin: [
-      process.env.FRONTEND_URL || 'http://localhost:3001',
-      'http://127.0.0.1:5500',
-      'http://localhost:5500',
-    ],
+    origin: (origin, callback) => {
+      if (
+        !origin ||
+        (allowedOrigin && origin === allowedOrigin) ||
+        /^http:\/\/localhost(:\d+)?$/.test(origin) ||
+        /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
+        /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin)
+      ) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      }
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
   });

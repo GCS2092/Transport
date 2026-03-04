@@ -26,6 +26,7 @@ export function LoginModal({ onClose }: Props) {
       const u = await login(email, password)
       onClose()
       if (u.role === 'DRIVER') router.push('/chauffeur')
+      else if (u.role === 'ADMIN') router.push('/admin')
     } catch {
       setError(a.error)
     } finally {
