@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────
+#  VTC Dakar — Backend (NestJS) .gitignore
+# ─────────────────────────────────────────────────────────────
+
+# ── Dependencies ──────────────────────────────────────────────
+/node_modules
+/.pnp
+.pnp.*
+
+# ── Build output ──────────────────────────────────────────────
+/dist
+/build
+
+# ── Tests & Coverage ──────────────────────────────────────────
+/coverage
+.nyc_output/
+
+# ── Environment (secrets) ─────────────────────────────────────
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+!.env.example
+
+# ── TypeScript ────────────────────────────────────────────────
+*.tsbuildinfo
+
+# ── Debug & Logs ──────────────────────────────────────────────
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.log
+logs/
+
+# ── OS ────────────────────────────────────────────────────────
+.DS_Store
+._*
+Thumbs.db
+desktop.ini
+
+# ── IDE ───────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Documentation & Misc ──────────────────────────────────────
+ROUTES_TEST.md
+PGADMIN_QUERIES.sql
+*.pem
+.cache/

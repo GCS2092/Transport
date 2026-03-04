@@ -1,0 +1,24 @@
+{
+  "name": "VTC Dakar - Transferts Aéroport",
+  "short_name": "VTC Dakar",
+  "description": "Réservez votre transfert aéroport à Dakar. Tarifs fixes, chauffeurs professionnels 24h/24.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F8FA",
+  "theme_color": "#2563EB",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
