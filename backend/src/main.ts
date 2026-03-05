@@ -15,20 +15,36 @@ async function bootstrap() {
 
   app.use(helmet.default());
 
-  const allowedOrigin = process.env.FRONTEND_URL;
+  // CORS : support multi-origines (dev local + Vercel + domaine custom)
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+
   app.enableCors({
     origin: (origin, callback) => {
-      if (
-        !origin ||
-        (allowedOrigin && origin === allowedOrigin) ||
-        /^http:\/\/localhost(:\d+)?$/.test(origin) ||
-        /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
-        /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin)
-      ) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS: origin ${origin} not allowed`));
+      // Pas d'origin = requête serveur-à-serveur (autorisé)
+      if (!origin) {
+        return callback(null, true);
       }
+
+      // Localhost/127.0.0.1 (dev)
+      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      // Réseau local 192.168.x.x (dev mobile)
+      if (/^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      // Origines autorisées via .env (Vercel, domaine custom)
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      // Sinon : bloqué
+      callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
