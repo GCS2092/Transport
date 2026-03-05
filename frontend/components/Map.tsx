@@ -76,7 +76,7 @@ export function Map({ center, zoom = 13, markers = [], route, className = '', au
     markersRef.current = []
 
     // Ajouter les nouveaux marqueurs
-    markers.forEach(({ position, popup, icon = 'default' }) => {
+    markers.forEach(({ position, popup, tooltip, icon = 'default' }) => {
       const color = iconColors[icon]
       
       const customIcon = L.divIcon({
