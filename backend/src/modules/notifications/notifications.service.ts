@@ -55,7 +55,7 @@ export class NotificationsService {
 <body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:20px;">
   <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
     <div style="background:#1a1a2e;color:#fff;padding:24px 32px;">
-      <h1 style="margin:0;font-size:22px;">VTC Dakar</h1>
+      <h1 style="margin:0;font-size:22px;">WEND'D Transport</h1>
     </div>
     <div style="padding:32px;">
       <h2 style="color:#1a1a2e;margin-top:0;">${title}</h2>
@@ -70,7 +70,7 @@ export class NotificationsService {
       ${waButton}
     </div>
     <div style="background:#f8f8f8;padding:16px 32px;text-align:center;">
-      <p style="font-size:11px;color:#aaa;margin:0;">VTC Dakar — Dakar, Sénégal</p>
+      <p style="font-size:11px;color:#aaa;margin:0;">WEND'D Transport — Dakar, Sénégal</p>
     </div>
   </div>
 </body>
@@ -323,7 +323,7 @@ export class NotificationsService {
 
     try {
       await this.transporter.sendMail({
-        from: `"${process.env.MAIL_FROM_NAME || 'VTC Dakar'}" <${process.env.MAIL_FROM}>`,
+        from: `"${process.env.MAIL_FROM_NAME || 'WEND\'D Transport'}" <${process.env.MAIL_FROM}>`,
         to,
         subject,
         html,

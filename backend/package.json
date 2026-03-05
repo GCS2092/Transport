@@ -1,8 +1,8 @@
 {
-  "name": "vtc-dakar-backend",
+  "name": "wendd-transport-backend",
   "version": "1.0.0",
-  "description": "VTC Dakar - Backend API NestJS",
-  "author": "VTC Dakar",
+  "description": "WEND'D Transport - Backend API NestJS",
+  "author": "WEND'D Transport",
   "private": true,
   "scripts": {
     "build": "nest build",

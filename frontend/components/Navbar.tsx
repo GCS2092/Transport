@@ -84,7 +84,7 @@ export function Navbar() {
               <circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
             </svg>
             <span className="text-sm font-bold text-white tracking-tight">
-              VTC<span className="text-[var(--accent)]">Dakar</span>
+              WEND'D <span className="text-[var(--accent)]">Transport</span>
             </span>
           </Link>
 

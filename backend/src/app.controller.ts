@@ -5,7 +5,7 @@ export class AppController {
   @Get()
   root() {
     return {
-      name: 'VTC Dakar API',
+      name: 'WEND\'D Transport API',
       version: '1.0.0',
       status: 'running',
       baseUrl: '/api/v1',

@@ -8,13 +8,13 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
-  title: "VTC Dakar - Transferts Aéroport & VTC à Dakar",
+  title: "WEND'D Transport - Transferts Aéroport & VTC à Dakar",
   description: "Réservez votre transfert aéroport à Dakar en 2 minutes. Tarifs fixes, chauffeurs professionnels disponibles 24h/24. Service VTC premium pour AIBD et toutes zones de Dakar.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "VTC Dakar",
+    title: "WEND'D Transport",
   },
   formatDetection: {
     telephone: false,
@@ -46,7 +46,7 @@ export default function RootLayout({
         {/* iOS PWA */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="VTC Dakar" />
+        <meta name="apple-mobile-web-app-title" content="WEND'D Transport" />
         <link rel="apple-touch-icon" href="/icon-192x192.png" />
         <link rel="apple-touch-icon" sizes="192x192" href="/icon-192x192.png" />
         <link rel="apple-touch-icon" sizes="512x512" href="/icon-512x512.png" />

@@ -9,7 +9,7 @@ export function Footer() {
             <path d="M5 17H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1l2-4h10l2 4h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/>
             <circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
           </svg>
-          <span className="font-bold text-sm">VTC Dakar</span>
+          <span className="font-bold text-sm">WEND'D Transport</span>
           <span className="text-white/30">·</span>
           <span className="text-white/50 text-xs">2026</span>
         </div>

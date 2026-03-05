@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from './entities/setting.entity';
+import { Contact } from './entities/contact.entity';
+import { Faq } from './entities/faq.entity';
 import { UpdateSettingDto } from './dto/update-setting.dto';
+import { CreateContactDto } from './dto/create-contact.dto';
+import { CreateFaqDto } from './dto/create-faq.dto';
 
 @Injectable()
 export class SettingsService {
@@ -11,6 +15,10 @@ export class SettingsService {
   constructor(
     @InjectRepository(Setting)
     private settingsRepository: Repository<Setting>,
+    @InjectRepository(Contact)
+    private contactsRepository: Repository<Contact>,
+    @InjectRepository(Faq)
+    private faqsRepository: Repository<Faq>,
   ) {}
 
   async onModuleInit() {
@@ -75,5 +83,45 @@ export class SettingsService {
     }
 
     return this.getNumber(key, 25000);
+  }
+
+  // ── Contacts ──────────────────────────────────────────────────────────
+  async getAllContacts(): Promise<Contact[]> {
+    return this.contactsRepository.find({ where: { active: true }, order: { order: 'ASC' } });
+  }
+
+  async createContact(dto: CreateContactDto): Promise<Contact> {
+    const contact = this.contactsRepository.create(dto);
+    return this.contactsRepository.save(contact);
+  }
+
+  async updateContact(id: string, dto: Partial<CreateContactDto>): Promise<Contact> {
+    await this.contactsRepository.update(id, dto);
+    return this.contactsRepository.findOne({ where: { id } });
+  }
+
+  async deleteContact(id: string): Promise<void> {
+    await this.contactsRepository.delete(id);
+  }
+
+  // ── FAQ ───────────────────────────────────────────────────────────────
+  async getAllFaqs(language?: string): Promise<Faq[]> {
+    const where: any = { active: true };
+    if (language) where.language = language;
+    return this.faqsRepository.find({ where, order: { order: 'ASC' } });
+  }
+
+  async createFaq(dto: CreateFaqDto): Promise<Faq> {
+    const faq = this.faqsRepository.create(dto);
+    return this.faqsRepository.save(faq);
+  }
+
+  async updateFaq(id: string, dto: Partial<CreateFaqDto>): Promise<Faq> {
+    await this.faqsRepository.update(id, dto);
+    return this.faqsRepository.findOne({ where: { id } });
+  }
+
+  async deleteFaq(id: string): Promise<void> {
+    await this.faqsRepository.delete(id);
   }
 }

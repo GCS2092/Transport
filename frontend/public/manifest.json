@@ -1,6 +1,6 @@
 {
-  "name": "VTC Dakar - Transferts Aéroport",
-  "short_name": "VTC Dakar",
+  "name": "WEND'D Transport - Transferts Aéroport",
+  "short_name": "WEND'D Transport",
   "description": "Réservez votre transfert aéroport à Dakar. Tarifs fixes, chauffeurs professionnels 24h/24.",
   "start_url": "/",
   "display": "standalone",

@@ -96,7 +96,7 @@ export default function DriverProfil() {
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-extrabold truncate">{driver.firstName} {driver.lastName}</h1>
-            <p className="text-white/60 text-sm mt-0.5">Chauffeur VTCDakar</p>
+            <p className="text-white/60 text-sm mt-0.5">Chauffeur WEND'D Transport</p>
             <div className="flex items-center gap-2 mt-2">
               <span className={`w-2 h-2 rounded-full ${st.dot} ${driver.status === 'DISPONIBLE' ? 'animate-pulse' : ''}`} />
               <span className="text-xs font-semibold text-white/80">{st.label}</span>

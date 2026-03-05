@@ -32,7 +32,7 @@ const IconTrash = () => (
   </svg>
 )
 
-type TabType = 'zones' | 'tarifs'
+type TabType = 'zones' | 'tarifs' | 'contact'
 
 export default function AdminConfig() {
   const [tab, setTab] = useState<TabType>('zones')
@@ -187,6 +187,12 @@ export default function AdminConfig() {
             }`}
           >
             Tarifs ({tariffs.length})
+          </button>
+          <button
+            onClick={() => window.location.href = '/admin/contact-faq'}
+            className="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+          >
+            📞 Contact & FAQ
           </button>
         </div>
 

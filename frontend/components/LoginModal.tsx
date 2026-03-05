@@ -89,7 +89,7 @@ export function LoginModal({ onClose }: Props) {
               value={email}
               onChange={e => setEmail(e.target.value)}
               className={inputCls}
-              placeholder="admin@vtcdakar.com"
+              placeholder="admin@wendd-transport.com"
               required
               autoFocus
             />

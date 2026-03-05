@@ -27,7 +27,7 @@ export class PdfService {
         .fillColor('#ffffff')
         .fontSize(22)
         .font('Helvetica-Bold')
-        .text('VTC Dakar', 50, 25);
+        .text('WEND\'D Transport', 50, 25);
       doc
         .fillColor('#aaaacc')
         .fontSize(10)
@@ -152,7 +152,7 @@ export class PdfService {
         .fillColor('#aaaaaa')
         .fontSize(8)
         .text(
-          `VTC Dakar — vtcdakar.com — ${new Date().toLocaleDateString(lang === Language.EN ? 'en-GB' : 'fr-FR')}`,
+          `WEND'D Transport — wendd-transport.com — ${new Date().toLocaleDateString(lang === Language.EN ? 'en-GB' : 'fr-FR')}`,
           50,
           footerY + 40,
           { align: 'center', width: doc.page.width - 100 },
