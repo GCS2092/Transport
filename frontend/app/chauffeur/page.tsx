@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useAuth } from '@/lib/auth'
 import { driverApi, Driver, Reservation } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
+import { useGeolocation } from '@/hooks/useGeolocation'
 
 const STATUS_DRIVER: Record<string, { label: string; color: string; dot: string }> = {
   DISPONIBLE:  { label: 'Disponible',   color: 'text-emerald-700', dot: 'bg-emerald-500' },
@@ -36,6 +37,24 @@ export default function DriverDashboard() {
   const [tab,     setTab]     = useState<'today' | 'upcoming' | 'done'>('today')
   const [loading, setLoading] = useState(true)
   const [toggling,setToggling]= useState(false)
+
+  const geo = useGeolocation({ watch: true, autoStart: true })
+
+  // Envoyer la position au backend toutes les 30s quand le chauffeur est actif
+  useEffect(() => {
+    if (!driver || driver.status === 'HORS_LIGNE') return
+    if (!geo.latitude || !geo.longitude) return
+
+    const send = () => driverApi.updateMyLocation({
+      latitude: geo.latitude!,
+      longitude: geo.longitude!,
+      accuracy: geo.accuracy ?? undefined,
+    }).catch(() => {})
+
+    send()
+    const timer = setInterval(send, 30_000)
+    return () => clearInterval(timer)
+  }, [driver?.status, geo.latitude, geo.longitude])
 
   useEffect(() => {
     if (authLoading) return

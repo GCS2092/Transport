@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
-import { reservationsApi, Reservation } from '@/lib/api'
+import { reservationsApi, driverApi, Reservation } from '@/lib/api'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { calculateRoute, formatDuration, formatDistance } from '@/lib/geocoding'
@@ -57,6 +57,22 @@ export default function RideDetail() {
   useEffect(() => {
     setIsHttps(window.location.protocol === 'https:' || window.location.hostname === 'localhost')
   }, [])
+
+  // Envoyer la position GPS au backend toutes les 15s (visible admin map)
+  useEffect(() => {
+    if (!geo.latitude || !geo.longitude) return
+    if (!ride || ['TERMINEE', 'ANNULEE'].includes(ride.status)) return
+
+    const send = () => driverApi.updateMyLocation({
+      latitude: geo.latitude!,
+      longitude: geo.longitude!,
+      accuracy: geo.accuracy ?? undefined,
+    }).catch(() => {})
+
+    send() // envoi immédiat
+    const timer = setInterval(send, 15_000)
+    return () => clearInterval(timer)
+  }, [geo.latitude, geo.longitude, ride?.status])
 
   useEffect(() => {
     if (authLoading) return
