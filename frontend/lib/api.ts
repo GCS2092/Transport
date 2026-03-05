@@ -68,6 +68,8 @@ export interface Reservation {
   flightNumber?: string
   notes?: string
   amount: number
+  discount?: number
+  promoCode?: string
   paymentStatus: string
   cancelToken: string
   pickupZone?: Zone | null
