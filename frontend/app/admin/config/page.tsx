@@ -102,7 +102,7 @@ export default function AdminConfig() {
   const openZoneModal = (zone?: Zone) => {
     if (zone) {
       setEditingZone(zone)
-      setZoneForm({ name: zone.name, description: zone.description, isActive: zone.isActive })
+      setZoneForm({ name: zone.name, description: zone.description ?? '', isActive: zone.isActive })
     } else {
       setEditingZone(null)
       setZoneForm({ name: '', description: '', isActive: true })
