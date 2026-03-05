@@ -53,6 +53,12 @@ export class Reservation {
   @Column({ nullable: true, type: 'decimal', precision: 10, scale: 7 })
   pickupLongitude: number;
 
+  @Column({ nullable: true, type: 'decimal', precision: 10, scale: 7 })
+  clientLatitude: number;
+
+  @Column({ nullable: true, type: 'decimal', precision: 10, scale: 7 })
+  clientLongitude: number;
+
   @Column({ nullable: true })
   dropoffZoneId: string;
 

@@ -94,10 +94,10 @@ export default function RideDetail() {
     const isEnCours = ride.status === 'EN_COURS'
     const destLat = isEnCours
       ? (ride.dropoffLatitude ?? ride.dropoffZone?.latitude)
-      : (ride.pickupLatitude  ?? ride.pickupZone?.latitude)
+      : (ride.clientLatitude ?? ride.pickupLatitude ?? ride.pickupZone?.latitude)
     const destLng = isEnCours
       ? (ride.dropoffLongitude ?? ride.dropoffZone?.longitude)
-      : (ride.pickupLongitude  ?? ride.pickupZone?.longitude)
+      : (ride.clientLongitude ?? ride.pickupLongitude ?? ride.pickupZone?.longitude)
 
     if (!destLat || !destLng) return
 

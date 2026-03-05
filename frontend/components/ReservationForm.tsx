@@ -73,6 +73,21 @@ export function ReservationForm() {
   const [geocodingPickup, setGeocodingPickup] = useState(false)
   const [geocodingDropoff, setGeocodingDropoff] = useState(false)
   const [autoAssign, setAutoAssign] = useState(true)
+  const [clientGps, setClientGps] = useState<{ lat: number; lng: number } | null>(null)
+  const [gpsState, setGpsState] = useState<'idle' | 'loading' | 'ok' | 'denied'>('idle')
+
+  const captureClientGps = () => {
+    if (!navigator.geolocation) { setGpsState('denied'); return }
+    setGpsState('loading')
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setClientGps({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setGpsState('ok')
+      },
+      () => setGpsState('denied'),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+    )
+  }
   
   const [formData, setFormData] = useState({
     clientFirstName: '',
@@ -250,6 +265,10 @@ export function ReservationForm() {
         delete payload.promoCode
       }
       payload.autoAssign = autoAssign
+      if (clientGps) {
+        payload.clientLatitude = clientGps.lat
+        payload.clientLongitude = clientGps.lng
+      }
 
       // Supprimer tous les champs vides ou invalides pour éviter les erreurs de validation
       if (!payload.pickupZoneId) delete payload.pickupZoneId
@@ -656,6 +675,34 @@ export function ReservationForm() {
                   )}
                 </div>
               </Field>
+
+              {/* GPS client optionnel */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">📍 Position actuelle (optionnel)</p>
+                <p className="text-xs text-gray-500 mb-3">
+                  Partagez votre position pour que le chauffeur vous localise précisément et soit assigné plus rapidement.
+                </p>
+                {gpsState === 'idle' && (
+                  <button
+                    type="button"
+                    onClick={captureClientGps}
+                    className="w-full py-2 rounded-lg border border-dashed border-gray-300 text-xs font-semibold text-gray-600 hover:border-emerald-500 hover:text-emerald-700 transition-colors"
+                  >
+                    📍 Partager ma position
+                  </button>
+                )}
+                {gpsState === 'loading' && (
+                  <p className="text-xs text-blue-600 text-center py-1">🔄 Localisation en cours…</p>
+                )}
+                {gpsState === 'ok' && clientGps && (
+                  <p className="text-xs text-emerald-700 font-semibold text-center py-1">
+                    ✓ Position enregistrée — le chauffeur vous trouvera facilement
+                  </p>
+                )}
+                {gpsState === 'denied' && (
+                  <p className="text-xs text-gray-400 text-center py-1">Localisation refusée — le quartier de départ sera utilisé</p>
+                )}
+              </div>
 
               <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <input

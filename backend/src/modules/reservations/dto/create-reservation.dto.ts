@@ -48,6 +48,14 @@ export class CreateReservationDto {
   pickupLongitude?: number;
 
   @IsOptional()
+  @IsNumber()
+  clientLatitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  clientLongitude?: number;
+
+  @IsOptional()
   @IsUUID()
   dropoffZoneId?: string;
 

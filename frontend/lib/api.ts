@@ -77,6 +77,8 @@ export interface Reservation {
   pickupCustomAddress?: string
   pickupLatitude?: number
   pickupLongitude?: number
+  clientLatitude?: number
+  clientLongitude?: number
   dropoffCustomAddress?: string
   dropoffLatitude?: number
   dropoffLongitude?: number

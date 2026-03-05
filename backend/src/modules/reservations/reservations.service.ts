@@ -263,69 +263,82 @@ export class ReservationsService {
       throw new BadRequestException('Only pending reservations can be auto-assigned');
     }
 
-    // Récupérer tous les chauffeurs disponibles
     const availableDrivers = await this.driversService.findAvailable();
 
     if (availableDrivers.length === 0) {
       throw new BadRequestException('No available drivers');
     }
 
-    // Déterminer les coordonnées de départ
-    const pickupLat = reservation.pickupLatitude || reservation.pickupZone?.latitude;
-    const pickupLng = reservation.pickupLongitude || reservation.pickupZone?.longitude;
+    // Priorité: GPS précis du client > coordonnées du pickup custom > centre de la zone
+    const pickupLat = Number(reservation.clientLatitude)
+      || Number(reservation.pickupLatitude)
+      || Number(reservation.pickupZone?.latitude);
+    const pickupLng = Number(reservation.clientLongitude)
+      || Number(reservation.pickupLongitude)
+      || Number(reservation.pickupZone?.longitude);
 
     if (!pickupLat || !pickupLng) {
-      // Si pas de coordonnées GPS, assigner le premier chauffeur disponible
       this.logger.warn(`No GPS coordinates for reservation ${reservation.code}, assigning first available driver`);
       return this.assignDriver(reservationId, availableDrivers[0].id);
     }
 
-    // Récupérer les positions GPS des chauffeurs disponibles
+    // Pour chaque chauffeur: GPS temps réel, sinon dropoff de sa dernière course terminée
     const driversWithDistance = await Promise.all(
       availableDrivers.map(async (driver) => {
         try {
+          // 1. Position GPS temps réel (< 30 min)
           const location = await this.driverLocationRepository.findOne({
             where: { driverId: driver.id },
             order: { updatedAt: 'DESC' },
           });
 
-          if (!location) {
-            return { driver, distance: Infinity };
+          if (location) {
+            const ageMs = Date.now() - new Date(location.updatedAt).getTime();
+            if (ageMs < 30 * 60 * 1000) { // GPS récent (< 30 min)
+              const distance = this.calculateDistance(
+                pickupLat, pickupLng,
+                Number(location.latitude), Number(location.longitude),
+              );
+              return { driver, distance, source: 'gps' };
+            }
           }
 
-          // Calculer la distance avec la formule de Haversine
-          const distance = this.calculateDistance(
-            pickupLat,
-            pickupLng,
-            location.latitude,
-            location.longitude,
-          );
+          // 2. Fallback: dropoff de la dernière course terminée
+          const lastRide = await this.reservationsRepository.findOne({
+            where: { driverId: driver.id, status: ReservationStatus.TERMINEE },
+            order: { completedAt: 'DESC' },
+          });
 
-          return { driver, distance };
-        } catch (err) {
-          return { driver, distance: Infinity };
+          if (lastRide) {
+            const dropLat = Number(lastRide.dropoffLatitude) || Number(lastRide.dropoffZone?.latitude);
+            const dropLng = Number(lastRide.dropoffLongitude) || Number(lastRide.dropoffZone?.longitude);
+            if (dropLat && dropLng) {
+              const distance = this.calculateDistance(pickupLat, pickupLng, dropLat, dropLng);
+              return { driver, distance, source: 'last_ride' };
+            }
+          }
+
+          return { driver, distance: Infinity, source: 'none' };
+        } catch {
+          return { driver, distance: Infinity, source: 'none' };
         }
       }),
     );
 
-    // Trier par distance croissante
     driversWithDistance.sort((a, b) => a.distance - b.distance);
+    const closest = driversWithDistance[0];
 
-    // Assigner le chauffeur le plus proche
-    const closestDriver = driversWithDistance[0];
-
-    if (closestDriver.distance === Infinity) {
-      // Aucun chauffeur avec position GPS, assigner le premier disponible
+    if (closest.distance === Infinity) {
       this.logger.warn(`No drivers with GPS location, assigning first available driver`);
       return this.assignDriver(reservationId, availableDrivers[0].id);
     }
 
     this.logger.log(
-      `Auto-assigning driver ${closestDriver.driver.firstName} ${closestDriver.driver.lastName} ` +
-      `(${closestDriver.distance.toFixed(2)} km away) to reservation ${reservation.code}`,
+      `Auto-assigning driver ${closest.driver.firstName} ${closest.driver.lastName} ` +
+      `(${closest.distance.toFixed(2)} km, source: ${closest.source}) to reservation ${reservation.code}`,
     );
 
-    return this.assignDriver(reservationId, closestDriver.driver.id);
+    return this.assignDriver(reservationId, closest.driver.id);
   }
 
   // Formule de Haversine pour calculer la distance entre deux points GPS
