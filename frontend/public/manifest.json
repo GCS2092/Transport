@@ -11,7 +11,7 @@
   "scope": "/",
   "icons": [
     {
-      "src": "/FOND.jpeg",
+      "src": "/images/FOND.jpeg",
       "sizes": "any",
       "type": "image/jpeg",
       "purpose": "any"

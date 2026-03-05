@@ -12,7 +12,7 @@ export function LandingPage({ onEnter }: Props) {
     <div
       className="min-h-[calc(100dvh-48px)] -mb-20 pb-20 flex flex-col overflow-hidden relative"
       style={{
-        backgroundImage: 'url(/FOND.jpeg)',
+        backgroundImage: 'url(/images/FOND.jpeg)',
         backgroundSize: 'cover',
         backgroundPosition: 'center center',
         backgroundRepeat: 'no-repeat',
