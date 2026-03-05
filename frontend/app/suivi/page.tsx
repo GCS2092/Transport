@@ -387,26 +387,35 @@ function SuiviContent() {
                     {tr.cancel}
                   </button>
                 ) : (
-                  <form onSubmit={handleCancel} className="bg-white rounded-2xl border-2 border-red-200 p-5 space-y-3">
-                    <p className="text-sm font-bold text-red-600">{tr.confirmCancel}</p>
-                    <p className="text-xs text-[var(--muted)] mb-2">{tr.cancelToken}</p>
-                    <input
-                      type="text"
-                      value={cancelToken}
-                      onChange={e => setCancelToken(e.target.value)}
-                      placeholder={tr.cancelTokenHint}
-                      className="w-full px-4 py-3 rounded-xl border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
-                      required
-                    />
+                  <form onSubmit={handleCancel} className="bg-white rounded-2xl border-2 border-red-200 p-5 space-y-4">
+                    <div>
+                      <p className="text-sm font-bold text-red-600 mb-1">{tr.confirmCancel}</p>
+                      <p className="text-xs text-[var(--muted)]">{tr.cancelToken}</p>
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        value={cancelToken}
+                        onChange={e => setCancelToken(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+                        placeholder="AB3K9P"
+                        maxLength={6}
+                        className="w-full px-4 py-4 rounded-xl border-2 border-gray-200 text-center text-2xl font-mono font-bold tracking-[0.4em] focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 uppercase"
+                        required
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <p className="text-xs text-gray-400 text-center mt-1.5">6 caractères — lettres et chiffres</p>
+                    </div>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => setShowCancelForm(false)} className="flex-1 py-2.5 rounded-xl border border-[var(--border)] text-sm font-semibold text-[var(--ink2)]">
+                      <button type="button" onClick={() => { setShowCancelForm(false); setCancelToken('') }} className="flex-1 py-2.5 rounded-xl border border-[var(--border)] text-sm font-semibold text-[var(--ink2)]">
                         {tr.back}
                       </button>
                       <button
                         type="submit"
-                        disabled={cancelLoading} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold disabled:opacity-60"
+                        disabled={cancelLoading || cancelToken.length !== 6}
+                        className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold disabled:opacity-50"
                       >
-                        {cancelLoading ? '...' : tr.confirm}
+                        {cancelLoading ? '…' : tr.confirm}
                       </button>
                     </div>
                   </form>

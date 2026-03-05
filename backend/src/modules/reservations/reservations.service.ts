@@ -59,6 +59,15 @@ export class ReservationsService {
     return code;
   }
 
+  private generateCancelToken(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let token = '';
+    for (let i = 0; i < 6; i++) {
+      token += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return token;
+  }
+
   async create(dto: CreateReservationDto): Promise<Reservation> {
     // Validation des zones
     if (!dto.pickupZoneId && !dto.pickupCustomAddress) {
@@ -83,7 +92,7 @@ export class ReservationsService {
       codeExists = !!existing;
     }
 
-    const cancelToken = uuidv4();
+    const cancelToken = this.generateCancelToken();
     const cancelTokenExpiresAt = new Date(dto.pickupDateTime);
 
     // Validation et application du code promo

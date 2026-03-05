@@ -92,11 +92,22 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Destination', 'To')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.dropoffZone?.name}</td></tr>
         <tr><td style="padding:8px;color:#666;font-weight:bold;">${this.t(lang, 'Montant', 'Amount')}</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
       </table>
-      <p style="font-size:13px;color:#666;">${this.t(lang, "Politique d'annulation : annulation gratuite possible via le lien reçu.", 'Cancellation policy: free cancellation via the link provided.')}</p>
+      ${reservation.cancelToken ? `
+      <div style="margin:20px 0;padding:16px;background:#fff8e1;border:2px dashed #f59e0b;border-radius:8px;text-align:center;">
+        <p style="margin:0 0 8px;font-size:12px;color:#92400e;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">
+          ${this.t(lang, "Code d'annulation", 'Cancellation Code')}
+        </p>
+        <p style="margin:0 0 8px;font-size:28px;font-family:monospace;font-weight:bold;color:#1a1a2e;letter-spacing:6px;">
+          ${reservation.cancelToken}
+        </p>
+        <p style="margin:0;font-size:11px;color:#78350f;">
+          ${this.t(lang, 'Conservez ce code pour annuler votre réservation depuis la page Suivi.', 'Keep this code to cancel your booking from the Tracking page.')}
+        </p>
+      </div>` : ''}
       <p style="margin-top:16px;">
-        <a href="${process.env.FRONTEND_URL || 'http://localhost:3001'}/reservation/${reservation.code}"
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:3001'}/suivi?code=${reservation.code}"
            style="display:inline-block;padding:10px 20px;background:#1a1a2e;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">
-          ${this.t(lang, 'Consulter ma réservation', 'View my booking')}
+          ${this.t(lang, 'Suivre ma réservation', 'Track my booking')}
         </a>
       </p>`;
 
