@@ -1,10 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
 import { reservationsApi, Reservation } from '@/lib/api'
 import { formatDate, formatCurrency } from '@/lib/utils'
+import { useGeolocation } from '@/hooks/useGeolocation'
+import { calculateRoute, formatDuration, formatDistance } from '@/lib/geocoding'
+import dynamic from 'next/dynamic'
+
+const Map = dynamic(() => import('@/components/Map').then(mod => ({ default: mod.Map })), {
+  ssr: false,
+  loading: () => <div className="w-full h-56 bg-gray-100 rounded-2xl animate-pulse flex items-center justify-center text-xs text-gray-400">Chargement de la carte…</div>
+})
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string }> = {
   EN_ATTENTE: { label: 'En attente', color: 'text-amber-700',   bg: 'bg-amber-50 border-amber-200'    },
@@ -20,6 +28,14 @@ const TRIP_LABELS: Record<string, string> = {
   ALLER_RETOUR:  'Aller-retour',
 }
 
+function pickupLabel(ride: Reservation): string {
+  return ride.pickupCustomAddress || ride.pickupZone?.name || 'Point de départ'
+}
+
+function dropoffLabel(ride: Reservation): string {
+  return ride.dropoffCustomAddress || ride.dropoffZone?.name || 'Destination'
+}
+
 export default function RideDetail() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -30,6 +46,17 @@ export default function RideDetail() {
   const [loading, setLoading] = useState(true)
   const [acting,  setActing]  = useState(false)
   const [error,   setError]   = useState('')
+  const [routeCoords, setRouteCoords] = useState<Array<[number, number]>>([])
+  const [routeInfo, setRouteInfo]     = useState<{ distance: number; duration: number } | null>(null)
+  const [isHttps,   setIsHttps]       = useState(true)
+  const routeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastRoutePos  = useRef<{ lat: number; lng: number } | null>(null)
+
+  const geo = useGeolocation({ watch: true, autoStart: true })
+
+  useEffect(() => {
+    setIsHttps(window.location.protocol === 'https:' || window.location.hostname === 'localhost')
+  }, [])
 
   useEffect(() => {
     if (authLoading) return
@@ -40,12 +67,57 @@ export default function RideDetail() {
       .finally(() => setLoading(false))
   }, [authLoading, user, id, router])
 
+  // Calcul de l'itinéraire avec debounce (15s ou >50m de déplacement)
+  useEffect(() => {
+    if (!ride || !geo.latitude || !geo.longitude) return
+    if (['TERMINEE', 'ANNULEE'].includes(ride.status)) return
+
+    // Choisir la destination selon le statut :
+    // ASSIGNEE → aller chercher le client (pickup)
+    // EN_COURS → emmener le client (dropoff)
+    const isEnCours = ride.status === 'EN_COURS'
+    const destLat = isEnCours
+      ? (ride.dropoffLatitude ?? ride.dropoffZone?.latitude)
+      : (ride.pickupLatitude  ?? ride.pickupZone?.latitude)
+    const destLng = isEnCours
+      ? (ride.dropoffLongitude ?? ride.dropoffZone?.longitude)
+      : (ride.pickupLongitude  ?? ride.pickupZone?.longitude)
+
+    if (!destLat || !destLng) return
+
+    // Vérifier si on a bougé de plus de 50 m depuis le dernier calcul
+    const prev = lastRoutePos.current
+    if (prev) {
+      const dlat = Math.abs(prev.lat - geo.latitude) * 111000
+      const dlng = Math.abs(prev.lng - geo.longitude) * 111000 * Math.cos(geo.latitude * Math.PI / 180)
+      const moved = Math.sqrt(dlat * dlat + dlng * dlng)
+      if (moved < 50) return  // moins de 50 m → pas besoin de recalculer
+    }
+
+    if (routeTimerRef.current) clearTimeout(routeTimerRef.current)
+    routeTimerRef.current = setTimeout(() => {
+      lastRoutePos.current = { lat: geo.latitude!, lng: geo.longitude! }
+      calculateRoute(geo.latitude!, geo.longitude!, destLat, destLng).then(r => {
+        if (r) {
+          setRouteCoords(r.coordinates)
+          setRouteInfo({ distance: r.distance, duration: r.duration })
+        }
+      })
+    }, 800)
+
+    return () => { if (routeTimerRef.current) clearTimeout(routeTimerRef.current) }
+  }, [ride, geo.latitude, geo.longitude])
+
   const updateStatus = async (status: 'EN_COURS' | 'TERMINEE') => {
     if (!ride || acting) return
     setActing(true)
     setError('')
     try {
       const { data } = await reservationsApi.updateStatus(ride.id, status)
+      // Réinitialiser l'itinéraire pour forcer un recalcul vers la nouvelle destination
+      setRouteCoords([])
+      setRouteInfo(null)
+      lastRoutePos.current = null
       setRide(data)
     } catch {
       setError('Impossible de mettre à jour le statut.')
@@ -111,7 +183,7 @@ export default function RideDetail() {
           <div className="flex-1 space-y-2">
             <div>
               <p className="text-xs text-gray-400">Départ</p>
-              <p className="text-sm font-bold text-gray-900">{ride.pickupZone?.name}</p>
+              <p className="text-sm font-bold text-gray-900">{pickupLabel(ride)}</p>
               <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 {formatDate(ride.pickupDateTime)}
@@ -120,7 +192,7 @@ export default function RideDetail() {
             <div className="h-px bg-gray-100" />
             <div>
               <p className="text-xs text-gray-400">Destination</p>
-              <p className="text-sm font-bold text-gray-900">{ride.dropoffZone?.name}</p>
+              <p className="text-sm font-bold text-gray-900">{dropoffLabel(ride)}</p>
               {ride.returnDateTime && (
                 <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -131,6 +203,93 @@ export default function RideDetail() {
           </div>
         </div>
       </div>
+
+      {/* ── Carte interactive ─────────────────────────────── */}
+      {ride.status !== 'TERMINEE' && ride.status !== 'ANNULEE' && (
+        <div className={`bg-white rounded-2xl border p-4 space-y-3 ${ride.status === 'EN_COURS' ? 'border-indigo-200' : 'border-gray-100'}`}>
+
+          {/* Bannière mode navigation */}
+          {ride.status === 'EN_COURS' ? (
+            <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2">
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wide">Navigation en cours</p>
+                <p className="text-xs text-indigo-700 font-semibold truncate">→ {dropoffLabel(ride)}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Carte — Aller chercher le client</p>
+              {geo.loading && <p className="text-[10px] text-gray-400">Localisation…</p>}
+              {geo.permission === 'denied' && <p className="text-[10px] text-red-500 font-semibold">Localisation refusée</p>}
+            </div>
+          )}
+
+          {/* ETA + Distance */}
+          {routeInfo && (
+            <div className="grid grid-cols-2 gap-2">
+              <div className={`rounded-xl p-3 text-center text-white ${ride.status === 'EN_COURS' ? 'bg-indigo-600' : 'bg-[var(--primary)]'}`}>
+                <p className="text-[10px] opacity-75 mb-0.5">Temps estimé</p>
+                <p className="text-xl font-extrabold">{formatDuration(routeInfo.duration)}</p>
+              </div>
+              <div className="bg-blue-500 rounded-xl p-3 text-center text-white">
+                <p className="text-[10px] opacity-75 mb-0.5">Distance restante</p>
+                <p className="text-xl font-extrabold">{formatDistance(routeInfo.distance)}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Avertissement HTTPS requis (iOS bloque la géolocalisation sur HTTP) */}
+          {!isHttps && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-3 flex items-start gap-2">
+              <span className="text-amber-500 text-base flex-shrink-0">⚠️</span>
+              <div>
+                <p className="text-xs font-bold text-amber-800 mb-0.5">Localisation non disponible</p>
+                <p className="text-[11px] text-amber-700 leading-snug">iOS bloque la géolocalisation sur les connexions HTTP. Demandez à votre administrateur de lancer le serveur en HTTPS.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Bouton pour demander la localisation */}
+          {isHttps && !geo.latitude && !geo.loading && geo.permission !== 'denied' && (
+            <button
+              onClick={geo.requestPermission}
+              className="w-full py-2.5 rounded-xl border border-dashed border-gray-300 text-xs text-gray-500 hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+            >
+              📍 Activer ma localisation pour voir la carte
+            </button>
+          )}
+
+          {/* Carte Leaflet */}
+          {geo.latitude && geo.longitude ? (
+            <Map
+              center={[geo.latitude, geo.longitude]}
+              zoom={ride.status === 'EN_COURS' ? 15 : 14}
+              autoFollow={ride.status === 'EN_COURS'}
+              markers={[
+                { position: [geo.latitude, geo.longitude], popup: 'Ma position', icon: 'driver' },
+                ...(ride.pickupLatitude && ride.pickupLongitude
+                  ? [{ position: [ride.pickupLatitude, ride.pickupLongitude] as [number, number], popup: `📍 ${pickupLabel(ride)}`, icon: 'pickup' as const }]
+                  : ride.pickupZone?.latitude && ride.pickupZone?.longitude
+                  ? [{ position: [ride.pickupZone.latitude, ride.pickupZone.longitude] as [number, number], popup: `📍 ${pickupLabel(ride)}`, icon: 'pickup' as const }]
+                  : []),
+                ...(ride.dropoffLatitude && ride.dropoffLongitude
+                  ? [{ position: [ride.dropoffLatitude, ride.dropoffLongitude] as [number, number], popup: `🏁 ${dropoffLabel(ride)}`, icon: 'dropoff' as const }]
+                  : ride.dropoffZone?.latitude && ride.dropoffZone?.longitude
+                  ? [{ position: [ride.dropoffZone.latitude, ride.dropoffZone.longitude] as [number, number], popup: `🏁 ${dropoffLabel(ride)}`, icon: 'dropoff' as const }]
+                  : []),
+              ]}
+              route={routeCoords.length > 0 ? routeCoords : undefined}
+              className={`rounded-xl overflow-hidden ${ride.status === 'EN_COURS' ? 'h-72' : 'h-56'}`}
+            />
+          ) : geo.permission === 'denied' ? (
+            <div className="h-40 rounded-xl bg-gray-50 border border-gray-200 flex flex-col items-center justify-center gap-2">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/><line x1="2" y1="2" x2="22" y2="22" stroke="#ef4444" strokeWidth="2"/></svg>
+              <p className="text-xs text-gray-400 text-center px-4">Autorisez la localisation dans les paramètres du navigateur</p>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {/* ── Client ────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4">

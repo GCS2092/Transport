@@ -7,6 +7,7 @@ import {
   IsInt,
   IsOptional,
   IsNumber,
+  IsBoolean,
   Min,
   Max,
   Matches,
@@ -90,4 +91,8 @@ export class CreateReservationDto {
   @IsOptional()
   @IsString()
   promoCode?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  autoAssign?: boolean;
 }

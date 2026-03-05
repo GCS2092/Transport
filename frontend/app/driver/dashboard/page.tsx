@@ -84,7 +84,7 @@ export default function DriverDashboard() {
       setMyRides(ridesRes.data)
     } catch (err) {
       console.error('Failed to load data', err)
-      router.push('/login')
+      router.push('/')
     } finally {
       setLoading(false)
     }

@@ -56,7 +56,7 @@ export function ReservationForm() {
   const [loading, setLoading] = useState(false)
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null)
   const { t, lang } = useTranslation()
-  const f = t.form
+  const f = t?.form || {}
   const [tripType, setTripType] = useState<'ALLER_SIMPLE' | 'RETOUR_SIMPLE' | 'ALLER_RETOUR'>('ALLER_SIMPLE')
   const [success, setSuccess] = useState(false)
   const [reservationCode, setReservationCode] = useState('')
@@ -127,13 +127,21 @@ export function ReservationForm() {
   }, [])
 
   useEffect(() => {
-    if (formData.pickupZoneId && formData.dropoffZoneId &&
-        formData.pickupZoneId !== formData.dropoffZoneId) {
-      tariffsApi.getPrice(formData.pickupZoneId, formData.dropoffZoneId)
-        .then(r => setEstimatedPrice(r.data.price))
-        .catch(() => setEstimatedPrice(null))
+    // Prix fixes selon le type de trajet
+    const fixedPrices = {
+      'ALLER_SIMPLE': 25000,
+      'RETOUR_SIMPLE': 25000,
+      'ALLER_RETOUR': 30000,
     }
-  }, [formData.pickupZoneId, formData.dropoffZoneId])
+    
+    // Afficher le prix dès qu'on a au moins une destination valide
+    if ((formData.pickupZoneId || (pickupType === 'custom' && customPickupAddress)) &&
+        (formData.dropoffZoneId || (dropoffType === 'custom' && customDropoffAddress))) {
+      setEstimatedPrice(fixedPrices[tripType])
+    } else {
+      setEstimatedPrice(null)
+    }
+  }, [formData.pickupZoneId, formData.dropoffZoneId, pickupType, dropoffType, customPickupAddress, customDropoffAddress, tripType])
 
   const loadZones = async () => {
     try {
@@ -209,27 +217,45 @@ export function ReservationForm() {
       // Gérer les adresses personnalisées
       if (pickupType === 'custom') {
         payload.pickupCustomAddress = customPickupAddress
-        payload.pickupZoneId = null
+        delete payload.pickupZoneId
         if (pickupCoords) {
           payload.pickupLatitude = pickupCoords.lat
           payload.pickupLongitude = pickupCoords.lng
         }
+      } else {
+        delete payload.pickupCustomAddress
+        delete payload.pickupLatitude
+        delete payload.pickupLongitude
       }
       
       if (dropoffType === 'custom') {
         payload.dropoffCustomAddress = customDropoffAddress
-        payload.dropoffZoneId = null
+        delete payload.dropoffZoneId
         if (dropoffCoords) {
           payload.dropoffLatitude = dropoffCoords.lat
           payload.dropoffLongitude = dropoffCoords.lng
         }
+      } else {
+        delete payload.dropoffCustomAddress
+        delete payload.dropoffLatitude
+        delete payload.dropoffLongitude
       }
       
       if (tripType !== 'ALLER_RETOUR') delete payload.returnDateTime
       if (!payload.flightNumber) delete payload.flightNumber
       if (!payload.notes) delete payload.notes
-      if (promoCode.trim()) payload.promoCode = promoCode.trim()
+      if (promoCode.trim()) {
+        payload.promoCode = promoCode.trim()
+      } else {
+        delete payload.promoCode
+      }
       payload.autoAssign = autoAssign
+
+      // Supprimer tous les champs vides ou invalides pour éviter les erreurs de validation
+      if (!payload.pickupZoneId) delete payload.pickupZoneId
+      if (!payload.dropoffZoneId) delete payload.dropoffZoneId
+      if (!payload.returnDateTime) delete payload.returnDateTime
+
       const { data } = await reservationsApi.create(payload)
       
       // Sauvegarder les infos client pour la prochaine fois
@@ -265,7 +291,8 @@ export function ReservationForm() {
       window.dispatchEvent(new Event('vtc_code_saved'))
     } catch (e: any) {
       const msg = e.response?.data?.message
-      setError(Array.isArray(msg) ? msg[0] : msg || f.genericError)
+      const errorMsg = Array.isArray(msg) ? msg[0] : typeof msg === 'string' ? msg : (f.genericError || 'Une erreur est survenue')
+      setError(errorMsg)
     } finally {
       setLoading(false)
     }
@@ -322,8 +349,8 @@ export function ReservationForm() {
     )
   }
 
-  const pickupName  = zones.find(z => z.id === formData.pickupZoneId)?.name  ?? ''
-  const dropoffName = zones.find(z => z.id === formData.dropoffZoneId)?.name ?? ''
+  const pickupName  = pickupType === 'custom' ? customPickupAddress : (zones.find(z => z.id === formData.pickupZoneId)?.name ?? '')
+  const dropoffName = dropoffType === 'custom' ? customDropoffAddress : (zones.find(z => z.id === formData.dropoffZoneId)?.name ?? '')
 
   /* ══════════════════════════════════════════════════════════════
      RENDU PRINCIPAL

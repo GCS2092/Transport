@@ -17,6 +17,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { PromoCodesModule } from './modules/promo-codes/promo-codes.module';
+import { SettingsModule } from './modules/settings/settings.module';
 import { UsersService } from './modules/users/users.service';
 
 @Module({
@@ -43,6 +44,7 @@ import { UsersService } from './modules/users/users.service';
     HealthModule,
     AuditModule,
     PromoCodesModule,
+    SettingsModule,
   ],
 })
 export class AppModule implements OnModuleInit {

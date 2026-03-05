@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from 'react'
 import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
 
 // Fix pour les icônes Leaflet avec Next.js
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -22,6 +21,7 @@ interface MapProps {
   }>
   route?: Array<[number, number]>
   className?: string
+  autoFollow?: boolean
 }
 
 const iconColors = {
@@ -31,7 +31,7 @@ const iconColors = {
   default: '#6b7280',
 }
 
-export function Map({ center, zoom = 13, markers = [], route, className = '' }: MapProps) {
+export function Map({ center, zoom = 13, markers = [], route, className = '', autoFollow = false }: MapProps) {
   const mapRef = useRef<L.Map | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const markersRef = useRef<L.Marker[]>([])
@@ -56,12 +56,15 @@ export function Map({ center, zoom = 13, markers = [], route, className = '' }: 
     }
   }, [])
 
-  // Mettre à jour le centre
+  // Mettre à jour le centre (smooth pan en mode navigation)
   useEffect(() => {
-    if (mapRef.current) {
+    if (!mapRef.current) return
+    if (autoFollow) {
+      mapRef.current.panTo(center, { animate: true, duration: 0.8 })
+    } else {
       mapRef.current.setView(center, zoom)
     }
-  }, [center, zoom])
+  }, [center, zoom, autoFollow])
 
   // Mettre à jour les marqueurs
   useEffect(() => {
@@ -106,12 +109,14 @@ export function Map({ center, zoom = 13, markers = [], route, className = '' }: 
     if (route && route.length > 0) {
       routeRef.current = L.polyline(route, {
         color: '#3b82f6',
-        weight: 4,
-        opacity: 0.7,
+        weight: 5,
+        opacity: 0.8,
       }).addTo(mapRef.current)
 
-      // Ajuster la vue pour afficher toute la route
-      mapRef.current.fitBounds(routeRef.current.getBounds(), { padding: [50, 50] })
+      // En mode navigation (autoFollow), ne pas fitBounds — la vue suit le chauffeur
+      if (!autoFollow) {
+        mapRef.current.fitBounds(routeRef.current.getBounds(), { padding: [50, 50] })
+      }
     }
   }, [route])
 

@@ -70,8 +70,8 @@ export interface Reservation {
   amount: number
   paymentStatus: string
   cancelToken: string
-  pickupZone: Zone
-  dropoffZone: Zone
+  pickupZone?: Zone | null
+  dropoffZone?: Zone | null
   pickupCustomAddress?: string
   pickupLatitude?: number
   pickupLongitude?: number
@@ -393,6 +393,10 @@ export const adminApi = {
       weekdayStats: { day: string; count: number }[];
       statusDistribution: { total: number; completed: number; cancelled: number; pending: number; assigned: number; inProgress: number };
     }>('/admin/analytics'),
+  getSettings: () =>
+    api.get<{ id: string; key: string; value: string; description: string }[]>('/settings'),
+  updateSetting: (key: string, dto: { value: string; description?: string }) =>
+    api.put(`/settings/${key}`, dto),
 }
 
 export const auditApi = {

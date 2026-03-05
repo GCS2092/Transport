@@ -1,26 +1,27 @@
 import {
   Injectable,
-  NotFoundException,
   BadRequestException,
+  NotFoundException,
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { v4 as uuidv4 } from 'uuid';
+import { Repository, Between, In } from 'typeorm';
 import { Reservation } from './entities/reservation.entity';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { TariffsService } from '../tariffs/tariffs.service';
+import { SettingsService } from '../settings/settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
 import { DriversService } from '../drivers/drivers.service';
 import { AuditService } from '../audit/audit.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
+import { DriverLocation } from '../drivers/entities/driver-location.entity';
+import { v4 as uuidv4 } from 'uuid';
 import { ReservationStatus } from '../../common/enums/reservation-status.enum';
 import { DriverStatus } from '../../common/enums/driver-status.enum';
 import { Language } from '../../common/enums/language.enum';
-import { DriverLocation } from '../drivers/entities/driver-location.entity';
 
 export interface FindAllFilters {
   page?: number;
@@ -41,6 +42,7 @@ export class ReservationsService {
     @InjectRepository(DriverLocation)
     private driverLocationRepository: Repository<DriverLocation>,
     private tariffsService: TariffsService,
+    private settingsService: SettingsService,
     private notificationsService: NotificationsService,
     private pdfService: PdfService,
     private driversService: DriversService,
@@ -57,7 +59,7 @@ export class ReservationsService {
     return code;
   }
 
-  async create(dto: CreateReservationDto & { autoAssign?: boolean }): Promise<Reservation> {
+  async create(dto: CreateReservationDto): Promise<Reservation> {
     // Validation des zones
     if (!dto.pickupZoneId && !dto.pickupCustomAddress) {
       throw new BadRequestException('Pickup zone or custom address is required');
@@ -67,23 +69,9 @@ export class ReservationsService {
       throw new BadRequestException('Dropoff zone or custom address is required');
     }
 
-    // Calcul du prix
-    let finalPrice = 0;
-    
-    if (dto.pickupZoneId && dto.dropoffZoneId) {
-      const tariff = await this.tariffsService.findByZones(dto.pickupZoneId, dto.dropoffZoneId);
-      if (!tariff) {
-        this.logger.warn(`No tariff found for zones: ${dto.pickupZoneId} → ${dto.dropoffZoneId}`);
-        throw new BadRequestException(
-          'No tariff found between these zones. Please contact support or use custom addresses.'
-        );
-      }
-      finalPrice = tariff.price;
-    } else {
-      // Prix par défaut pour adresses personnalisées (à ajuster selon la distance)
-      finalPrice = 10000; // 10 000 FCFA
-      this.logger.log('Using default price for custom addresses');
-    }
+    // Calcul du prix fixe selon le type de trajet
+    const finalPrice = await this.settingsService.getPriceForTripType(dto.tripType);
+    this.logger.log(`Using fixed price for ${dto.tripType}: ${finalPrice} FCFA`);
 
     await this.checkDailyLimit(dto.clientEmail);
 
@@ -197,13 +185,19 @@ export class ReservationsService {
   }
 
   async findByCode(code: string): Promise<Reservation> {
-    const reservation = await this.reservationsRepository.findOne({ where: { code } });
+    const reservation = await this.reservationsRepository.findOne({
+      where: { code },
+      relations: ['pickupZone', 'dropoffZone', 'driver'],
+    });
     if (!reservation) throw new NotFoundException('Reservation not found');
     return reservation;
   }
 
   async findById(id: string): Promise<Reservation> {
-    const reservation = await this.reservationsRepository.findOne({ where: { id } });
+    const reservation = await this.reservationsRepository.findOne({
+      where: { id },
+      relations: ['pickupZone', 'dropoffZone', 'driver'],
+    });
     if (!reservation) throw new NotFoundException('Reservation not found');
     return reservation;
   }
@@ -212,6 +206,7 @@ export class ReservationsService {
     return this.reservationsRepository.find({
       where: { driverId },
       order: { pickupDateTime: 'ASC' },
+      relations: ['pickupZone', 'dropoffZone'],
     });
   }
 
@@ -400,23 +395,13 @@ export class ReservationsService {
         if (dto.status === ReservationStatus.EN_COURS) {
           await this.notificationsService.sendRideStarted(updated);
         } else if (dto.status === ReservationStatus.TERMINEE) {
-          await this.notificationsService.sendRideCompleted(updated);
+          const pdfBuffer = await this.pdfService.generateReceipt(updated);
+          await this.notificationsService.sendRideCompleted(updated, pdfBuffer);
         }
       } catch (e) {
         this.logger.error('Failed to send status change email', e?.message);
       }
     });
-
-    if (dto.status === ReservationStatus.TERMINEE) {
-      setImmediate(async () => {
-        try {
-          const pdfBuffer = await this.pdfService.generateReceipt(updated);
-          await this.notificationsService.sendRideCompleted(updated, pdfBuffer);
-        } catch (e) {
-          this.logger.error('Failed to send ride completed email', e?.message);
-        }
-      });
-    }
 
     if (dto.status === ReservationStatus.ANNULEE) {
       setImmediate(async () => {
@@ -455,12 +440,10 @@ export class ReservationsService {
     if (updates.passengers) updateData.passengers = updates.passengers;
     if (updates.notes !== undefined) updateData.notes = updates.notes;
 
-    // Recalculer le prix si les zones ont changé
-    if (updates.pickupZoneId && updates.dropoffZoneId) {
-      const tariff = await this.tariffsService.findByZones(updates.pickupZoneId, updates.dropoffZoneId);
-      if (tariff) {
-        updateData.amount = tariff.price;
-      }
+    // Recalculer le prix selon le type de trajet (prix fixe)
+    if (updates.tripType || updates.pickupZoneId || updates.dropoffZoneId) {
+      const tripType = updates.tripType || reservation.tripType;
+      updateData.amount = await this.settingsService.getPriceForTripType(tripType);
     }
 
     await this.reservationsRepository.update(reservation.id, updateData);
