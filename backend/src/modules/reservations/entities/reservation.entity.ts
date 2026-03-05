@@ -37,19 +37,37 @@ export class Reservation {
   @Column({ type: 'enum', enum: TripType })
   tripType: TripType;
 
-  @Column()
+  @Column({ nullable: true })
   pickupZoneId: string;
 
-  @ManyToOne(() => Zone, { eager: true })
+  @ManyToOne(() => Zone, { eager: true, nullable: true })
   @JoinColumn({ name: 'pickupZoneId' })
   pickupZone: Zone;
 
-  @Column()
+  @Column({ nullable: true })
+  pickupCustomAddress: string;
+
+  @Column({ nullable: true, type: 'decimal', precision: 10, scale: 7 })
+  pickupLatitude: number;
+
+  @Column({ nullable: true, type: 'decimal', precision: 10, scale: 7 })
+  pickupLongitude: number;
+
+  @Column({ nullable: true })
   dropoffZoneId: string;
 
-  @ManyToOne(() => Zone, { eager: true })
+  @ManyToOne(() => Zone, { nullable: true })
   @JoinColumn({ name: 'dropoffZoneId' })
   dropoffZone: Zone;
+
+  @Column({ nullable: true, type: 'text' })
+  dropoffCustomAddress: string;
+
+  @Column({ nullable: true, type: 'decimal', precision: 10, scale: 7 })
+  dropoffLatitude: number;
+
+  @Column({ nullable: true, type: 'decimal', precision: 10, scale: 7 })
+  dropoffLongitude: number;
 
   @Column({ type: 'timestamp' })
   pickupDateTime: Date;
@@ -82,6 +100,15 @@ export class Reservation {
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   amount: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  originalAmount: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  discount: number;
+
+  @Column({ nullable: true })
+  promoCode: string;
 
   @Column({ type: 'enum', enum: Language, default: Language.FR })
   language: Language;

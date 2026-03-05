@@ -16,9 +16,11 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
 import { DriversService } from '../drivers/drivers.service';
 import { AuditService } from '../audit/audit.service';
+import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { ReservationStatus } from '../../common/enums/reservation-status.enum';
 import { DriverStatus } from '../../common/enums/driver-status.enum';
 import { Language } from '../../common/enums/language.enum';
+import { DriverLocation } from '../drivers/entities/driver-location.entity';
 
 export interface FindAllFilters {
   page?: number;
@@ -36,11 +38,14 @@ export class ReservationsService {
   constructor(
     @InjectRepository(Reservation)
     private reservationsRepository: Repository<Reservation>,
+    @InjectRepository(DriverLocation)
+    private driverLocationRepository: Repository<DriverLocation>,
     private tariffsService: TariffsService,
     private notificationsService: NotificationsService,
     private pdfService: PdfService,
     private driversService: DriversService,
     private auditService: AuditService,
+    private promoCodesService: PromoCodesService,
   ) {}
 
   private generateCode(): string {
@@ -52,10 +57,32 @@ export class ReservationsService {
     return code;
   }
 
-  async create(dto: CreateReservationDto): Promise<Reservation> {
-    const tariff = await this.tariffsService.findByZones(dto.pickupZoneId, dto.dropoffZoneId);
-    if (!tariff) {
-      throw new BadRequestException('No active tariff found for this zone pair');
+  async create(dto: CreateReservationDto & { autoAssign?: boolean }): Promise<Reservation> {
+    // Validation des zones
+    if (!dto.pickupZoneId && !dto.pickupCustomAddress) {
+      throw new BadRequestException('Pickup zone or custom address is required');
+    }
+    
+    if (!dto.dropoffZoneId && !dto.dropoffCustomAddress) {
+      throw new BadRequestException('Dropoff zone or custom address is required');
+    }
+
+    // Calcul du prix
+    let finalPrice = 0;
+    
+    if (dto.pickupZoneId && dto.dropoffZoneId) {
+      const tariff = await this.tariffsService.findByZones(dto.pickupZoneId, dto.dropoffZoneId);
+      if (!tariff) {
+        this.logger.warn(`No tariff found for zones: ${dto.pickupZoneId} → ${dto.dropoffZoneId}`);
+        throw new BadRequestException(
+          'No tariff found between these zones. Please contact support or use custom addresses.'
+        );
+      }
+      finalPrice = tariff.price;
+    } else {
+      // Prix par défaut pour adresses personnalisées (à ajuster selon la distance)
+      finalPrice = 10000; // 10 000 FCFA
+      this.logger.log('Using default price for custom addresses');
     }
 
     await this.checkDailyLimit(dto.clientEmail);
@@ -71,10 +98,33 @@ export class ReservationsService {
     const cancelToken = uuidv4();
     const cancelTokenExpiresAt = new Date(dto.pickupDateTime);
 
+    // Validation et application du code promo
+    let finalAmount = finalPrice;
+    let discount = 0;
+    let promoCode = null;
+    let originalAmount = null;
+
+    if (dto.promoCode) {
+      const promoResult = await this.promoCodesService.validateAndApply(dto.promoCode, finalPrice);
+      if (promoResult.valid) {
+        discount = promoResult.discount;
+        finalAmount = finalPrice - discount;
+        promoCode = dto.promoCode.toUpperCase();
+        originalAmount = finalPrice;
+        // Incrémenter le compteur d'utilisation
+        await this.promoCodesService.incrementUsage(promoCode);
+      } else {
+        throw new BadRequestException(promoResult.message || 'Code promo invalide');
+      }
+    }
+
     const reservation = this.reservationsRepository.create({
       ...dto,
       code,
-      amount: tariff.price,
+      amount: finalAmount,
+      originalAmount,
+      discount,
+      promoCode,
       language: dto.language || Language.FR,
       cancelToken,
       cancelTokenExpiresAt,
@@ -90,6 +140,19 @@ export class ReservationsService {
         this.logger.error('Failed to send confirmation email', e?.message);
       }
     });
+
+    // Assignation automatique si demandée
+    if (dto.autoAssign) {
+      try {
+        this.logger.log(`Auto-assigning driver for reservation ${saved.code}`);
+        const assigned = await this.autoAssignDriver(saved.id);
+        return assigned;
+      } catch (err) {
+        this.logger.warn(`Auto-assignment failed for ${saved.code}: ${err.message}`);
+        // Retourner la réservation même si l'assignation échoue
+        return saved;
+      }
+    }
 
     return saved;
   }
@@ -197,6 +260,104 @@ export class ReservationsService {
     return updated;
   }
 
+  // Assignation automatique du chauffeur le plus proche
+  async autoAssignDriver(reservationId: string): Promise<Reservation> {
+    const reservation = await this.findById(reservationId);
+
+    if (reservation.status !== ReservationStatus.EN_ATTENTE) {
+      throw new BadRequestException('Only pending reservations can be auto-assigned');
+    }
+
+    // Récupérer tous les chauffeurs disponibles
+    const availableDrivers = await this.driversService.findAvailable();
+
+    if (availableDrivers.length === 0) {
+      throw new BadRequestException('No available drivers');
+    }
+
+    // Déterminer les coordonnées de départ
+    const pickupLat = reservation.pickupLatitude || reservation.pickupZone?.latitude;
+    const pickupLng = reservation.pickupLongitude || reservation.pickupZone?.longitude;
+
+    if (!pickupLat || !pickupLng) {
+      // Si pas de coordonnées GPS, assigner le premier chauffeur disponible
+      this.logger.warn(`No GPS coordinates for reservation ${reservation.code}, assigning first available driver`);
+      return this.assignDriver(reservationId, availableDrivers[0].id);
+    }
+
+    // Récupérer les positions GPS des chauffeurs disponibles
+    const driversWithDistance = await Promise.all(
+      availableDrivers.map(async (driver) => {
+        try {
+          const location = await this.driverLocationRepository.findOne({
+            where: { driverId: driver.id },
+            order: { updatedAt: 'DESC' },
+          });
+
+          if (!location) {
+            return { driver, distance: Infinity };
+          }
+
+          // Calculer la distance avec la formule de Haversine
+          const distance = this.calculateDistance(
+            pickupLat,
+            pickupLng,
+            location.latitude,
+            location.longitude,
+          );
+
+          return { driver, distance };
+        } catch (err) {
+          return { driver, distance: Infinity };
+        }
+      }),
+    );
+
+    // Trier par distance croissante
+    driversWithDistance.sort((a, b) => a.distance - b.distance);
+
+    // Assigner le chauffeur le plus proche
+    const closestDriver = driversWithDistance[0];
+
+    if (closestDriver.distance === Infinity) {
+      // Aucun chauffeur avec position GPS, assigner le premier disponible
+      this.logger.warn(`No drivers with GPS location, assigning first available driver`);
+      return this.assignDriver(reservationId, availableDrivers[0].id);
+    }
+
+    this.logger.log(
+      `Auto-assigning driver ${closestDriver.driver.firstName} ${closestDriver.driver.lastName} ` +
+      `(${closestDriver.distance.toFixed(2)} km away) to reservation ${reservation.code}`,
+    );
+
+    return this.assignDriver(reservationId, closestDriver.driver.id);
+  }
+
+  // Formule de Haversine pour calculer la distance entre deux points GPS
+  private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371; // Rayon de la Terre en km
+    const dLat = this.toRad(lat2 - lat1);
+    const dLng = this.toRad(lng2 - lng1);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.toRad(lat1)) *
+        Math.cos(this.toRad(lat2)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  private toRad(deg: number): number {
+    return deg * (Math.PI / 180);
+  }
+
+  async generateReceipt(reservation: Reservation): Promise<Buffer> {
+    return this.pdfService.generateReceipt(reservation);
+  }
+
   async updateStatus(id: string, dto: UpdateReservationDto): Promise<Reservation> {
     const reservation = await this.findById(id);
 
@@ -233,6 +394,19 @@ export class ReservationsService {
     }
     const updated = await this.findById(id);
 
+    // Envoyer des emails selon le changement de statut
+    setImmediate(async () => {
+      try {
+        if (dto.status === ReservationStatus.EN_COURS) {
+          await this.notificationsService.sendRideStarted(updated);
+        } else if (dto.status === ReservationStatus.TERMINEE) {
+          await this.notificationsService.sendRideCompleted(updated);
+        }
+      } catch (e) {
+        this.logger.error('Failed to send status change email', e?.message);
+      }
+    });
+
     if (dto.status === ReservationStatus.TERMINEE) {
       setImmediate(async () => {
         try {
@@ -256,6 +430,41 @@ export class ReservationsService {
     }
 
     return updated;
+  }
+
+  async updateByClient(code: string, token: string, updates: any): Promise<Reservation> {
+    const reservation = await this.findByCode(code);
+
+    if (reservation.cancelToken !== token) {
+      throw new ForbiddenException('Invalid token');
+    }
+    if (reservation.cancelTokenExpiresAt < new Date()) {
+      throw new BadRequestException('Token has expired');
+    }
+    if (reservation.status !== ReservationStatus.EN_ATTENTE) {
+      throw new BadRequestException('Can only modify reservations that are pending');
+    }
+
+    const updateData: any = {};
+    
+    if (updates.pickupZoneId) updateData.pickupZoneId = updates.pickupZoneId;
+    if (updates.dropoffZoneId) updateData.dropoffZoneId = updates.dropoffZoneId;
+    if (updates.pickupDateTime) updateData.pickupDateTime = updates.pickupDateTime;
+    if (updates.returnDateTime !== undefined) updateData.returnDateTime = updates.returnDateTime;
+    if (updates.flightNumber !== undefined) updateData.flightNumber = updates.flightNumber;
+    if (updates.passengers) updateData.passengers = updates.passengers;
+    if (updates.notes !== undefined) updateData.notes = updates.notes;
+
+    // Recalculer le prix si les zones ont changé
+    if (updates.pickupZoneId && updates.dropoffZoneId) {
+      const tariff = await this.tariffsService.findByZones(updates.pickupZoneId, updates.dropoffZoneId);
+      if (tariff) {
+        updateData.amount = tariff.price;
+      }
+    }
+
+    await this.reservationsRepository.update(reservation.id, updateData);
+    return this.findById(reservation.id);
   }
 
   async cancelByToken(code: string, token: string): Promise<Reservation> {

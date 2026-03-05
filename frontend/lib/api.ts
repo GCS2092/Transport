@@ -24,8 +24,11 @@ api.interceptors.request.use((config) => {
 export interface Zone {
   id: string
   name: string
-  description: string
+  description?: string
   isActive: boolean
+  latitude?: number
+  longitude?: number
+  address?: string
 }
 
 export interface Tariff {
@@ -69,6 +72,12 @@ export interface Reservation {
   cancelToken: string
   pickupZone: Zone
   dropoffZone: Zone
+  pickupCustomAddress?: string
+  pickupLatitude?: number
+  pickupLongitude?: number
+  dropoffCustomAddress?: string
+  dropoffLatitude?: number
+  dropoffLongitude?: number
   driver?: {
     id: string
     firstName: string
@@ -78,6 +87,8 @@ export interface Reservation {
     vehiclePlate: string
     status: string
   }
+  startedAt?: string
+  completedAt?: string
   createdAt: string
 }
 
@@ -119,6 +130,36 @@ export interface AdminStats {
     total: number
     actifs: number
   }
+  driversDetails?: Array<{
+    id: string
+    firstName: string
+    lastName: string
+    status: string
+    vehicleType: string
+    vehiclePlate: string
+    activeCourse: {
+      code: string
+      status: string
+      pickupZone: string
+      dropoffZone: string
+    } | null
+  }>
+  activeDrivers?: Array<{
+    id: string
+    firstName: string
+    lastName: string
+    phone: string
+    vehicleType: string
+    vehiclePlate: string
+    status: string
+    currentRide?: {
+      code: string
+      clientName: string
+      pickup: string
+      dropoff: string
+      amount: number
+    }
+  }>
   alerts: {
     failedEmails: number
   }
@@ -199,6 +240,12 @@ export const reservationsApi = {
   cancel: (code: string, token: string) => 
     api.post('/reservations/cancel', { code, token }),
 
+  updateByClient: (code: string, cancelToken: string, updates: any) =>
+    api.patch<Reservation>(`/reservations/code/${code}`, { cancelToken, ...updates }),
+
+  getDriverLocation: (code: string) =>
+    api.get<DriverLocation | null>(`/reservations/code/${code}/driver-location`),
+
   getById: (id: string) =>
     api.get<Reservation>(`/reservations/${id}`),
 
@@ -210,6 +257,8 @@ export const reservationsApi = {
 
   assignDriver: (id: string, driverId: string) =>
     api.put<Reservation>(`/reservations/${id}/assign`, { driverId }),
+
+  autoAssignDriver: (id: string) => api.post(`/reservations/${id}/auto-assign`),
 
   cancelByAdmin: (id: string) =>
     api.put<Reservation>(`/reservations/${id}/cancel`, {}),
@@ -224,12 +273,25 @@ export const reservationsApi = {
     api.patch<Reservation>(`/reservations/${id}`, updates),
 }
 
+export interface DriverLocation {
+  latitude: number
+  longitude: number
+  accuracy?: number
+  speed?: number
+  heading?: number
+  updatedAt: string
+}
+
 export const driverApi = {
   getMe: () => api.get<Driver>('/drivers/me'),
   updateMyProfile: (data: Partial<Pick<Driver, 'phone' | 'vehiclePlate' | 'email'>>) =>
     api.put<Driver>('/drivers/me', data),
   updateMyStatus: (status: 'DISPONIBLE' | 'EN_COURSE' | 'HORS_LIGNE') =>
     api.put<Driver>('/drivers/me/status', { status }),
+  updateMyLocation: (location: { latitude: number; longitude: number; accuracy?: number; speed?: number; heading?: number }) =>
+    api.post<DriverLocation>('/drivers/me/location', location),
+  getLocation: (driverId: string) =>
+    api.get<DriverLocation | null>(`/drivers/${driverId}/location`),
   getMyRides: () => api.get<Reservation[]>('/reservations/driver/my'),
   getAll: () => api.get<Driver[]>('/drivers'),
   getAvailable: () => api.get<Driver[]>('/drivers/available'),
@@ -338,6 +400,13 @@ export const auditApi = {
     api.get<{ data: AuditLog[]; total: number }>('/audit', { params }),
   getByEntity: (entityType: string, entityId: string) =>
     api.get<AuditLog[]>('/audit/entity', { params: { entityType, entityId } }),
+}
+
+export const authApi = {
+  login: (email: string, password: string) =>
+    api.post<{ accessToken: string; user: { id: string; email: string; role: string } }>('/auth/login', { email, password }),
+  refresh: () =>
+    api.post<{ accessToken: string }>('/auth/refresh'),
 }
 
 export const promoCodesApi = {

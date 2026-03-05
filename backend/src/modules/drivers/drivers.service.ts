@@ -2,8 +2,10 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Driver } from './entities/driver.entity';
+import { DriverLocation } from './entities/driver-location.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { CreateDriverDto } from './dto/create-driver.dto';
+import { UpdateLocationDto } from './dto/update-location.dto';
 import { DriverStatus } from '../../common/enums/driver-status.enum';
 import { ReservationStatus } from '../../common/enums/reservation-status.enum';
 
@@ -12,6 +14,8 @@ export class DriversService {
   constructor(
     @InjectRepository(Driver)
     private driversRepository: Repository<Driver>,
+    @InjectRepository(DriverLocation)
+    private locationRepository: Repository<DriverLocation>,
     @InjectRepository(Reservation)
     private reservationsRepository: Repository<Reservation>,
   ) {}
@@ -108,5 +112,48 @@ export class DriversService {
       },
       recentRides: reservations.slice(0, 10),
     };
+  }
+
+  async updateLocation(driverId: string, dto: UpdateLocationDto): Promise<DriverLocation> {
+    await this.findById(driverId);
+    
+    // Chercher la dernière localisation
+    let location = await this.locationRepository.findOne({
+      where: { driverId },
+      order: { updatedAt: 'DESC' },
+    });
+
+    if (location) {
+      // Mettre à jour la localisation existante
+      await this.locationRepository.update(location.id, dto);
+      return this.locationRepository.findOne({ where: { id: location.id } });
+    } else {
+      // Créer une nouvelle localisation
+      location = this.locationRepository.create({
+        driverId,
+        ...dto,
+      });
+      return this.locationRepository.save(location);
+    }
+  }
+
+  async getLocation(driverId: string): Promise<DriverLocation | null> {
+    return this.locationRepository.findOne({
+      where: { driverId },
+      order: { updatedAt: 'DESC' },
+    });
+  }
+
+  async getLocationByReservation(reservationId: string): Promise<DriverLocation | null> {
+    const reservation = await this.reservationsRepository.findOne({
+      where: { id: reservationId },
+      relations: ['driver'],
+    });
+
+    if (!reservation || !reservation.driverId) {
+      return null;
+    }
+
+    return this.getLocation(reservation.driverId);
   }
 }

@@ -26,9 +26,19 @@ export class TariffsService {
   }
 
   async findByZones(zoneFromId: string, zoneToId: string): Promise<Tariff | null> {
-    return this.tariffsRepository.findOne({
+    // Chercher dans le sens normal (A → B)
+    let tariff = await this.tariffsRepository.findOne({
       where: { zoneFromId, zoneToId, isActive: true },
     });
+    
+    // Si pas trouvé, chercher dans le sens inverse (B → A)
+    if (!tariff) {
+      tariff = await this.tariffsRepository.findOne({
+        where: { zoneFromId: zoneToId, zoneToId: zoneFromId, isActive: true },
+      });
+    }
+    
+    return tariff;
   }
 
   async create(dto: CreateTariffDto): Promise<Tariff> {

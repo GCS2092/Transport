@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { zonesApi, tariffsApi, reservationsApi, Zone } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n'
+import { saveClientInfo, getClientInfo, addToHistory } from '@/lib/clientStorage'
+import { geocodeAddress } from '@/lib/geocoding'
 
 /* ── Icônes SVG inline (lucide-like) ────────────────────────────── */
 const IconArrowDown = () => (
@@ -59,6 +61,19 @@ export function ReservationForm() {
   const [success, setSuccess] = useState(false)
   const [reservationCode, setReservationCode] = useState('')
   const [error, setError] = useState('')
+  const [promoCode, setPromoCode] = useState('')
+  const [promoDiscount, setPromoDiscount] = useState(0)
+  const [promoError, setPromoError] = useState('')
+  const [pickupType, setPickupType] = useState<'zone' | 'custom'>('zone')
+  const [dropoffType, setDropoffType] = useState<'zone' | 'custom'>('zone')
+  const [customPickupAddress, setCustomPickupAddress] = useState('')
+  const [customDropoffAddress, setCustomDropoffAddress] = useState('')
+  const [pickupCoords, setPickupCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const [dropoffCoords, setDropoffCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const [geocodingPickup, setGeocodingPickup] = useState(false)
+  const [geocodingDropoff, setGeocodingDropoff] = useState(false)
+  const [autoAssign, setAutoAssign] = useState(true)
+  
   const [formData, setFormData] = useState({
     clientFirstName: '',
     clientLastName: '',
@@ -76,7 +91,40 @@ export function ReservationForm() {
   const set = (key: string, val: string | number) =>
     setFormData(prev => ({ ...prev, [key]: val }))
 
-  useEffect(() => { loadZones() }, [])
+  // Géocoder l'adresse de départ avec debounce
+  useEffect(() => {
+    if (pickupType === 'custom' && customPickupAddress.length > 10) {
+      const timer = setTimeout(async () => {
+        setGeocodingPickup(true)
+        const result = await geocodeAddress(customPickupAddress)
+        if (result) {
+          setPickupCoords({ lat: result.lat, lng: result.lng })
+        }
+        setGeocodingPickup(false)
+      }, 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [customPickupAddress, pickupType])
+
+  // Géocoder l'adresse d'arrivée avec debounce
+  useEffect(() => {
+    if (dropoffType === 'custom' && customDropoffAddress.length > 10) {
+      const timer = setTimeout(async () => {
+        setGeocodingDropoff(true)
+        const result = await geocodeAddress(customDropoffAddress)
+        if (result) {
+          setDropoffCoords({ lat: result.lat, lng: result.lng })
+        }
+        setGeocodingDropoff(false)
+      }, 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [customDropoffAddress, dropoffType])
+
+  useEffect(() => { 
+    loadZones()
+    loadSavedClientInfo()
+  }, [])
 
   useEffect(() => {
     if (formData.pickupZoneId && formData.dropoffZoneId &&
@@ -91,10 +139,35 @@ export function ReservationForm() {
     try {
       const { data } = await zonesApi.getActive()
       setZones(data)
-      const aibd = data.find((z: Zone) => z.name.toLowerCase().includes('aibd'))
-      const alma = data.find((z: Zone) => z.name.toLowerCase().includes('almad'))
-      if (aibd && alma) setFormData(p => ({ ...p, pickupZoneId: aibd.id, dropoffZoneId: alma.id }))
+      const savedInfo = getClientInfo()
+      if (savedInfo?.lastPickupZoneId && savedInfo?.lastDropoffZoneId) {
+        setFormData(p => ({ 
+          ...p, 
+          pickupZoneId: savedInfo.lastPickupZoneId || '', 
+          dropoffZoneId: savedInfo.lastDropoffZoneId || '' 
+        }))
+      } else {
+        const aibd = data.find((z: Zone) => z.name.toLowerCase().includes('aibd'))
+        const alma = data.find((z: Zone) => z.name.toLowerCase().includes('almad'))
+        if (aibd && alma) setFormData(p => ({ ...p, pickupZoneId: aibd.id, dropoffZoneId: alma.id }))
+      }
     } catch {}
+  }
+
+  const loadSavedClientInfo = () => {
+    const savedInfo = getClientInfo()
+    if (savedInfo) {
+      setFormData(prev => ({
+        ...prev,
+        clientFirstName: savedInfo.firstName,
+        clientLastName: savedInfo.lastName,
+        clientEmail: savedInfo.email,
+        clientPhone: savedInfo.phone,
+      }))
+      if (savedInfo.lastPromoCode) {
+        setPromoCode(savedInfo.lastPromoCode)
+      }
+    }
   }
 
   const validateStep1 = () => {
@@ -132,10 +205,60 @@ export function ReservationForm() {
         passengers: Number(formData.passengers),
         language: lang,
       }
+      
+      // Gérer les adresses personnalisées
+      if (pickupType === 'custom') {
+        payload.pickupCustomAddress = customPickupAddress
+        payload.pickupZoneId = null
+        if (pickupCoords) {
+          payload.pickupLatitude = pickupCoords.lat
+          payload.pickupLongitude = pickupCoords.lng
+        }
+      }
+      
+      if (dropoffType === 'custom') {
+        payload.dropoffCustomAddress = customDropoffAddress
+        payload.dropoffZoneId = null
+        if (dropoffCoords) {
+          payload.dropoffLatitude = dropoffCoords.lat
+          payload.dropoffLongitude = dropoffCoords.lng
+        }
+      }
+      
       if (tripType !== 'ALLER_RETOUR') delete payload.returnDateTime
       if (!payload.flightNumber) delete payload.flightNumber
       if (!payload.notes) delete payload.notes
+      if (promoCode.trim()) payload.promoCode = promoCode.trim()
+      payload.autoAssign = autoAssign
       const { data } = await reservationsApi.create(payload)
+      
+      // Sauvegarder les infos client pour la prochaine fois
+      saveClientInfo({
+        firstName: formData.clientFirstName,
+        lastName: formData.clientLastName,
+        email: formData.clientEmail,
+        phone: formData.clientPhone,
+        lastPromoCode: promoCode.trim() || undefined,
+        lastPickupZoneId: formData.pickupZoneId,
+        lastDropoffZoneId: formData.dropoffZoneId,
+      })
+      
+      // Ajouter à l'historique
+      const pickupZoneName = pickupType === 'zone' 
+        ? zones.find(z => z.id === formData.pickupZoneId)?.name || ''
+        : customPickupAddress
+      const dropoffZoneName = dropoffType === 'zone'
+        ? zones.find(z => z.id === formData.dropoffZoneId)?.name || ''
+        : customDropoffAddress
+      addToHistory({
+        code: data.code,
+        date: new Date().toISOString(),
+        pickupZone: pickupZoneName,
+        dropoffZone: dropoffZoneName,
+        amount: data.amount,
+        status: data.status,
+      })
+      
       setSuccess(true)
       setReservationCode(data.code)
       localStorage.setItem('vtc_last_code', data.code)
@@ -206,13 +329,11 @@ export function ReservationForm() {
      RENDU PRINCIPAL
   ══════════════════════════════════════════════════════════════ */
   return (
-    <div className="min-h-[calc(100dvh-7rem)] bg-gray-50 pb-10">
-      <div className="max-w-lg mx-auto px-4 pt-6">
-
-        <div className="mb-6">
-          <h1 className="text-xl font-bold text-gray-900">{f.title}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{f.subtitle}</p>
-        </div>
+    <>
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-gray-900">{f.title}</h1>
+        <p className="text-sm text-gray-500 mt-0.5">{f.subtitle}</p>
+      </div>
 
         <div className="flex items-center mb-6">
           {[{ id: 1, label: f.step1 }, { id: 2, label: f.step2 }].map((s, i) => (
@@ -270,13 +391,65 @@ export function ReservationForm() {
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{f.itinerary}</p>
 
               <Field label={f.departure}>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><IconMapPin /></div>
-                  <select value={formData.pickupZoneId} onChange={e => set('pickupZoneId', e.target.value)} className={selectCls + ' pl-9'}>
-                    <option value="">{f.selectDeparture}</option>
-                    {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
-                  </select>
+                <div className="mb-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPickupType('zone')}
+                    className={`flex-1 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
+                      pickupType === 'zone'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Zone prédéfinie
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPickupType('custom')}
+                    className={`flex-1 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
+                      pickupType === 'custom'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Adresse personnalisée
+                  </button>
                 </div>
+                
+                {pickupType === 'zone' ? (
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><IconMapPin /></div>
+                    <select value={formData.pickupZoneId} onChange={e => set('pickupZoneId', e.target.value)} className={selectCls + ' pl-9'}>
+                      <option value="">{f.selectDeparture}</option>
+                      {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="text"
+                      value={customPickupAddress}
+                      onChange={e => setCustomPickupAddress(e.target.value)}
+                      placeholder="Ex: Rue 10, Sicap Liberté, Dakar"
+                      className={inputCls}
+                    />
+                    {geocodingPickup && (
+                      <p className="text-xs text-blue-600 mt-1">
+                        🔍 Recherche de l'adresse...
+                      </p>
+                    )}
+                    {!geocodingPickup && pickupCoords && (
+                      <p className="text-xs text-emerald-600 mt-1">
+                        ✓ Adresse localisée
+                      </p>
+                    )}
+                    {!geocodingPickup && !pickupCoords && customPickupAddress.length > 10 && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        📍 Entrez l'adresse complète avec le quartier
+                      </p>
+                    )}
+                  </div>
+                )}
               </Field>
 
               <div className="flex items-center gap-2">
@@ -286,13 +459,65 @@ export function ReservationForm() {
               </div>
 
               <Field label={f.arrival}>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><IconMapPin /></div>
-                  <select value={formData.dropoffZoneId} onChange={e => set('dropoffZoneId', e.target.value)} className={selectCls + ' pl-9'}>
-                    <option value="">{f.selectArrival}</option>
-                    {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
-                  </select>
+                <div className="mb-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDropoffType('zone')}
+                    className={`flex-1 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
+                      dropoffType === 'zone'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Zone prédéfinie
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDropoffType('custom')}
+                    className={`flex-1 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
+                      dropoffType === 'custom'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Adresse personnalisée
+                  </button>
                 </div>
+                
+                {dropoffType === 'zone' ? (
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><IconMapPin /></div>
+                    <select value={formData.dropoffZoneId} onChange={e => set('dropoffZoneId', e.target.value)} className={selectCls + ' pl-9'}>
+                      <option value="">{f.selectArrival}</option>
+                      {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="text"
+                      value={customDropoffAddress}
+                      onChange={e => setCustomDropoffAddress(e.target.value)}
+                      placeholder="Ex: Avenue Bourguiba, Plateau, Dakar"
+                      className={inputCls}
+                    />
+                    {geocodingDropoff && (
+                      <p className="text-xs text-blue-600 mt-1">
+                        🔍 Recherche de l'adresse...
+                      </p>
+                    )}
+                    {!geocodingDropoff && dropoffCoords && (
+                      <p className="text-xs text-emerald-600 mt-1">
+                        ✓ Adresse localisée
+                      </p>
+                    )}
+                    {!geocodingDropoff && !dropoffCoords && customDropoffAddress.length > 10 && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        📍 Entrez l'adresse complète avec le quartier
+                      </p>
+                    )}
+                  </div>
+                )}
               </Field>
             </div>
 
@@ -387,6 +612,40 @@ export function ReservationForm() {
                 <input type="text" value={formData.flightNumber} onChange={e => set('flightNumber', e.target.value)} className={inputCls} placeholder="AF718" />
               </Field>
 
+              <Field label="Code promo (optionnel)">
+                <div className="space-y-2">
+                  <input 
+                    type="text" 
+                    value={promoCode} 
+                    onChange={e => {
+                      setPromoCode(e.target.value.toUpperCase())
+                      setPromoError('')
+                    }} 
+                    className={inputCls} 
+                    placeholder="PROMO2024" 
+                  />
+                  {promoError && (
+                    <p className="text-xs text-red-600">{promoError}</p>
+                  )}
+                </div>
+              </Field>
+
+              <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="autoAssign"
+                  checked={autoAssign}
+                  onChange={e => setAutoAssign(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                />
+                <label htmlFor="autoAssign" className="flex-1 cursor-pointer">
+                  <p className="text-sm font-semibold text-gray-900">🤖 Assignation automatique</p>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Assigner automatiquement le chauffeur disponible le plus proche (recommandé)
+                  </p>
+                </label>
+              </div>
+
               <Field label={f.notes}>
                 <textarea value={formData.notes} onChange={e => set('notes', e.target.value)} className={inputCls + ' resize-none'} placeholder={f.notesPlaceholder} rows={2} />
               </Field>
@@ -436,9 +695,7 @@ export function ReservationForm() {
           )}
         </div>
 
-        <p className="text-xs text-center text-gray-400 mt-3">{f.footer}</p>
-
-      </div>
-    </div>
+      <p className="text-xs text-center text-gray-400 mt-3">{f.footer}</p>
+    </>
   )
 }

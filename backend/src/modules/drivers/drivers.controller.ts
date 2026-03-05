@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, NotFoundExc
 import { DriversService } from './drivers.service';
 import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverStatusDto } from './dto/update-driver-status.dto';
+import { UpdateLocationDto } from './dto/update-location.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -99,5 +100,22 @@ export class DriversController {
   @Roles(Role.ADMIN)
   deactivate(@Param('id') id: string) {
     return this.driversService.deactivate(id);
+  }
+
+  @Post('me/location')
+  @UseGuards(RolesGuard)
+  @Roles(Role.DRIVER)
+  async updateMyLocation(
+    @CurrentUser() user: { id: string },
+    @Body() dto: UpdateLocationDto,
+  ) {
+    const driver = await this.driversService.findByUserId(user.id);
+    if (!driver) throw new NotFoundException('Driver profile not found');
+    return this.driversService.updateLocation(driver.id, dto);
+  }
+
+  @Get(':id/location')
+  getDriverLocation(@Param('id') id: string) {
+    return this.driversService.getLocation(id);
   }
 }

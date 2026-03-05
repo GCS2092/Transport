@@ -158,33 +158,6 @@ export class NotificationsService {
     );
   }
 
-  async sendRideCompleted(reservation: Reservation, pdfBuffer?: Buffer): Promise<void> {
-    const lang = reservation.language;
-    const waLink = this.buildWhatsAppLink(reservation);
-
-    const title = this.t(lang, 'Course terminée — Merci !', 'Ride completed — Thank you!');
-    const body = `
-      <p>${this.t(lang, `Merci <strong>${reservation.clientFirstName}</strong> d'avoir choisi VTC Dakar.`, `Thank you <strong>${reservation.clientFirstName}</strong> for choosing VTC Dakar.`)}</p>
-      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Code', 'Code')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.code}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Chauffeur', 'Driver')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.driver?.firstName} ${reservation.driver?.lastName}</td></tr>
-        <tr><td style="padding:8px;color:#666;font-weight:bold;">${this.t(lang, 'Montant final', 'Final amount')}</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
-      </table>
-      <p>${this.t(lang, 'Votre reçu est disponible en pièce jointe.', 'Your receipt is attached.')}</p>`;
-
-    const attachments = pdfBuffer
-      ? [{ filename: `recu-${reservation.code}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }]
-      : [];
-
-    await this.sendEmail(
-      reservation.clientEmail,
-      `${title} — #${reservation.code}`,
-      this.buildEmailHtml(reservation, title, body, waLink),
-      NotificationType.RIDE_COMPLETED,
-      reservation.id,
-      attachments,
-    );
-  }
 
   async sendReservationCancelled(reservation: Reservation): Promise<void> {
     const lang = reservation.language;
@@ -252,6 +225,57 @@ export class NotificationsService {
       `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`,
       NotificationType.RESERVATION_CANCELLED,
       reservation.id,
+    );
+  }
+
+  async sendRideStarted(reservation: Reservation): Promise<void> {
+    const lang = reservation.language;
+    const title = this.t(lang, 'Votre course a démarré', 'Your ride has started');
+    const body = `
+      <p>${this.t(lang, 'Bonjour', 'Hello')} <strong>${reservation.clientFirstName}</strong>,</p>
+      <p>${this.t(lang, 'Votre chauffeur a démarré la course.', 'Your driver has started the ride.')}</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Code', 'Code')}</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Chauffeur', 'Driver')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.driver?.firstName} ${reservation.driver?.lastName}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Véhicule', 'Vehicle')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.driver?.vehicleType} - ${reservation.driver?.vehiclePlate}</td></tr>
+        <tr><td style="padding:8px;color:#666;">${this.t(lang, 'Trajet', 'Route')}</td><td style="padding:8px;">${reservation.pickupZone?.name} → ${reservation.dropoffZone?.name}</td></tr>
+      </table>
+      <p style="font-size:13px;color:#888;">${this.t(lang, 'Bon voyage !', 'Have a safe trip!')}</p>`;
+
+    await this.sendEmail(
+      reservation.clientEmail,
+      `${title} — #${reservation.code}`,
+      this.buildEmailHtml(reservation, title, body),
+      NotificationType.RIDE_STARTED,
+      reservation.id,
+    );
+  }
+
+  async sendRideCompleted(reservation: Reservation, pdfBuffer?: Buffer): Promise<void> {
+    const lang = reservation.language;
+    const title = this.t(lang, 'Course terminée', 'Ride completed');
+    const body = `
+      <p>${this.t(lang, 'Bonjour', 'Hello')} <strong>${reservation.clientFirstName}</strong>,</p>
+      <p>${this.t(lang, 'Votre course est terminée. Merci d\'avoir utilisé nos services !', 'Your ride is completed. Thank you for using our services!')}</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Code', 'Code')}</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Trajet', 'Route')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.pickupZone?.name} → ${reservation.dropoffZone?.name}</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">${this.t(lang, 'Montant', 'Amount')}</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+      </table>
+      <p style="font-size:13px;color:#888;">${this.t(lang, 'À bientôt pour une prochaine course !', 'See you soon for your next ride!')}</p>`;
+
+    const attachments = pdfBuffer ? [{
+      filename: `recu-${reservation.code}.pdf`,
+      content: pdfBuffer,
+    }] : [];
+
+    await this.sendEmail(
+      reservation.clientEmail,
+      `${title} — #${reservation.code}`,
+      this.buildEmailHtml(reservation, title, body),
+      NotificationType.RIDE_COMPLETED,
+      reservation.id,
+      attachments,
     );
   }
 

@@ -37,6 +37,7 @@ export default function AdminReservations() {
   const [exporting, setExporting] = useState(false)
   const [archiving, setArchiving] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchType, setSearchType] = useState<'code' | 'client'>('code')
   const [showEditModal, setShowEditModal] = useState(false)
   const [editForm, setEditForm] = useState<Partial<Reservation>>({})
 
@@ -74,6 +75,21 @@ export default function AdminReservations() {
     } catch (err) {
       console.error('Failed to assign driver', err)
       alert('Erreur lors de l\'assignation du chauffeur')
+    }
+  }
+
+  const handleAutoAssign = async () => {
+    if (!selectedReservation) return
+    try {
+      await reservationsApi.autoAssignDriver(selectedReservation.id)
+      setShowAssignModal(false)
+      setSelectedReservation(null)
+      setSelectedDriver('')
+      loadData()
+      alert('Chauffeur assigné automatiquement avec succès !')
+    } catch (err: any) {
+      console.error('Failed to auto-assign driver', err)
+      alert(err.response?.data?.message || 'Erreur lors de l\'assignation automatique')
     }
   }
 
@@ -168,7 +184,22 @@ export default function AdminReservations() {
     ANNULEE: 'Annulée',
   }
 
-  const filteredReservations = reservations.filter(res => {
+  const filteredReservations = reservations.filter(r => {
+    if (!searchQuery) return true
+    
+    const query = searchQuery.toLowerCase()
+    
+    if (searchType === 'code') {
+      return r.code.toLowerCase().includes(query)
+    } else {
+      // Recherche par client (email ou téléphone)
+      return (
+        r.clientEmail.toLowerCase().includes(query) ||
+        r.clientPhone.includes(query) ||
+        `${r.clientFirstName} ${r.clientLastName}`.toLowerCase().includes(query)
+      )
+    }
+  }).filter(res => {
     if (!searchQuery) return true
     const query = searchQuery.toLowerCase()
     return (
@@ -195,6 +226,28 @@ export default function AdminReservations() {
 
         {/* Barre de recherche */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+          <div className="flex gap-3 mb-3">
+            <button
+              onClick={() => setSearchType('code')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                searchType === 'code'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              🔍 Par code
+            </button>
+            <button
+              onClick={() => setSearchType('client')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                searchType === 'client'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              👤 Par client
+            </button>
+          </div>
           <div className="relative">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
               <IconSearch />
@@ -203,7 +256,11 @@ export default function AdminReservations() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Rechercher par code, client, email, téléphone, zone, chauffeur, montant..."
+              placeholder={
+                searchType === 'code'
+                  ? 'Rechercher par code de réservation (ex: VTC-ABC123)...'
+                  : 'Rechercher par nom, email ou téléphone du client...'
+              }
               className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             {searchQuery && (
@@ -374,24 +431,93 @@ export default function AdminReservations() {
                 <p className="text-sm text-gray-700">{selectedReservation.clientFirstName} {selectedReservation.clientLastName}</p>
               </div>
 
+              <div className="mb-4">
+                <button
+                  onClick={handleAutoAssign}
+                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 transition-all shadow-md flex items-center justify-center gap-2"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                  </svg>
+                  Assignation automatique (chauffeur le plus proche)
+                </button>
+                <p className="text-xs text-gray-500 text-center mt-2">
+                  Le système choisira le chauffeur disponible le plus proche basé sur la géolocalisation
+                </p>
+              </div>
+
+              <div className="relative mb-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200"></div>
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="px-2 bg-white text-gray-500">OU</span>
+                </div>
+              </div>
+
               <div className="mb-6">
                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
-                  Sélectionner un chauffeur
+                  Sélectionner manuellement un chauffeur
                 </label>
-                <select
-                  value={selectedDriver}
-                  onChange={e => setSelectedDriver(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="">-- Choisir --</option>
+                <div className="space-y-2 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-2">
                   {drivers
-                    .filter(d => d.isActive && d.status === 'DISPONIBLE')
-                    .map(d => (
-                      <option key={d.id} value={d.id}>
-                        {d.firstName} {d.lastName} • {d.vehicleType}
-                      </option>
-                    ))}
-                </select>
+                    .filter(d => d.isActive)
+                    .sort((a, b) => {
+                      if (a.status === 'DISPONIBLE' && b.status !== 'DISPONIBLE') return -1
+                      if (a.status !== 'DISPONIBLE' && b.status === 'DISPONIBLE') return 1
+                      return 0
+                    })
+                    .map(d => {
+                      const hasActiveCourse = reservations.some(r => 
+                        r.driver?.id === d.id && 
+                        (r.status === 'ASSIGNEE' || r.status === 'EN_COURS')
+                      )
+                      const isAvailable = d.status === 'DISPONIBLE' && !hasActiveCourse
+                      
+                      return (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => isAvailable && setSelectedDriver(d.id)}
+                          disabled={!isAvailable}
+                          className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all ${
+                            selectedDriver === d.id
+                              ? 'border-emerald-500 bg-emerald-50'
+                              : isAvailable
+                              ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                              : 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-gray-900">
+                                {d.firstName} {d.lastName}
+                              </p>
+                              <p className="text-xs text-gray-500">{d.vehicleType} • {d.vehiclePlate}</p>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                d.status === 'DISPONIBLE' 
+                                  ? 'bg-emerald-100 text-emerald-700' 
+                                  : d.status === 'EN_COURSE'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {d.status === 'DISPONIBLE' ? 'Disponible' : d.status === 'EN_COURSE' ? 'En course' : 'Hors ligne'}
+                              </span>
+                              {hasActiveCourse && (
+                                <span className="text-xs font-semibold text-orange-600">Course active</span>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  {drivers.filter(d => d.isActive).length === 0 && (
+                    <p className="text-sm text-gray-500 text-center py-4">Aucun chauffeur actif</p>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-3">

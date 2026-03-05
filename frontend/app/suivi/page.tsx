@@ -2,9 +2,17 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { reservationsApi, Reservation } from '@/lib/api'
+import { reservationsApi, Reservation, DriverLocation } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n'
+import { updateReservationStatus } from '@/lib/clientStorage'
+import { calculateRoute, formatDuration, formatDistance } from '@/lib/geocoding'
+import dynamic from 'next/dynamic'
+
+const Map = dynamic(() => import('@/components/Map').then(mod => ({ default: mod.Map })), {
+  ssr: false,
+  loading: () => <div className="w-full h-64 bg-gray-100 rounded-xl animate-pulse" />
+})
 
 const STATUS_COLORS: Record<string, { color: string; bg: string }> = {
   EN_ATTENTE: { color: '#A16207', bg: '#FEF9C3' },
@@ -27,6 +35,9 @@ function SuiviContent() {
   const [cancelLoading, setCancelLoading] = useState(false)
   const [showCancelForm, setShowCancelForm] = useState(false)
   const [cancelToken, setCancelToken] = useState('')
+  const [driverLocation, setDriverLocation] = useState<DriverLocation | null>(null)
+  const [routeCoordinates, setRouteCoordinates] = useState<Array<[number, number]>>([])
+  const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null)
 
   const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
     EN_ATTENTE: { label: 'En attente', ...STATUS_COLORS.EN_ATTENTE },
@@ -41,6 +52,56 @@ function SuiviContent() {
     if (c) { setCode(c); doSearch(c) }
   }, [])
 
+  // Polling pour la position du chauffeur si course EN_COURS
+  useEffect(() => {
+    if (!reservation || reservation.status !== 'EN_COURS') {
+      setDriverLocation(null)
+      setRouteCoordinates([])
+      setRouteInfo(null)
+      return
+    }
+
+    const fetchDriverLocation = async () => {
+      try {
+        const { data } = await reservationsApi.getDriverLocation(reservation.code)
+        setDriverLocation(data)
+      } catch (err) {
+        console.error('Failed to fetch driver location', err)
+      }
+    }
+
+    fetchDriverLocation()
+    const interval = setInterval(fetchDriverLocation, 10000) // 10 secondes
+
+    return () => clearInterval(interval)
+  }, [reservation])
+
+  // Calculer l'itinéraire du chauffeur vers le client
+  useEffect(() => {
+    if (!driverLocation || !reservation) {
+      setRouteCoordinates([])
+      setRouteInfo(null)
+      return
+    }
+
+    const destLat = reservation.pickupLatitude || reservation.pickupZone?.latitude
+    const destLng = reservation.pickupLongitude || reservation.pickupZone?.longitude
+
+    if (!destLat || !destLng) return
+
+    calculateRoute(
+      driverLocation.latitude,
+      driverLocation.longitude,
+      destLat,
+      destLng
+    ).then(route => {
+      if (route) {
+        setRouteCoordinates(route.coordinates)
+        setRouteInfo({ distance: route.distance, duration: route.duration })
+      }
+    })
+  }, [driverLocation, reservation])
+
   const doSearch = async (c: string) => {
     if (!c.trim()) return
     setLoading(true)
@@ -49,6 +110,10 @@ function SuiviContent() {
     try {
       const { data } = await reservationsApi.getByCode(c.trim())
       setReservation(data)
+      // Mettre à jour le statut dans l'historique localStorage
+      updateReservationStatus(data.code, data.status)
+      // Déclencher un événement pour rafraîchir l'historique
+      window.dispatchEvent(new Event('vtc_code_saved'))
     } catch (err: any) {
       setError(err.response?.data?.message || tr.notFound)
     } finally {
@@ -167,12 +232,16 @@ function SuiviContent() {
               <div className="flex items-center gap-3">
                 <div className="flex-1">
                   <p className="text-xs text-[var(--muted)]">{tr.departure}</p>
-                  <p className="font-bold text-[var(--ink)]">{reservation.pickupZone.name}</p>
+                  <p className="font-bold text-[var(--ink)]">
+                    {reservation.pickupCustomAddress || reservation.pickupZone?.name || 'Adresse de départ'}
+                  </p>
                 </div>
                 <div className="text-[var(--accent)] font-bold text-xl">→</div>
                 <div className="flex-1 text-right">
                   <p className="text-xs text-[var(--muted)]">{tr.arrival}</p>
-                  <p className="font-bold text-[var(--ink)]">{reservation.dropoffZone.name}</p>
+                  <p className="font-bold text-[var(--ink)]">
+                    {reservation.dropoffCustomAddress || reservation.dropoffZone?.name || 'Adresse d\'arrivée'}
+                  </p>
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-[var(--border)] flex justify-between items-center">
@@ -195,6 +264,75 @@ function SuiviContent() {
                 </div>
               ))}
             </div>
+
+            {/* Carte de suivi en temps réel */}
+            {reservation.status === 'EN_COURS' && driverLocation && (
+              <div className="bg-white rounded-2xl border border-[var(--border)] p-5">
+                <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide mb-3">📍 Suivi en temps réel</p>
+                
+                {/* ETA et Distance */}
+                {routeInfo && (
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg p-3 text-white text-center">
+                      <p className="text-xs opacity-90 mb-1">Arrivée estimée</p>
+                      <p className="text-2xl font-bold">{formatDuration(routeInfo.duration)}</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-3 text-white text-center">
+                      <p className="text-xs opacity-90 mb-1">Distance</p>
+                      <p className="text-2xl font-bold">{formatDistance(routeInfo.distance)}</p>
+                    </div>
+                  </div>
+                )}
+
+                <Map
+                  center={[driverLocation.latitude, driverLocation.longitude]}
+                  zoom={14}
+                  markers={[
+                    {
+                      position: [driverLocation.latitude, driverLocation.longitude],
+                      popup: 'Votre chauffeur',
+                      icon: 'driver'
+                    },
+                    ...(reservation.pickupLatitude && reservation.pickupLongitude ? [{
+                      position: [reservation.pickupLatitude, reservation.pickupLongitude] as [number, number],
+                      popup: reservation.pickupCustomAddress || 'Point de départ',
+                      icon: 'pickup' as const
+                    }] : reservation.pickupZone?.latitude && reservation.pickupZone?.longitude ? [{
+                      position: [reservation.pickupZone.latitude, reservation.pickupZone.longitude] as [number, number],
+                      popup: reservation.pickupZone.name,
+                      icon: 'pickup' as const
+                    }] : [])
+                  ]}
+                  route={routeCoordinates.length > 0 ? routeCoordinates : undefined}
+                  className="h-80"
+                />
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Position mise à jour il y a {Math.round((Date.now() - new Date(driverLocation.updatedAt).getTime()) / 1000)}s
+                </p>
+              </div>
+            )}
+
+            {/* Télécharger le reçu si terminée */}
+            {reservation.status === 'TERMINEE' && (
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-5 text-white">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="text-sm font-semibold mb-1">✓ Course terminée</p>
+                    <p className="text-xs opacity-90">Merci d'avoir utilisé nos services</p>
+                  </div>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-80">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </div>
+                <a
+                  href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1'}/reservations/code/${reservation.code}/receipt`}
+                  download
+                  className="block w-full py-3 bg-white text-emerald-600 rounded-lg font-bold text-center hover:bg-emerald-50 transition-colors"
+                >
+                  📄 Télécharger le reçu PDF
+                </a>
+              </div>
+            )}
 
             {/* Chauffeur assigné */}
             {reservation.driver && (

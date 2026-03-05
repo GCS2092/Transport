@@ -106,9 +106,21 @@ export default function AdminDashboard() {
       <div className="max-w-6xl mx-auto px-4 pt-6">
         
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Tableau de bord</h1>
-          <p className="text-sm text-gray-500 mt-1">Vue d'ensemble de l'activité</p>
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Tableau de bord</h1>
+            <p className="text-sm text-gray-500 mt-1">Vue d'ensemble de l'activité</p>
+          </div>
+          <a
+            href="/admin/map"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+              <circle cx="12" cy="10" r="3"/>
+            </svg>
+            Carte des chauffeurs
+          </a>
         </div>
 
         {/* Alertes */}
@@ -309,6 +321,58 @@ export default function AdminDashboard() {
             </div>
           </div>
         </div>
+
+        {/* Liste détaillée des chauffeurs actifs */}
+        {stats.driversDetails && stats.driversDetails.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 className="text-base font-bold text-gray-900 mb-4">Chauffeurs actifs</h2>
+            <div className="space-y-2">
+              {stats.driversDetails.map(driver => (
+                <div 
+                  key={driver.id} 
+                  className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-sm font-semibold text-gray-900">
+                        {driver.firstName} {driver.lastName}
+                      </p>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        driver.status === 'DISPONIBLE' 
+                          ? 'bg-emerald-100 text-emerald-700' 
+                          : driver.status === 'EN_COURSE'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {driver.status === 'DISPONIBLE' ? 'Disponible' : driver.status === 'EN_COURSE' ? 'En course' : 'Hors ligne'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {driver.vehicleType} • {driver.vehiclePlate}
+                    </p>
+                    {driver.activeCourse && (
+                      <div className="mt-2 pt-2 border-t border-gray-100">
+                        <p className="text-xs text-gray-600">
+                          <span className="font-semibold">Course active:</span> {driver.activeCourse.code}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {driver.activeCourse.pickupZone} → {driver.activeCourse.dropoffZone}
+                        </p>
+                        <span className={`inline-block mt-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          driver.activeCourse.status === 'ASSIGNEE' 
+                            ? 'bg-blue-100 text-blue-700' 
+                            : 'bg-purple-100 text-purple-700'
+                        }`}>
+                          {driver.activeCourse.status === 'ASSIGNEE' ? 'Assignée' : 'En cours'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

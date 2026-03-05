@@ -97,7 +97,59 @@ export class AdminController {
       actifs: driverStats.filter(d => d.isActive).length,
     };
 
+    // Récupérer les courses actives pour chaque chauffeur
+    const activeReservations = await this.reservationRepository.find({
+      where: [
+        { status: ReservationStatus.ASSIGNEE },
+        { status: ReservationStatus.EN_COURS },
+      ],
+      relations: ['driver', 'pickupZone', 'dropoffZone'],
+    });
+
+    const driversWithCourses = driverStats
+      .filter(d => d.isActive)
+      .map(driver => {
+        const activeCourse = activeReservations.find(r => r.driverId === driver.id);
+        return {
+          id: driver.id,
+          firstName: driver.firstName,
+          lastName: driver.lastName,
+          status: driver.status,
+          vehicleType: driver.vehicleType,
+          vehiclePlate: driver.vehiclePlate,
+          activeCourse: activeCourse ? {
+            code: activeCourse.code,
+            status: activeCourse.status,
+            pickupZone: activeCourse.pickupZone?.name,
+            dropoffZone: activeCourse.dropoffZone?.name,
+          } : null,
+        };
+      });
+
     const failedEmails = await this.emailLogRepository.count({ where: { status: 'ECHEC' } });
+
+    // Préparer activeDrivers pour la carte globale
+    const activeDrivers = driverStats
+      .filter(d => d.isActive && (d.status === 'DISPONIBLE' || d.status === 'EN_COURSE'))
+      .map(driver => {
+        const activeCourse = activeReservations.find(r => r.driverId === driver.id);
+        return {
+          id: driver.id,
+          firstName: driver.firstName,
+          lastName: driver.lastName,
+          phone: driver.phone,
+          vehicleType: driver.vehicleType,
+          vehiclePlate: driver.vehiclePlate,
+          status: driver.status,
+          currentRide: activeCourse ? {
+            code: activeCourse.code,
+            clientName: `${activeCourse.clientFirstName} ${activeCourse.clientLastName}`,
+            pickup: activeCourse.pickupCustomAddress || activeCourse.pickupZone?.name || 'Adresse personnalisée',
+            dropoff: activeCourse.dropoffCustomAddress || activeCourse.dropoffZone?.name || 'Adresse personnalisée',
+            amount: activeCourse.amount,
+          } : undefined,
+        };
+      });
 
     return {
       total,
@@ -108,6 +160,8 @@ export class AdminController {
       },
       thisMonth: monthlyCount,
       drivers: driversByStatus,
+      driversDetails: driversWithCourses,
+      activeDrivers,
       alerts: {
         failedEmails,
       },

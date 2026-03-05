@@ -6,6 +6,7 @@ import {
   IsDateString,
   IsInt,
   IsOptional,
+  IsNumber,
   Min,
   Max,
   Matches,
@@ -29,11 +30,37 @@ export class CreateReservationDto {
   @IsEnum(TripType)
   tripType: TripType;
 
+  @IsOptional()
   @IsUUID()
-  pickupZoneId: string;
+  pickupZoneId?: string;
 
+  @IsOptional()
+  @IsString()
+  pickupCustomAddress?: string;
+
+  @IsOptional()
+  @IsNumber()
+  pickupLatitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  pickupLongitude?: number;
+
+  @IsOptional()
   @IsUUID()
-  dropoffZoneId: string;
+  dropoffZoneId?: string;
+
+  @IsOptional()
+  @IsString()
+  dropoffCustomAddress?: string;
+
+  @IsOptional()
+  @IsNumber()
+  dropoffLatitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  dropoffLongitude?: number;
 
   @IsDateString()
   pickupDateTime: string;
@@ -59,4 +86,8 @@ export class CreateReservationDto {
   @IsOptional()
   @IsEnum(Language)
   language?: Language;
+
+  @IsOptional()
+  @IsString()
+  promoCode?: string;
 }
