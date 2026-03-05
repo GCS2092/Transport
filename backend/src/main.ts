@@ -16,34 +16,39 @@ async function bootstrap() {
   app.use(helmet.default());
 
   // CORS : support multi-origines (dev local + Vercel + domaine custom)
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
-    .split(',')
-    .map(o => o.trim())
-    .filter(Boolean);
+  // Sources d'origines autorisées :
+  //   1. localhost / 127.0.0.1 (tout port) — dev
+  //   2. 192.168.x.x (tout port) — dev mobile réseau local
+  //   3. *.vercel.app — tous les déploiements Vercel
+  //   4. FRONTEND_URL — l'URL principale du frontend (ex: https://transport-six-xi.vercel.app)
+  //   5. ALLOWED_ORIGINS — liste CSV d'URLs supplémentaires
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    ...(process.env.ALLOWED_ORIGINS || '').split(','),
+  ]
+    .map(o => o?.trim())
+    .filter(Boolean) as string[];
+
+  console.log('✅ CORS allowed origins:', allowedOrigins.length ? allowedOrigins : ['(none — only localhost)']);
 
   app.enableCors({
     origin: (origin, callback) => {
       // Pas d'origin = requête serveur-à-serveur (autorisé)
-      if (!origin) {
-        return callback(null, true);
-      }
+      if (!origin) return callback(null, true);
 
-      // Localhost/127.0.0.1 (dev)
-      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
-        return callback(null, true);
-      }
+      // Localhost / 127.0.0.1 (dev)
+      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return callback(null, true);
 
       // Réseau local 192.168.x.x (dev mobile)
-      if (/^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin)) {
-        return callback(null, true);
-      }
+      if (/^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin)) return callback(null, true);
 
-      // Origines autorisées via .env (Vercel, domaine custom)
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+      // *.vercel.app (tous les déploiements preview + production Vercel)
+      if (/^https:\/\/[a-zA-Z0-9-]+(\.vercel\.app)$/.test(origin)) return callback(null, true);
 
-      // Sinon : bloqué
+      // Origines explicitement autorisées via .env
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+
+      console.warn(`CORS blocked: ${origin}`);
       callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
