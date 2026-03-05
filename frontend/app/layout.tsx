@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: "/favicon.ico",
-    apple: "/icon-192x192.png",
+    apple: "/FOND.jpeg",
   },
 };
 
@@ -47,9 +47,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="WEND'D Transport" />
-        <link rel="apple-touch-icon" href="/icon-192x192.png" />
-        <link rel="apple-touch-icon" sizes="192x192" href="/icon-192x192.png" />
-        <link rel="apple-touch-icon" sizes="512x512" href="/icon-512x512.png" />
+        <link rel="apple-touch-icon" href="/FOND.jpeg" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/FOND.jpeg" />
         {/* Viewport mobile */}
         <meta name="mobile-web-app-capable" content="yes" />
       </head>

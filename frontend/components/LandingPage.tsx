@@ -9,15 +9,20 @@ export function LandingPage({ onEnter }: Props) {
   const fr = lang === 'fr'
 
   return (
-    <div className="min-h-[calc(100dvh-3rem)] flex flex-col bg-[var(--primary)] overflow-hidden relative pb-20">
-
-      {/* Cercles décoratifs */}
-      <div className="absolute top-[-80px] right-[-80px] w-64 h-64 rounded-full bg-white/5 pointer-events-none" />
-      <div className="absolute top-[60px] right-[-40px] w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
-      <div className="absolute bottom-[80px] left-[-60px] w-52 h-52 rounded-full bg-white/5 pointer-events-none" />
+    <div
+      className="min-h-[calc(100dvh-48px)] -mb-20 pb-20 flex flex-col overflow-hidden relative"
+      style={{
+        backgroundImage: 'url(/FOND.jpeg)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center center',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
+      {/* Overlay sombre pour lisibilité du texte */}
+      <div className="absolute inset-0 bg-black/65 pointer-events-none" />
 
       {/* Zone principale */}
-      <div className="flex-1 flex flex-col justify-center px-6 pt-10 max-w-lg mx-auto w-full">
+      <div className="relative z-10 flex-1 flex flex-col justify-center px-6 pt-6 max-w-lg mx-auto w-full">
 
         {/* Badge */}
         <div className="inline-flex items-center gap-2 bg-white/10 rounded-full px-4 py-1.5 mb-8 self-start">
@@ -29,14 +34,13 @@ export function LandingPage({ onEnter }: Props) {
 
         {/* Titre */}
         <h1 className="text-4xl font-extrabold text-white leading-tight mb-3">
-          {fr ? (
-            <>Votre transfert<br /><span className="text-[var(--accent)]">à Dakar</span><br />en 2 minutes</>
-          ) : (
-            <>Your transfer<br /><span className="text-[var(--accent)]">in Dakar</span><br />in 2 minutes</>
-          )}
+          WEND&apos;D transport<br />
+          <span className="text-[var(--accent)] text-2xl font-semibold">
+            {fr ? 'le chemin sûr vers votre direction' : 'the safe way to your destination'}
+          </span>
         </h1>
 
-        <p className="text-white/60 text-sm leading-relaxed mb-10">
+        <p className="text-white/70 text-sm leading-relaxed mb-10">
           {fr
             ? 'Tarifs fixes garantis, confirmation immédiate par email. Chauffeurs professionnels disponibles pour tous vos transferts.'
             : 'Fixed rates guaranteed, immediate email confirmation. Professional drivers available for all your transfers.'}
@@ -87,7 +91,7 @@ export function LandingPage({ onEnter }: Props) {
       </div>
 
       {/* CTA fixé en bas */}
-      <div className="px-6 pb-6 max-w-lg mx-auto w-full">
+      <div className="relative z-10 px-6 pb-6 max-w-lg mx-auto w-full">
         <button
           onClick={onEnter}
           className="w-full py-4 rounded-2xl bg-[var(--accent)] text-white text-base font-bold tracking-wide shadow-lg hover:bg-[var(--accent-hover)] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
