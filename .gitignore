@@ -20,6 +20,7 @@ test.html
 !**/public/images/*.svg
 *.svg
 *.ico
+!**/public/favicon.ico
 
 # ── OS ────────────────────────────────────────────────────────
 .DS_Store

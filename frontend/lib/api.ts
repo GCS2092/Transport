@@ -41,12 +41,13 @@ api.interceptors.response.use(
       const userId      = localStorage.getItem('vtc_user_id')
 
       if (!refreshToken || !userId) {
-        // Pas de refresh token → déconnecter
+        // Pas de refresh token → déconnecter seulement si l'utilisateur était connecté
+        const wasLoggedIn = !!localStorage.getItem('vtc_token')
         localStorage.removeItem('vtc_token')
         localStorage.removeItem('vtc_user')
         localStorage.removeItem('vtc_refresh_token')
         localStorage.removeItem('vtc_user_id')
-        window.location.href = '/login'
+        if (wasLoggedIn) window.location.href = '/login'
         return Promise.reject(error)
       }
 

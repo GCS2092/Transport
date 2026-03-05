@@ -3,9 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
-import axios from 'axios'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1'
+import { api } from '@/lib/api'
 
 interface Contact {
   id: string
@@ -51,14 +49,9 @@ export default function AdminContactFaqPage() {
 
   const fetchData = async () => {
     try {
-      const token = localStorage.getItem('vtc_token')
       const [contactsRes, faqsRes] = await Promise.all([
-        axios.get(`${API_URL}/settings/contacts/all`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        axios.get(`${API_URL}/settings/faqs/all`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        api.get('/settings/contacts/all'),
+        api.get('/settings/faqs/all'),
       ])
       setContacts(contactsRes.data)
       setFaqs(faqsRes.data)
@@ -71,15 +64,10 @@ export default function AdminContactFaqPage() {
 
   const saveContact = async (data: Partial<Contact>) => {
     try {
-      const token = localStorage.getItem('vtc_token')
       if (editingContact?.id) {
-        await axios.put(`${API_URL}/settings/contacts/${editingContact.id}`, data, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        await api.put(`/settings/contacts/${editingContact.id}`, data)
       } else {
-        await axios.post(`${API_URL}/settings/contacts`, data, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        await api.post('/settings/contacts', data)
       }
       fetchData()
       setShowContactModal(false)
@@ -93,10 +81,7 @@ export default function AdminContactFaqPage() {
   const deleteContact = async (id: string) => {
     if (!confirm('Supprimer ce contact ?')) return
     try {
-      const token = localStorage.getItem('vtc_token')
-      await axios.delete(`${API_URL}/settings/contacts/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      await api.delete(`/settings/contacts/${id}`)
       fetchData()
     } catch (error) {
       console.error('Erreur suppression contact:', error)
@@ -105,15 +90,10 @@ export default function AdminContactFaqPage() {
 
   const saveFaq = async (data: Partial<Faq>) => {
     try {
-      const token = localStorage.getItem('vtc_token')
       if (editingFaq?.id) {
-        await axios.put(`${API_URL}/settings/faqs/${editingFaq.id}`, data, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        await api.put(`/settings/faqs/${editingFaq.id}`, data)
       } else {
-        await axios.post(`${API_URL}/settings/faqs`, data, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        await api.post('/settings/faqs', data)
       }
       fetchData()
       setShowFaqModal(false)
@@ -127,10 +107,7 @@ export default function AdminContactFaqPage() {
   const deleteFaq = async (id: string) => {
     if (!confirm('Supprimer cette FAQ ?')) return
     try {
-      const token = localStorage.getItem('vtc_token')
-      await axios.delete(`${API_URL}/settings/faqs/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      await api.delete(`/settings/faqs/${id}`)
       fetchData()
     } catch (error) {
       console.error('Erreur suppression FAQ:', error)
