@@ -4,6 +4,8 @@ import { Navbar } from "@/components/Navbar";
 import { RouteGuard } from "@/components/RouteGuard";
 import { LanguageProvider } from "@/lib/i18n";
 import { AuthProvider } from "@/lib/auth";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   title: "VTC Dakar - Transferts Aéroport & VTC à Dakar",
@@ -60,6 +62,8 @@ export default function RootLayout({
             </main>
           </AuthProvider>
         </LanguageProvider>
+        <Analytics />
+        <SpeedInsights />
         <script
           dangerouslySetInnerHTML={{
             __html: `
