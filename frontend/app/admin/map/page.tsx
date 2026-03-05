@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminApi, driverApi } from '@/lib/api'
 import dynamic from 'next/dynamic'
@@ -32,12 +32,19 @@ interface DriverWithLocation {
   }
 }
 
+// Clé de cache: lat/lon arrondis à 3 décimales (~110m)
+function cacheKey(lat: number | string, lon: number | string) {
+  return `${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}`
+}
+
 export default function AdminMapPage() {
   const router = useRouter()
   const [drivers, setDrivers] = useState<DriverWithLocation[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDriver, setSelectedDriver] = useState<DriverWithLocation | null>(null)
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'DISPONIBLE' | 'EN_COURSE'>('ALL')
+  const [neighborhoods, setNeighborhoods] = useState<Record<string, string>>({})
+  const geocache = useRef<Record<string, string>>({}) // cache: cacheKey → neighborhood label
 
   useEffect(() => {
     loadDrivers()
@@ -46,11 +53,28 @@ export default function AdminMapPage() {
     return () => clearInterval(interval)
   }, [])
 
+  const reverseGeocode = async (lat: number, lon: number): Promise<string> => {
+    const key = cacheKey(lat, lon)
+    if (geocache.current[key]) return geocache.current[key]
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=fr`,
+        { headers: { 'User-Agent': 'WENDD-Transport/1.0' } }
+      )
+      const data = await res.json()
+      const a = data.address || {}
+      const label = a.suburb || a.neighbourhood || a.quarter || a.city_district || a.town || a.village || a.city || 'Zone inconnue'
+      geocache.current[key] = label
+      return label
+    } catch {
+      return 'Zone inconnue'
+    }
+  }
+
   const loadDrivers = async () => {
     try {
       const { data: stats } = await adminApi.getStats()
       
-      // Récupérer les chauffeurs actifs avec leurs positions
       const driversWithLocation: DriverWithLocation[] = []
       
       for (const driver of stats.activeDrivers || []) {
@@ -64,13 +88,26 @@ export default function AdminMapPage() {
               updatedAt: location.updatedAt
             } : undefined
           })
-        } catch (err) {
-          // Chauffeur sans position GPS
+        } catch {
           driversWithLocation.push(driver)
         }
       }
       
       setDrivers(driversWithLocation)
+
+      // Reverse geocoding en parallèle pour les chauffeurs avec position
+      const updates: Record<string, string> = {}
+      await Promise.all(
+        driversWithLocation
+          .filter(d => d.location)
+          .map(async d => {
+            const label = await reverseGeocode(d.location!.latitude, d.location!.longitude)
+            updates[d.id] = label
+          })
+      )
+      if (Object.keys(updates).length > 0) {
+        setNeighborhoods(prev => ({ ...prev, ...updates }))
+      }
     } catch (err) {
       console.error('Failed to load drivers', err)
     } finally {
@@ -237,25 +274,38 @@ export default function AdminMapPage() {
             <Map
               center={mapCenter}
               zoom={12}
-              markers={driversWithLocation.map(driver => ({
-                position: [driver.location!.latitude, driver.location!.longitude],
-                popup: `
-                  <div class="text-sm">
-                    <p class="font-bold">${driver.firstName} ${driver.lastName}</p>
-                    <p class="text-xs text-gray-600">${driver.vehicleType}</p>
-                    <p class="text-xs ${driver.status === 'DISPONIBLE' ? 'text-emerald-600' : 'text-orange-600'}">
-                      ${driver.status === 'DISPONIBLE' ? '🟢 Disponible' : '🔴 En course'}
-                    </p>
-                    ${driver.currentRide ? `
-                      <div class="mt-1 pt-1 border-t border-gray-200">
-                        <p class="text-xs font-mono">${driver.currentRide.code}</p>
-                        <p class="text-xs text-gray-500">${driver.currentRide.pickup} → ${driver.currentRide.dropoff}</p>
-                      </div>
-                    ` : ''}
-                  </div>
-                `,
-                icon: driver.status === 'DISPONIBLE' ? 'driver' : 'driver'
-              }))}
+              markers={driversWithLocation.map(driver => {
+                const zone = neighborhoods[driver.id]
+                const statusColor = driver.status === 'DISPONIBLE' ? '#16a34a' : '#ea580c'
+                const statusLabel = driver.status === 'DISPONIBLE' ? '🟢 Disponible' : '🔴 En course'
+                const updatedAt = driver.location?.updatedAt
+                  ? new Date(driver.location.updatedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                  : ''
+
+                return {
+                  position: [driver.location!.latitude, driver.location!.longitude] as [number, number],
+                  tooltip: `
+                    <div style="font-family:system-ui,sans-serif;min-width:170px;line-height:1.5">
+                      <div style="font-weight:700;font-size:13px;margin-bottom:2px">${driver.firstName} ${driver.lastName}</div>
+                      <div style="font-size:11px;color:#6b7280">${driver.vehicleType} · ${driver.vehiclePlate}</div>
+                      <div style="font-size:11px;color:${statusColor};margin-top:3px">${statusLabel}</div>
+                      ${zone ? `<div style="font-size:11px;color:#374151;margin-top:4px">📍 ${zone}</div>` : ''}
+                      ${updatedAt ? `<div style="font-size:10px;color:#9ca3af;margin-top:2px">Mis à jour ${updatedAt}</div>` : ''}
+                      ${driver.currentRide ? `<div style="font-size:11px;color:#6b7280;margin-top:4px;padding-top:4px;border-top:1px solid #e5e7eb">${driver.currentRide.pickup} → ${driver.currentRide.dropoff}</div>` : ''}
+                    </div>
+                  `,
+                  popup: `
+                    <div style="font-family:system-ui,sans-serif;font-size:13px">
+                      <p style="font-weight:700;margin:0 0 4px">${driver.firstName} ${driver.lastName}</p>
+                      <p style="font-size:11px;color:#6b7280;margin:0 0 2px">${driver.vehicleType} · ${driver.vehiclePlate}</p>
+                      <p style="font-size:11px;color:${statusColor};margin:0">${statusLabel}</p>
+                      ${zone ? `<p style="font-size:11px;color:#374151;margin:4px 0 0">📍 ${zone}</p>` : ''}
+                      ${driver.currentRide ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280">${driver.currentRide.pickup} → ${driver.currentRide.dropoff}</div>` : ''}
+                    </div>
+                  `,
+                  icon: 'driver' as const,
+                }
+              })}
               className="h-full"
             />
           ) : (

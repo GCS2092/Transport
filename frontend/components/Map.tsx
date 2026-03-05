@@ -17,6 +17,7 @@ interface MapProps {
   markers?: Array<{
     position: [number, number]
     popup?: string
+    tooltip?: string
     icon?: 'default' | 'pickup' | 'dropoff' | 'driver'
   }>
   route?: Array<[number, number]>
@@ -86,9 +87,19 @@ export function Map({ center, zoom = 13, markers = [], route, className = '', au
       })
 
       const marker = L.marker(position, { icon: customIcon }).addTo(mapRef.current!)
-      
+
       if (popup) {
         marker.bindPopup(popup)
+      }
+
+      if (tooltip) {
+        marker.bindTooltip(tooltip, {
+          permanent: false,
+          sticky: true,
+          direction: 'top',
+          offset: [0, -20],
+          className: 'wendd-tooltip',
+        })
       }
 
       markersRef.current.push(marker)

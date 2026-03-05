@@ -80,3 +80,16 @@ input, select, textarea, button {
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+/* Leaflet tooltip — admin map driver info */
+.wendd-tooltip {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  padding: 8px 12px;
+  pointer-events: none;
+}
+.wendd-tooltip::before {
+  border-top-color: #e5e7eb;
+}
