@@ -38,10 +38,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<AuthUser> => {
     const { data } = await api.post('/auth/login', { email, password })
-    const { accessToken, user: u } = data
+    const { accessToken, refreshToken, user: u } = data
     setUser(u)
     localStorage.setItem('vtc_token', accessToken)
     localStorage.setItem('vtc_user',  JSON.stringify(u))
+    if (refreshToken) localStorage.setItem('vtc_refresh_token', refreshToken)
+    if (u?.id)        localStorage.setItem('vtc_user_id', u.id)
     api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
     return u
   }
@@ -50,6 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     localStorage.removeItem('vtc_token')
     localStorage.removeItem('vtc_user')
+    localStorage.removeItem('vtc_refresh_token')
+    localStorage.removeItem('vtc_user_id')
     delete api.defaults.headers.common['Authorization']
   }
 

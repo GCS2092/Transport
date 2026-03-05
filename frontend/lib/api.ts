@@ -20,6 +20,74 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Intercepteur de réponse — refresh automatique sur 401
+let isRefreshing = false
+let failedQueue: Array<{ resolve: (v: string) => void; reject: (e: unknown) => void }> = []
+
+function processQueue(error: unknown, token: string | null) {
+  failedQueue.forEach(p => error ? p.reject(error) : p.resolve(token!))
+  failedQueue = []
+}
+
+api.interceptors.response.use(
+  res => res,
+  async (error) => {
+    const original = error.config
+    const status = error.response?.status
+
+    // Network error ou 401 → tenter le refresh
+    if ((status === 401 || !error.response) && !original._retry && typeof window !== 'undefined') {
+      const refreshToken = localStorage.getItem('vtc_refresh_token')
+      const userId      = localStorage.getItem('vtc_user_id')
+
+      if (!refreshToken || !userId) {
+        // Pas de refresh token → déconnecter
+        localStorage.removeItem('vtc_token')
+        localStorage.removeItem('vtc_user')
+        localStorage.removeItem('vtc_refresh_token')
+        localStorage.removeItem('vtc_user_id')
+        window.location.href = '/login'
+        return Promise.reject(error)
+      }
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject })
+        }).then(token => {
+          original.headers.Authorization = `Bearer ${token}`
+          return api(original)
+        })
+      }
+
+      original._retry = true
+      isRefreshing = true
+
+      try {
+        const { data } = await axios.post(`${API_URL}/auth/refresh`, { userId, refreshToken })
+        const newToken = data.accessToken
+        localStorage.setItem('vtc_token', newToken)
+        if (data.refreshToken) localStorage.setItem('vtc_refresh_token', data.refreshToken)
+        api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`
+        processQueue(null, newToken)
+        original.headers.Authorization = `Bearer ${newToken}`
+        return api(original)
+      } catch (refreshErr) {
+        processQueue(refreshErr, null)
+        localStorage.removeItem('vtc_token')
+        localStorage.removeItem('vtc_user')
+        localStorage.removeItem('vtc_refresh_token')
+        localStorage.removeItem('vtc_user_id')
+        window.location.href = '/login'
+        return Promise.reject(refreshErr)
+      } finally {
+        isRefreshing = false
+      }
+    }
+
+    return Promise.reject(error)
+  }
+)
+
 // Types
 export interface Zone {
   id: string
