@@ -44,7 +44,22 @@ export default function AdminMapPage() {
   const [selectedDriver, setSelectedDriver] = useState<DriverWithLocation | null>(null)
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'DISPONIBLE' | 'EN_COURSE'>('ALL')
   const [neighborhoods, setNeighborhoods] = useState<Record<string, string>>({})
+  const [showSidebar, setShowSidebar] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
   const geocache = useRef<Record<string, string>>({}) // cache: cacheKey → neighborhood label
+
+  // Détecter mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+      if (window.innerWidth < 768) {
+        setShowSidebar(false)
+      }
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   useEffect(() => {
     loadDrivers()
@@ -131,72 +146,120 @@ export default function AdminMapPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+      <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 md:py-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">🗺️ Carte des chauffeurs</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Suivi en temps réel • Mise à jour toutes les 10s
-            </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowSidebar(!showSidebar)}
+              className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 12h18M3 6h18M3 18h18"/>
+              </svg>
+            </button>
+            <div>
+              <h1 className="text-lg md:text-2xl font-bold text-gray-900">🗺️ Carte des chauffeurs</h1>
+              <p className="text-xs md:text-sm text-gray-500 mt-1">
+                Suivi en temps réel • Mise à jour toutes les 10s
+              </p>
+            </div>
           </div>
           <button
             onClick={() => router.push('/admin')}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            className="px-3 md:px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
           >
             ← Retour
           </button>
         </div>
       </div>
 
-      <div className="flex h-[calc(100vh-80px)]">
-        {/* Sidebar */}
-        <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
-          <div className="p-4 space-y-4">
-            {/* Filtres par statut */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => setStatusFilter('ALL')}
-                className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                  statusFilter === 'ALL'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                Tous ({drivers.length})
-              </button>
-              <button
-                onClick={() => setStatusFilter('DISPONIBLE')}
-                className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                  statusFilter === 'DISPONIBLE'
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                Dispo ({drivers.filter(d => d.status === 'DISPONIBLE').length})
-              </button>
-              <button
-                onClick={() => setStatusFilter('EN_COURSE')}
-                className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                  statusFilter === 'EN_COURSE'
-                    ? 'bg-orange-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                En course ({drivers.filter(d => d.status === 'EN_COURSE').length})
-              </button>
-            </div>
+      <div className="flex h-[calc(100vh-64px)] md:h-[calc(100vh-80px)] relative">
+        {/* Sidebar - Overlay sur mobile */}
+        {(showSidebar || !isMobile) && (
+          <>
+            {/* Overlay mobile */}
+            {isMobile && showSidebar && (
+              <div 
+                className="fixed inset-0 bg-black/50 z-40 md:hidden"
+                onClick={() => setShowSidebar(false)}
+              />
+            )}
+            
+            {/* Sidebar */}
+            <div className={`${
+              isMobile 
+                ? 'fixed left-0 top-16 bottom-0 w-80 bg-white border-r border-gray-200 z-50 transform transition-transform duration-300'
+                : 'w-80 bg-white border-r border-gray-200 overflow-y-auto'
+            } ${
+              isMobile && !showSidebar ? '-translate-x-full' : 'translate-x-0'
+            }`}>
+              <div className="p-4 space-y-4">
+                {/* Header mobile */}
+                {isMobile && (
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-gray-900">Chauffeurs</h3>
+                    <button
+                      onClick={() => setShowSidebar(false)}
+                      className="p-2 rounded-lg hover:bg-gray-100"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
+                )}
+                {/* Filtres par statut */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setStatusFilter('ALL')}
+                    className={`flex-1 py-2 px-2 md:px-3 rounded-lg text-xs font-semibold transition-all ${
+                      statusFilter === 'ALL'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <span className="hidden md:inline">Tous</span>
+                    <span className="md:hidden">All</span>
+                    ({drivers.length})
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('DISPONIBLE')}
+                    className={`flex-1 py-2 px-2 md:px-3 rounded-lg text-xs font-semibold transition-all ${
+                      statusFilter === 'DISPONIBLE'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <span className="hidden md:inline">Dispo</span>
+                    <span className="md:hidden">🟢</span>
+                    ({drivers.filter(d => d.status === 'DISPONIBLE').length})
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('EN_COURSE')}
+                    className={`flex-1 py-2 px-2 md:px-3 rounded-lg text-xs font-semibold transition-all ${
+                      statusFilter === 'EN_COURSE'
+                        ? 'bg-orange-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <span className="hidden md:inline">Course</span>
+                    <span className="md:hidden">🔴</span>
+                    ({drivers.filter(d => d.status === 'EN_COURSE').length})
+                  </button>
+                </div>
 
-            {/* Stats rapides */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-                <p className="text-xs text-emerald-600 font-semibold">Disponibles</p>
-                <p className="text-2xl font-bold text-emerald-700">{availableDrivers.length}</p>
-              </div>
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                <p className="text-xs text-orange-600 font-semibold">En course</p>
-                <p className="text-2xl font-bold text-orange-700">{busyDrivers.length}</p>
-              </div>
-            </div>
+                {/* Stats rapides */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                    <p className="text-xs text-emerald-600 font-semibold">Disponibles</p>
+                    <p className="text-xl md:text-2xl font-bold text-emerald-700">{availableDrivers.length}</p>
+                  </div>
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    <p className="text-xs text-orange-600 font-semibold">En course</p>
+                    <p className="text-xl md:text-2xl font-bold text-orange-700">{busyDrivers.length}</p>
+                  </div>
+                </div>
 
             {/* Liste des chauffeurs */}
             <div>
@@ -265,8 +328,9 @@ export default function AdminMapPage() {
                 )}
               </div>
             </div>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Carte */}
         <div className="flex-1 relative">
@@ -321,9 +385,13 @@ export default function AdminMapPage() {
             </div>
           )}
 
-          {/* Détails du chauffeur sélectionné */}
+          {/* Détails du chauffeur sélectionné - Responsive */}
           {selectedDriver && (
-            <div className="absolute top-4 right-4 bg-white rounded-xl shadow-lg border border-gray-200 p-4 w-80">
+            <div className={`${
+              isMobile 
+                ? 'fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-lg border border-gray-200 z-50 max-h-[70vh] overflow-y-auto'
+                : 'absolute top-4 right-4 bg-white rounded-xl shadow-lg border border-gray-200 p-4 w-80'
+            }`}>
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <h3 className="font-bold text-gray-900">
@@ -334,9 +402,12 @@ export default function AdminMapPage() {
                 </div>
                 <button
                   onClick={() => setSelectedDriver(null)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 hover:text-gray-600 p-1"
                 >
-                  ✕
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
                 </button>
               </div>
 

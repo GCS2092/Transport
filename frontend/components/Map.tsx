@@ -41,21 +41,56 @@ export function Map({ center, zoom = 13, markers = [], route, className = '', au
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return
 
-    // Initialiser la carte
-    const map = L.map(mapContainerRef.current).setView(center, zoom)
+    // Initialiser la carte avec options PWA-friendly
+    const map = L.map(mapContainerRef.current, {
+      center,
+      zoom,
+      zoomControl: !isMobile(), // Cacher le contrôle zoom sur mobile
+      attributionControl: true,
+      tap: true, // Support tap sur mobile
+      touchZoom: true, // Zoom avec pinch
+      scrollWheelZoom: !isMobile(), // Désactiver scroll zoom sur mobile pour éviter les conflits
+      doubleClickZoom: true,
+      boxZoom: true,
+      keyboard: true,
+    })
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
       maxZoom: 19,
     }).addTo(map)
 
+    // Ajouter un contrôle zoom custom pour mobile
+    if (isMobile()) {
+      L.control.zoom({
+        position: 'bottomright',
+      }).addTo(map)
+    }
+
     mapRef.current = map
 
+    // Gérer le redimensionnement pour PWA
+    const handleResize = () => {
+      if (mapRef.current) {
+        mapRef.current.invalidateSize()
+      }
+    }
+    
+    window.addEventListener('resize', handleResize)
+    window.addEventListener('orientationchange', handleResize)
+
     return () => {
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('orientationchange', handleResize)
       map.remove()
       mapRef.current = null
     }
   }, [])
+
+  // Helper pour détecter mobile
+  function isMobile() {
+    return typeof window !== 'undefined' && window.innerWidth < 768
+  }
 
   // Mettre à jour le centre (smooth pan en mode navigation)
   useEffect(() => {
@@ -78,12 +113,23 @@ export function Map({ center, zoom = 13, markers = [], route, className = '', au
     // Ajouter les nouveaux marqueurs
     markers.forEach(({ position, popup, tooltip, icon = 'default' }) => {
       const color = iconColors[icon]
+      const isMobileDevice = isMobile()
+      const markerSize = isMobileDevice ? 32 : 24
       
       const customIcon = L.divIcon({
         className: 'custom-marker',
-        html: `<div style="background-color: ${color}; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-        iconSize: [24, 24],
-        iconAnchor: [12, 24],
+        html: `<div style="
+          background-color: ${color}; 
+          width: ${markerSize}px; 
+          height: ${markerSize}px; 
+          border-radius: 50% 50% 50% 0; 
+          transform: rotate(-45deg); 
+          border: 2px solid white; 
+          box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+          transition: all 0.2s ease;
+        "></div>`,
+        iconSize: [markerSize, markerSize],
+        iconAnchor: [markerSize/2, markerSize],
       })
 
       const marker = L.marker(position, { icon: customIcon }).addTo(mapRef.current!)
@@ -134,8 +180,12 @@ export function Map({ center, zoom = 13, markers = [], route, className = '', au
   return (
     <div 
       ref={mapContainerRef} 
-      className={`w-full h-full min-h-[300px] rounded-xl overflow-hidden ${className}`}
-      style={{ zIndex: 0 }}
+      className={`w-full h-full min-h-[250px] md:min-h-[300px] rounded-xl overflow-hidden touch-none ${className}`}
+      style={{ 
+        zIndex: 0,
+        // Éviter le scroll sur mobile pendant l'interaction avec la carte
+        touchAction: 'manipulation',
+      }}
     />
   )
 }
