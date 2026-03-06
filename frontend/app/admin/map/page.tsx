@@ -32,7 +32,6 @@ interface DriverWithLocation {
   }
 }
 
-// Clé de cache: lat/lon arrondis à 3 décimales (~110m)
 function cacheKey(lat: number | string, lon: number | string) {
   return `${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}`
 }
@@ -46,15 +45,12 @@ export default function AdminMapPage() {
   const [neighborhoods, setNeighborhoods] = useState<Record<string, string>>({})
   const [showSidebar, setShowSidebar] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
-  const geocache = useRef<Record<string, string>>({}) // cache: cacheKey → neighborhood label
+  const geocache = useRef<Record<string, string>>({})
 
-  // Détecter mobile
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768)
-      if (window.innerWidth < 768) {
-        setShowSidebar(false)
-      }
+      if (window.innerWidth < 768) setShowSidebar(false)
     }
     checkMobile()
     window.addEventListener('resize', checkMobile)
@@ -63,7 +59,6 @@ export default function AdminMapPage() {
 
   useEffect(() => {
     loadDrivers()
-    // Rafraîchir toutes les 10 secondes
     const interval = setInterval(loadDrivers, 10000)
     return () => clearInterval(interval)
   }, [])
@@ -89,9 +84,8 @@ export default function AdminMapPage() {
   const loadDrivers = async () => {
     try {
       const { data: stats } = await adminApi.getStats()
-      
       const driversWithLocation: DriverWithLocation[] = []
-      
+
       for (const driver of stats.activeDrivers || []) {
         try {
           const { data: location } = await driverApi.getLocation(driver.id)
@@ -107,10 +101,9 @@ export default function AdminMapPage() {
           driversWithLocation.push(driver)
         }
       }
-      
+
       setDrivers(driversWithLocation)
 
-      // Reverse geocoding en parallèle pour les chauffeurs avec position
       const updates: Record<string, string> = {}
       await Promise.all(
         driversWithLocation
@@ -130,21 +123,21 @@ export default function AdminMapPage() {
     }
   }
 
-  const filteredDrivers = statusFilter === 'ALL' 
-    ? drivers 
+  const filteredDrivers = statusFilter === 'ALL'
+    ? drivers
     : drivers.filter(d => d.status === statusFilter)
-  
+
   const availableDrivers = filteredDrivers.filter(d => d.status === 'DISPONIBLE')
   const busyDrivers = filteredDrivers.filter(d => d.status === 'EN_COURSE')
   const driversWithLocation = filteredDrivers.filter(d => d.location)
 
-  // Centre de la carte (Dakar par défaut)
   const mapCenter: [number, number] = driversWithLocation.length > 0 && driversWithLocation[0].location
     ? [driversWithLocation[0].location.latitude, driversWithLocation[0].location.longitude]
-    : [14.7167, -17.4677] // Dakar
+    : [14.7167, -17.4677]
 
   return (
     <div className="min-h-screen bg-gray-50">
+
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 md:py-4">
         <div className="flex items-center justify-between">
@@ -174,27 +167,25 @@ export default function AdminMapPage() {
       </div>
 
       <div className="flex h-[calc(100vh-64px)] md:h-[calc(100vh-80px)] relative">
-        {/* Sidebar - Overlay sur mobile */}
+
+        {/* Sidebar */}
         {(showSidebar || !isMobile) && (
           <>
-            {/* Overlay mobile */}
             {isMobile && showSidebar && (
-              <div 
+              <div
                 className="fixed inset-0 bg-black/50 z-40 md:hidden"
                 onClick={() => setShowSidebar(false)}
               />
             )}
-            
-            {/* Sidebar */}
+
             <div className={`${
-              isMobile 
+              isMobile
                 ? 'fixed left-0 top-16 bottom-0 w-80 bg-white border-r border-gray-200 z-50 transform transition-transform duration-300'
                 : 'w-80 bg-white border-r border-gray-200 overflow-y-auto'
-            } ${
-              isMobile && !showSidebar ? '-translate-x-full' : 'translate-x-0'
-            }`}>
+            } ${isMobile && !showSidebar ? '-translate-x-full' : 'translate-x-0'}`}>
+
               <div className="p-4 space-y-4">
-                {/* Header mobile */}
+
                 {isMobile && (
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-bold text-gray-900">Chauffeurs</h3>
@@ -209,14 +200,13 @@ export default function AdminMapPage() {
                     </button>
                   </div>
                 )}
-                {/* Filtres par statut */}
+
+                {/* Filtres */}
                 <div className="flex gap-2">
                   <button
                     onClick={() => setStatusFilter('ALL')}
                     className={`flex-1 py-2 px-2 md:px-3 rounded-lg text-xs font-semibold transition-all ${
-                      statusFilter === 'ALL'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      statusFilter === 'ALL' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
                     <span className="hidden md:inline">Tous</span>
@@ -226,9 +216,7 @@ export default function AdminMapPage() {
                   <button
                     onClick={() => setStatusFilter('DISPONIBLE')}
                     className={`flex-1 py-2 px-2 md:px-3 rounded-lg text-xs font-semibold transition-all ${
-                      statusFilter === 'DISPONIBLE'
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      statusFilter === 'DISPONIBLE' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
                     <span className="hidden md:inline">Dispo</span>
@@ -238,9 +226,7 @@ export default function AdminMapPage() {
                   <button
                     onClick={() => setStatusFilter('EN_COURSE')}
                     className={`flex-1 py-2 px-2 md:px-3 rounded-lg text-xs font-semibold transition-all ${
-                      statusFilter === 'EN_COURSE'
-                        ? 'bg-orange-600 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      statusFilter === 'EN_COURSE' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
                     <span className="hidden md:inline">Course</span>
@@ -249,7 +235,7 @@ export default function AdminMapPage() {
                   </button>
                 </div>
 
-                {/* Stats rapides */}
+                {/* Stats */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
                     <p className="text-xs text-emerald-600 font-semibold">Disponibles</p>
@@ -261,74 +247,77 @@ export default function AdminMapPage() {
                   </div>
                 </div>
 
-            {/* Liste des chauffeurs */}
-            <div>
-              <h3 className="text-sm font-bold text-gray-900 mb-2">
-                Chauffeurs actifs ({filteredDrivers.length})
-              </h3>
-              <div className="space-y-2">
-                {filteredDrivers.map(driver => (
-                  <button
-                    key={driver.id}
-                    onClick={() => setSelectedDriver(driver)}
-                    className={`w-full text-left p-3 rounded-lg border transition-all ${
-                      selectedDriver?.id === driver.id
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="font-bold text-sm text-gray-900">
-                          {driver.firstName} {driver.lastName}
-                        </p>
-                        <p className="text-xs text-gray-500">{driver.vehicleType}</p>
-                      </div>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        driver.status === 'DISPONIBLE'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-orange-100 text-orange-700'
-                      }`}>
-                        {driver.status === 'DISPONIBLE' ? '🟢 Dispo' : '🔴 En course'}
-                      </span>
-                    </div>
+                {/* Liste chauffeurs */}
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 mb-2">
+                    Chauffeurs actifs ({filteredDrivers.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {filteredDrivers.map(driver => (
+                      <button
+                        key={driver.id}
+                        onClick={() => setSelectedDriver(driver)}
+                        className={`w-full text-left p-3 rounded-lg border transition-all ${
+                          selectedDriver?.id === driver.id
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <p className="font-bold text-sm text-gray-900">
+                              {driver.firstName} {driver.lastName}
+                            </p>
+                            <p className="text-xs text-gray-500">{driver.vehicleType}</p>
+                          </div>
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            driver.status === 'DISPONIBLE'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-orange-100 text-orange-700'
+                          }`}>
+                            {driver.status === 'DISPONIBLE' ? '🟢 Dispo' : '🔴 En course'}
+                          </span>
+                        </div>
 
-                    {driver.location ? (
-                      <div className="flex items-center gap-1 text-xs text-gray-500">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                          <circle cx="12" cy="10" r="3"/>
-                        </svg>
-                        <span>
-                          Position: {new Date(driver.location.updatedAt).toLocaleTimeString('fr-FR', { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })}
-                        </span>
+                        {driver.location ? (
+                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                              <circle cx="12" cy="10" r="3"/>
+                            </svg>
+                            <span>
+                              Position: {new Date(driver.location.updatedAt).toLocaleTimeString('fr-FR', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400">📍 Position non disponible</p>
+                        )}
+
+                        {driver.currentRide && (
+                          <div className="mt-2 pt-2 border-t border-gray-200">
+                            <p className="text-xs font-mono text-gray-600">{driver.currentRide.code}</p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {driver.currentRide.pickup} → {driver.currentRide.dropoff}
+                            </p>
+                          </div>
+                        )}
+                      </button>
+                    ))}
+
+                    {drivers.length === 0 && !loading && (
+                      <div className="text-center py-8 text-gray-500">
+                        <p className="text-sm">Aucun chauffeur actif</p>
                       </div>
-                    ) : (
-                      <p className="text-xs text-gray-400">📍 Position non disponible</p>
                     )}
-
-                    {driver.currentRide && (
-                      <div className="mt-2 pt-2 border-t border-gray-200">
-                        <p className="text-xs font-mono text-gray-600">{driver.currentRide.code}</p>
-                        <p className="text-xs text-gray-500 truncate">
-                          {driver.currentRide.pickup} → {driver.currentRide.dropoff}
-                        </p>
-                      </div>
-                    )}
-                  </button>
-                ))}
-
-                {drivers.length === 0 && !loading && (
-                  <div className="text-center py-8 text-gray-500">
-                    <p className="text-sm">Aucun chauffeur actif</p>
                   </div>
-                )}
+                </div>
+
               </div>
             </div>
-          </div>
+          </>
         )}
 
         {/* Carte */}
@@ -384,10 +373,10 @@ export default function AdminMapPage() {
             </div>
           )}
 
-          {/* Détails du chauffeur sélectionné - Responsive */}
+          {/* Détails chauffeur sélectionné */}
           {selectedDriver && (
             <div className={`${
-              isMobile 
+              isMobile
                 ? 'fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-lg border border-gray-200 z-50 max-h-[70vh] overflow-y-auto'
                 : 'absolute top-4 right-4 bg-white rounded-xl shadow-lg border border-gray-200 p-4 w-80'
             }`}>
@@ -458,6 +447,7 @@ export default function AdminMapPage() {
               </div>
             </div>
           )}
+
         </div>
       </div>
     </div>
