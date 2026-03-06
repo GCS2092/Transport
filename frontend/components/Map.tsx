@@ -47,13 +47,12 @@ export function Map({ center, zoom = 13, markers = [], route, className = '', au
       zoom,
       zoomControl: !isMobile(), // Cacher le contrôle zoom sur mobile
       attributionControl: true,
-      tap: true, // Support tap sur mobile
       touchZoom: true, // Zoom avec pinch
       scrollWheelZoom: !isMobile(), // Désactiver scroll zoom sur mobile pour éviter les conflits
       doubleClickZoom: true,
       boxZoom: true,
       keyboard: true,
-    })
+    } as any) // Cast to any pour supporter les options non-standard de Leaflet
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
