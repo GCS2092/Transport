@@ -431,6 +431,8 @@ export const adminApi = {
   getStats: () => api.get<AdminStats>('/admin/stats'),
   getUsers: (params?: { page?: number; limit?: number; role?: string }) =>
     api.get<{ data: User[]; total: number }>('/admin/users', { params }),
+  createUser: (dto: { email: string; password: string; firstName: string; lastName: string; phone: string; role: string }) =>
+    api.post<User>('/admin/users', dto),
   createDriverUser: (dto: CreateDriverUserDto) =>
     api.post<User>('/admin/users/driver', dto),
   deactivateUser: (id: string) =>
