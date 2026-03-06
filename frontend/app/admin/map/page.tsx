@@ -328,7 +328,6 @@ export default function AdminMapPage() {
                 )}
               </div>
             </div>
-            </div>
           </div>
         )}
 

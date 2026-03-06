@@ -116,8 +116,8 @@ export default function AdminUsers() {
 
   const handleAdminPasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    // Mot de passe admin fixe pour la démo - à remplacer par une vérification sécurisée
-    if (adminPassword === 'admin123') {
+    // Mot de passe admin - à remplacer par une vérification sécurisée
+    if (adminPassword === 'Admin_VTC_2024!') {
       setAdminPasswordValid(true)
       setAdminMode(true)
       setShowAdminPassword(false)
