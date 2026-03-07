@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { createTransport, Transporter } from 'nodemailer';
+import { Resend } from 'resend';
 import { EmailLog } from './entities/email-log.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { NotificationType } from '../../common/enums/notification-type.enum';
@@ -10,21 +10,13 @@ import { Language } from '../../common/enums/language.enum';
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
-  private transporter: Transporter;
+  private resend: Resend;
 
   constructor(
     @InjectRepository(EmailLog)
     private emailLogRepository: Repository<EmailLog>,
   ) {
-    this.transporter = createTransport({
-      host: process.env.MAIL_HOST,
-      port: parseInt(process.env.MAIL_PORT, 10) || 587,
-      secure: false,
-      auth: {
-        user: process.env.MAIL_USER,
-        pass: process.env.MAIL_PASS,
-      },
-    });
+    this.resend = new Resend(process.env.RESEND_API_KEY);
   }
 
   private buildWhatsAppLink(reservation: Reservation): string {
@@ -169,7 +161,6 @@ export class NotificationsService {
     );
   }
 
-
   async sendReservationCancelled(reservation: Reservation): Promise<void> {
     const lang = reservation.language;
 
@@ -275,9 +266,10 @@ export class NotificationsService {
       </table>
       <p style="font-size:13px;color:#888;">${this.t(lang, 'À bientôt pour une prochaine course !', 'See you soon for your next ride!')}</p>`;
 
+    // Resend accepte les pièces jointes en base64
     const attachments = pdfBuffer ? [{
       filename: `recu-${reservation.code}.pdf`,
-      content: pdfBuffer,
+      content: pdfBuffer.toString('base64'),
     }] : [];
 
     await this.sendEmail(
@@ -316,13 +308,14 @@ export class NotificationsService {
     );
   }
 
+  // ─── Méthode privée — seule partie modifiée ────────────────────────────────
   private async sendEmail(
     to: string,
     subject: string,
     html: string,
     type: NotificationType,
     reservationId: string,
-    attachments: any[] = [],
+    attachments: { filename: string; content: string }[] = [],
     attempt = 1,
   ): Promise<void> {
     const log = this.emailLogRepository.create({
@@ -333,8 +326,8 @@ export class NotificationsService {
     });
 
     try {
-      await this.transporter.sendMail({
-        from: `"${process.env.MAIL_FROM_NAME || 'WEND\'D Transport'}" <${process.env.MAIL_FROM}>`,
+      await this.resend.emails.send({
+        from: `${process.env.MAIL_FROM_NAME || "WEND'D Transport"} <${process.env.MAIL_FROM}>`,
         to,
         subject,
         html,
