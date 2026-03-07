@@ -54,7 +54,13 @@ export function Navbar() {
     setLastCode(localStorage.getItem('vtc_last_code'))
     const handler = () => setLastCode(localStorage.getItem('vtc_last_code'))
     window.addEventListener('vtc_code_saved', handler)
-    return () => window.removeEventListener('vtc_code_saved', handler)
+    // Écouter l'événement d'annulation pour supprimer le code
+    const clearHandler = () => setLastCode(null)
+    window.addEventListener('vtc_code_cleared', clearHandler)
+    return () => {
+      window.removeEventListener('vtc_code_saved', handler)
+      window.removeEventListener('vtc_code_cleared', clearHandler)
+    }
   }, [])
 
   const NAV_LINKS = [

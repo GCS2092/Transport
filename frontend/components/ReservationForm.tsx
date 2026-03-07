@@ -75,6 +75,23 @@ export function ReservationForm() {
   const [autoAssign, setAutoAssign] = useState(true)
   const [clientGps, setClientGps] = useState<{ lat: number; lng: number } | null>(null)
   const [gpsState, setGpsState] = useState<'idle' | 'loading' | 'ok' | 'denied'>('idle')
+  
+  // Pays et indicatifs téléphoniques
+  const [countryCode, setCountryCode] = useState('+221') // Sénégal par défaut
+  const countryOptions = [
+    { code: '+221', country: 'Sénégal', flag: '🇸🇳' },
+    { code: '+33', country: 'France', flag: '🇫🇷' },
+    { code: '+212', country: 'Maroc', flag: '🇲🇦' },
+    { code: '+225', country: 'Côte d\'Ivoire', flag: '🇨🇮' },
+    { code: '+224', country: 'Guinée', flag: '🇬🇳' },
+    { code: '+223', country: 'Mali', flag: '🇲🇱' },
+    { code: '+227', country: 'Niger', flag: '🇳🇪' },
+    { code: '+228', country: 'Togo', flag: '🇹🇬' },
+    { code: '+229', country: 'Bénin', flag: '🇧🇯' },
+    { code: '+1', country: 'USA/Canada', flag: '🇺🇸' },
+    { code: '+44', country: 'UK', flag: '🇬🇧' },
+    { code: '+49', country: 'Allemagne', flag: '🇩🇪' },
+  ]
 
   const captureClientGps = () => {
     if (!navigator.geolocation) { setGpsState('denied'); return }
@@ -105,6 +122,26 @@ export function ReservationForm() {
 
   const set = (key: string, val: string | number) =>
     setFormData(prev => ({ ...prev, [key]: val }))
+
+  // Auto-set AIBD for specific trip types
+  useEffect(() => {
+    const aibd = zones.find((z: Zone) => z.name.toLowerCase().includes('aibd'))
+    if (!aibd) return
+
+    if (tripType === 'ALLER_SIMPLE') {
+      // Aller simple: destination forcée à AIBD
+      setDropoffType('zone')
+      set('dropoffZoneId', aibd.id)
+      setCustomDropoffAddress('')
+      setDropoffCoords(null)
+    } else if (tripType === 'RETOUR_SIMPLE') {
+      // Retour simple: départ forcé à AIBD
+      setPickupType('zone')
+      set('pickupZoneId', aibd.id)
+      setCustomPickupAddress('')
+      setPickupCoords(null)
+    }
+  }, [tripType, zones])
 
   // Géocoder l'adresse de départ avec debounce
   useEffect(() => {
@@ -205,7 +242,9 @@ export function ReservationForm() {
     if (!formData.clientFirstName.trim()) return f.firstNameRequired
     if (!formData.clientLastName.trim()) return f.lastNameRequired
     if (!formData.clientEmail.trim() || !formData.clientEmail.includes('@')) return f.emailInvalid
-    if (!formData.clientPhone.trim() || !/^\+[1-9]\d{6,14}$/.test(formData.clientPhone)) return f.phoneInvalid
+    // Validation téléphone avec indicatif pays
+    const fullPhone = countryCode + formData.clientPhone.replace(/\s/g, '')
+    if (!formData.clientPhone.trim() || !/^\+[1-9]\d{6,14}$/.test(fullPhone)) return f.phoneInvalid
     return ''
   }
 
@@ -224,6 +263,7 @@ export function ReservationForm() {
     try {
       const payload: any = {
         ...formData,
+        clientPhone: countryCode + formData.clientPhone.replace(/\s/g, ''),
         tripType,
         passengers: Number(formData.passengers),
         language: lang,
@@ -437,6 +477,19 @@ export function ReservationForm() {
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{f.itinerary}</p>
 
               <Field label={f.departure}>
+                {/* Pour RETOUR_SIMPLE, le départ est forcé à AIBD */}
+                {tripType === 'RETOUR_SIMPLE' ? (
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600"><IconMapPin /></div>
+                    <input 
+                      type="text" 
+                      value="Aéroport International Blaise Diagne (AIBD)" 
+                      disabled 
+                      className={inputCls + ' pl-9 bg-emerald-50 border-emerald-200 text-emerald-700 cursor-not-allowed'}
+                    />
+                  </div>
+                ) : (
+                  <>
                 <div className="mb-2 flex gap-2">
                   <button
                     type="button"
@@ -496,6 +549,8 @@ export function ReservationForm() {
                     )}
                   </div>
                 )}
+                </>
+                )}
               </Field>
 
               <div className="flex items-center gap-2">
@@ -505,6 +560,19 @@ export function ReservationForm() {
               </div>
 
               <Field label={f.arrival}>
+                {/* Pour ALLER_SIMPLE, la destination est forcée à AIBD */}
+                {tripType === 'ALLER_SIMPLE' ? (
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600"><IconMapPin /></div>
+                    <input 
+                      type="text" 
+                      value="Aéroport International Blaise Diagne (AIBD)" 
+                      disabled 
+                      className={inputCls + ' pl-9 bg-emerald-50 border-emerald-200 text-emerald-700 cursor-not-allowed'}
+                    />
+                  </div>
+                ) : (
+                  <>
                 <div className="mb-2 flex gap-2">
                   <button
                     type="button"
@@ -563,6 +631,8 @@ export function ReservationForm() {
                       </p>
                     )}
                   </div>
+                )}
+                </>
                 )}
               </Field>
             </div>
@@ -651,7 +721,30 @@ export function ReservationForm() {
               </Field>
 
               <Field label={f.phoneField} hint={f.phoneHint}>
-                <input type="tel" value={formData.clientPhone} onChange={e => set('clientPhone', e.target.value)} className={inputCls} placeholder="+221 77 123 45 67" />
+                <div className="flex gap-2">
+                  <select 
+                    value={countryCode} 
+                    onChange={e => setCountryCode(e.target.value)}
+                    className={selectCls + ' w-24 flex-shrink-0'}
+                  >
+                    {countryOptions.map(opt => (
+                      <option key={opt.code} value={opt.code}>
+                        {opt.flag} {opt.code}
+                      </option>
+                    ))}
+                  </select>
+                  <input 
+                    type="tel" 
+                    value={formData.clientPhone} 
+                    onChange={e => {
+                      // N'autoriser que les chiffres et espaces
+                      const val = e.target.value.replace(/[^0-9\s]/g, '')
+                      set('clientPhone', val)
+                    }} 
+                    className={inputCls + ' flex-1'} 
+                    placeholder="77 123 45 67" 
+                  />
+                </div>
               </Field>
 
               <Field label={f.flightNumber}>

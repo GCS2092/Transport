@@ -325,6 +325,9 @@ export const reservationsApi = {
   updateStatus: (id: string, status: string) =>
     api.put<Reservation>(`/reservations/${id}/status`, { status }),
 
+  updatePaymentStatus: (id: string, paymentStatus: string) =>
+    api.put<Reservation>(`/reservations/${id}/status`, { paymentStatus }),
+
   getAll: (params?: { page?: number; limit?: number; status?: string; driverId?: string; dateFrom?: string; dateTo?: string }) =>
     api.get<{ data: Reservation[]; total: number }>('/reservations', { params }),
 

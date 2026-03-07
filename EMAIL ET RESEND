@@ -1,0 +1,19 @@
+Oui exactement ! Le processus est :
+
+1. **Acheter un domaine** (ex: `wendd.sn` ou `wendd-transport.com`)
+2. **Resend → Domains → Add Domain** → il te donne des enregistrements DNS
+3. **Ajouter ces DNS** chez ton registrar (Namecheap, Vercel, etc.)
+4. **Changer une variable** sur Render :
+```
+MAIL_FROM=noreply@wendd.sn
+```
+
+Et c'est tout — tes clients reçoivent leurs emails normalement. 🎉
+
+---
+
+**En attendant d'acheter ton domaine**, tu peux tester en mettant `slovengama@gmail.com` comme email client dans tes réservations de test, c'est le seul qui reçoit en mode sans domaine.
+
+
+est ce que tu peux fire que quand le client prend une course aller simple que la section d arrivee ne soit qe sur AIBD genre retir les autres choix  et pour le retour simple que le depart soit pris depuis AIBD jusqua la destion soit dans les zones soir predeifine soit les adreeses personnalisee et donne beacoiup plus d adresse predeifnis  mias par contre poru aller retour tu laisses el qu elle et usi lors de la validation du numero que la personne entre le numero correctement genre tu peux l aider en mettant l indicatif convenable par rapport au pays qu il a choisit a fin d eviter les erreurs de saisies ou les chiffes manquants et aussi est ce que ut peux me dire si c es t normal que malgre le fait que la course soit termine que le apientement reste en attente ou c est au chauffer de valider que le apyement a ete effecute depuis sppn dashboard pourque sur le resume de course que ca change ET AUSSI JE VEUX SAVOIR POURQUOI DANS KES LAUKS L ADRESSE DE DEPART ET LA DESTINATION NE S AFFICHE PAS CA A MIS UNDEFINED ALORS QUE J AI BIEN CHOISI 
+ET AUSSI JE VOUDRAI QUE UT FSEES QUE LORSQU UN EOCURSE EST ANNULE APRES AVOIRR ECU LE MAIL D ANNULAIOTN QUE LE CODE DE LA COURSE SE SUPPRIME EN HAUT SUR LA BARRE OU SE TROUVE L HEURE 

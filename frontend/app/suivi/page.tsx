@@ -131,6 +131,12 @@ function SuiviContent() {
     setCancelLoading(true)
     try {
       await reservationsApi.cancel(code, cancelToken)
+      // Supprimer le code de localStorage si c'est celui affiché
+      const lastCode = localStorage.getItem('vtc_last_code')
+      if (lastCode === code) {
+        localStorage.removeItem('vtc_last_code')
+        window.dispatchEvent(new Event('vtc_code_cleared'))
+      }
       await doSearch(code)
       setShowCancelForm(false)
       setCancelToken('')
