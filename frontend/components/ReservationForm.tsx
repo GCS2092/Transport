@@ -777,29 +777,50 @@ export function ReservationForm() {
               </Field>
 
               <Field label={f.phoneField} hint={currentCountry.hint}>
-                <div className="grid grid-cols-[4rem_1fr] gap-2">
-                  <select 
-                    value={countryCode} 
-                    onChange={e => setCountryCode(e.target.value)}
-                    style={{ width: '4rem' }}
-                    className="px-1 py-3 rounded-xl border border-gray-200 bg-white text-xs font-semibold text-center focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  >
-                    {countryOptions.map(opt => (
-                      <option key={opt.code} value={opt.code}>
-                        {opt.shortCode}
-                      </option>
-                    ))}
-                  </select>
-                  <input 
-                    type="tel" 
-                    value={formData.clientPhone} 
-                    onChange={e => {
-                      const val = e.target.value.replace(/[^0-9\s]/g, '')
-                      set('clientPhone', val)
-                    }} 
-                    className="w-full px-3 py-3 rounded-xl border border-gray-200 bg-white text-base focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 placeholder:text-gray-400" 
-                    placeholder={currentCountry.placeholder}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr', gap: '8px', width: '100%' }}>
+                  <div style={{ width: '60px', flexShrink: 0 }}>
+                    <select 
+                      value={countryCode} 
+                      onChange={e => setCountryCode(e.target.value)}
+                      style={{ 
+                        width: '60px', 
+                        height: '48px',
+                        padding: '0 4px',
+                        borderRadius: '12px',
+                        border: '1px solid #e5e7eb',
+                        backgroundColor: 'white',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        textAlign: 'center'
+                      }}
+                    >
+                      {countryOptions.map(opt => (
+                        <option key={opt.code} value={opt.code}>
+                          {opt.shortCode}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <input 
+                      type="tel" 
+                      value={formData.clientPhone} 
+                      onChange={e => {
+                        const val = e.target.value.replace(/[^0-9\s]/g, '')
+                        set('clientPhone', val)
+                      }} 
+                      style={{
+                        width: '100%',
+                        height: '48px',
+                        padding: '0 12px',
+                        borderRadius: '12px',
+                        border: '1px solid #e5e7eb',
+                        backgroundColor: 'white',
+                        fontSize: '16px'
+                      }}
+                      placeholder={currentCountry.placeholder}
+                    />
+                  </div>
                 </div>
               </Field>
 
