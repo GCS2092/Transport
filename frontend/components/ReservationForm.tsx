@@ -76,22 +76,24 @@ export function ReservationForm() {
   const [clientGps, setClientGps] = useState<{ lat: number; lng: number } | null>(null)
   const [gpsState, setGpsState] = useState<'idle' | 'loading' | 'ok' | 'denied'>('idle')
   
-  // Pays et indicatifs téléphoniques
-  const [countryCode, setCountryCode] = useState('+221') // Sénégal par défaut
+  // Pays et indicatifs téléphoniques avec formats spécifiques
+  const [countryCode, setCountryCode] = useState('+221')
   const countryOptions = [
-    { code: '+221', country: 'Sénégal', flag: '🇸🇳' },
-    { code: '+33', country: 'France', flag: '🇫🇷' },
-    { code: '+212', country: 'Maroc', flag: '🇲🇦' },
-    { code: '+225', country: 'Côte d\'Ivoire', flag: '🇨🇮' },
-    { code: '+224', country: 'Guinée', flag: '🇬🇳' },
-    { code: '+223', country: 'Mali', flag: '🇲🇱' },
-    { code: '+227', country: 'Niger', flag: '🇳🇪' },
-    { code: '+228', country: 'Togo', flag: '🇹🇬' },
-    { code: '+229', country: 'Bénin', flag: '🇧🇯' },
-    { code: '+1', country: 'USA/Canada', flag: '🇺🇸' },
-    { code: '+44', country: 'UK', flag: '🇬🇧' },
-    { code: '+49', country: 'Allemagne', flag: '🇩🇪' },
+    { code: '+221', country: 'Sénégal', flag: '🇸🇳', placeholder: '77 123 45 67', format: 'XX XXX XX XX', hint: 'Sénégal: +221 77 123 45 67 (9 chiffres)', minLength: 9, maxLength: 12 },
+    { code: '+33', country: 'France', flag: '🇫🇷', placeholder: '6 12 34 56 78', format: 'X XX XX XX XX', hint: 'France: +33 6 12 34 56 78 (10 chiffres)', minLength: 10, maxLength: 13 },
+    { code: '+212', country: 'Maroc', flag: '🇲🇦', placeholder: '612 345 678', format: 'XXX XXX XXX', hint: 'Maroc: +212 612 345 678 (9 chiffres)', minLength: 9, maxLength: 12 },
+    { code: '+225', country: 'Côte d\'Ivoire', flag: '🇨🇮', placeholder: '01 23 45 67', format: 'XX XX XX XX', hint: 'CI: +225 01 23 45 67 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+224', country: 'Guinée', flag: '🇬🇳', placeholder: '621 34 56 78', format: 'XXX XX XX XX', hint: 'Guinée: +224 621 34 56 78 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+227', country: 'Niger', flag: '🇳🇪', placeholder: '93 12 34 56', format: 'XX XX XX XX', hint: 'Niger: +227 93 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+235', country: 'Tchad', flag: '��', placeholder: '62 12 34 56', format: 'XX XX XX XX', hint: 'Tchad: +235 62 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+237', country: 'Cameroun', flag: '��', placeholder: '6 12 34 56 78', format: 'X XX XX XX XX', hint: 'Cameroun: +237 6 12 34 56 78 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+228', country: 'Togo', flag: '🇹🇬', placeholder: '90 12 34 56', format: 'XX XX XX XX', hint: 'Togo: +228 90 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+229', country: 'Bénin', flag: '🇧🇯', placeholder: '97 12 34 56', format: 'XX XX XX XX', hint: 'Bénin: +229 97 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+232', country: 'Sierra Leone', flag: '🇸🇱', placeholder: '75 123456', format: 'XX XXXXXX', hint: 'Sierra Leone: +232 75 123456 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+233', country: 'Ghana', flag: '🇬�', placeholder: '24 123 4567', format: 'XX XXX XXXX', hint: 'Ghana: +233 24 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
   ]
+  
+  const currentCountry = countryOptions.find(c => c.code === countryCode) || countryOptions[0]
 
   const captureClientGps = () => {
     if (!navigator.geolocation) { setGpsState('denied'); return }
@@ -263,9 +265,15 @@ export function ReservationForm() {
     if (!formData.clientFirstName.trim()) return f.firstNameRequired
     if (!formData.clientLastName.trim()) return f.lastNameRequired
     if (!formData.clientEmail.trim() || !formData.clientEmail.includes('@')) return f.emailInvalid
-    // Validation téléphone avec indicatif pays
-    const fullPhone = countryCode + formData.clientPhone.replace(/\s/g, '')
-    if (!formData.clientPhone.trim() || !/^\+[1-9]\d{6,14}$/.test(fullPhone)) return f.phoneInvalid
+    
+    // Validation téléphone avec indicatif pays - format spécifique par pays
+    const phoneDigitsOnly = formData.clientPhone.replace(/\s/g, '').replace(/[^0-9]/g, '')
+    const fullPhone = countryCode + phoneDigitsOnly
+    
+    if (!phoneDigitsOnly) return f.phoneInvalid
+    if (phoneDigitsOnly.length < currentCountry.minLength) return `${f.phoneInvalid} — minimum ${currentCountry.minLength} chiffres`
+    if (phoneDigitsOnly.length > currentCountry.maxLength) return `${f.phoneInvalid} — maximum ${currentCountry.maxLength} chiffres`
+    
     return ''
   }
 
@@ -741,7 +749,7 @@ export function ReservationForm() {
                 <input type="email" value={formData.clientEmail} onChange={e => set('clientEmail', e.target.value)} className={inputCls} placeholder="moussa@gmail.com" />
               </Field>
 
-              <Field label={f.phoneField} hint={f.phoneHint}>
+              <Field label={f.phoneField} hint={currentCountry.hint}>
                 <div className="flex gap-2">
                   <select 
                     value={countryCode} 
@@ -758,12 +766,12 @@ export function ReservationForm() {
                     type="tel" 
                     value={formData.clientPhone} 
                     onChange={e => {
-                      // N'autoriser que les chiffres et espaces
+                      // Accepter chiffres et espaces uniquement
                       const val = e.target.value.replace(/[^0-9\s]/g, '')
                       set('clientPhone', val)
                     }} 
                     className={inputCls + ' flex-1'} 
-                    placeholder="77 123 45 67" 
+                    placeholder={currentCountry.placeholder}
                   />
                 </div>
               </Field>
