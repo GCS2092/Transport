@@ -754,7 +754,7 @@ export function ReservationForm() {
                   <select 
                     value={countryCode} 
                     onChange={e => setCountryCode(e.target.value)}
-                    className={selectCls + ' w-24 flex-shrink-0'}
+                    className={selectCls + ' w-20 flex-shrink-0 px-2'}
                   >
                     {countryOptions.map(opt => (
                       <option key={opt.code} value={opt.code}>
@@ -770,7 +770,7 @@ export function ReservationForm() {
                       const val = e.target.value.replace(/[^0-9\s]/g, '')
                       set('clientPhone', val)
                     }} 
-                    className={inputCls + ' flex-1'} 
+                    className={inputCls + ' flex-1 min-w-0'} 
                     placeholder={currentCountry.placeholder}
                   />
                 </div>
