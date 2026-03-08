@@ -27,6 +27,8 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { PaymentStatus } from '../../common/enums/payment-status.enum';
+import { SupervisionGuard } from '../../common/guards/supervision.guard';
 
 @Controller('reservations')
 export class ReservationsController {
@@ -206,4 +208,61 @@ export class ReservationsController {
     const days = olderThanDays ? parseInt(olderThanDays, 10) : 90;
     return this.reservationsService.archiveCompleted(days);
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // PAYMENT SUPERVISION SYSTEM
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Chauffeur : changer le statut de paiement de sa course (IMPAYE, PAIEMENT_COMPLET, ACOMPTE_VERSE)
+   */
+  @Patch(':id/payment-status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.DRIVER)
+  updatePaymentStatusByDriver(
+    @Param('id') id: string,
+    @Body('paymentStatus') paymentStatus: PaymentStatus,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.reservationsService.updatePaymentStatusByDriver(id, paymentStatus, user.id);
+  }
+
+  /**
+   * Admin : supervision des paiements - liste toutes les courses avec filtres paiement
+   * Protégé par SupervisionGuard (nécessite mot de passe admin + token supervision)
+   */
+  @Get('payment/supervision')
+  @UseGuards(JwtAuthGuard, RolesGuard, SupervisionGuard)
+  @Roles(Role.ADMIN)
+  getPaymentSupervision(
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.reservationsService.getPaymentSupervision({
+      paymentStatus: paymentStatus as PaymentStatus,
+      dateFrom,
+      dateTo,
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
+  }
+
+  /**
+   * Admin : changer le statut de paiement d'une course (avec audit log)
+   * Protégé par SupervisionGuard (nécessite mot de passe admin + token supervision)
+   */
+  @Patch(':id/payment-status/admin')
+  @UseGuards(JwtAuthGuard, RolesGuard, SupervisionGuard)
+  @Roles(Role.ADMIN)
+  updatePaymentStatusByAdmin(
+    @Param('id') id: string,
+    @Body('paymentStatus') paymentStatus: PaymentStatus,
+    @CurrentUser() user: { id: string; email: string },
+  ) {
+    return this.reservationsService.updatePaymentStatusByAdmin(id, paymentStatus, user);
+  }
 }
+

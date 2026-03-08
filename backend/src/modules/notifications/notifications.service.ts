@@ -540,6 +540,86 @@ export class NotificationsService {
     }
   }
 
+  async sendAdminUnpaidRide(reservation: Reservation, adminEmails: string[], markedAt: Date): Promise<void> {
+    if (!adminEmails.length) return;
+
+    const pickup = this.getPickupAddress(reservation);
+    const dropoff = this.getDropoffAddress(reservation);
+
+    const title = '⚠️ Course marquée IMPAYÉE par le chauffeur';
+    const body = `
+      <p style="color:#dc2626;font-weight:bold;font-size:18px;">🚨 ALERTE IMPAYÉ</p>
+      <p>Le chauffeur a signalé un <strong>non-paiement</strong> pour cette course.</p>
+      
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;border:3px solid #dc2626;border-radius:8px;">
+        <tr style="background:#fef2f2;"><td colspan="2" style="padding:12px;font-weight:bold;color:#991b1b;">📋 Détails de la course</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;font-size:16px;">${reservation.code}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Téléphone client</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;color:#dc2626;">${reservation.clientPhone}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Chauffeur</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.driver?.firstName} ${reservation.driver?.lastName || 'Non assigné'}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Téléphone chauffeur</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.driver?.phone || 'N/A'}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Trajet</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup} → ${dropoff}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure course</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">💰 Montant dû</td><td style="padding:8px;font-weight:bold;color:#dc2626;font-size:18px;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+      </table>
+      
+      <div style="background:#fef2f2;padding:12px;border-radius:8px;border-left:4px solid #dc2626;margin:16px 0;">
+        <p style="margin:0;font-weight:bold;color:#991b1b;">⏰ Signalé comme impayé à : ${markedAt.toLocaleString('fr-FR')}</p>
+        <p style="margin:8px 0 0 0;font-size:14px;">Par : ${reservation.driver?.firstName} ${reservation.driver?.lastName || 'Chauffeur'}</p>
+      </div>
+      
+      <p style="background:#fff7ed;padding:12px;border-radius:4px;border-left:4px solid #ea580c;">
+        <strong>Action requise :</strong> Contactez immédiatement le client et/ou le chauffeur pour régulariser la situation.
+      </p>
+      
+      <p style="font-size:12px;color:#888;">
+        Cette alerte a été générée automatiquement quand le chauffeur a marqué la course comme impayée dans l'application.
+      </p>`;
+
+    const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`;
+
+    for (const email of adminEmails) {
+      await this.sendEmail(
+        email,
+        `${title} — #${reservation.code} — ${Number(reservation.amount).toLocaleString()} FCFA`,
+        html,
+        NotificationType.ADMIN_UNPAID_RIDE,
+        reservation.id,
+      );
+    }
+  }
+
+  async sendDriverPaymentRegularized(reservation: Reservation): Promise<void> {
+    if (!reservation.driver?.email) return;
+
+    const title = '✅ Paiement régularisé';
+    const body = `
+      <p>Bonjour <strong>${reservation.driver.firstName}</strong>,</p>
+      <p style="color:#16a34a;font-weight:bold;">Bonne nouvelle !</p>
+      <p>La course <strong>#${reservation.code}</strong> que vous aviez signalée comme impayée a été régularisée.</p>
+      <p>Le paiement est maintenant complet et validé par l'administration.</p>
+      
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;border:2px solid #16a34a;border-radius:8px;">
+        <tr style="background:#f0fdf4;"><td colspan="2" style="padding:12px;font-weight:bold;color:#166534;">📋 Détails de la course</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientPhone}</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">💰 Montant</td><td style="padding:8px;font-weight:bold;color:#16a34a;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+      </table>
+      
+      <p style="font-size:12px;color:#888;">
+        Merci pour votre vigilance. Le dossier est maintenant clos.
+      </p>`;
+
+    await this.sendEmail(
+      reservation.driver.email,
+      `${title} — #${reservation.code}`,
+      `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`,
+      NotificationType.DRIVER_NEW_RIDE,
+      reservation.id,
+    );
+  }
+
   // ─── Méthode privée ──────────────────────────────────────────────────────────
   private async sendEmail(
     to: string,

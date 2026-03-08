@@ -46,4 +46,15 @@ export class AuthController {
   logoutAll(@CurrentUser() user: { id: string }) {
     return this.authService.logoutAll(user.id);
   }
+
+  @Post('verify-password')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  verifyPassword(
+    @CurrentUser() user: { id: string; email: string },
+    @Body('password') password: string,
+  ) {
+    return this.authService.verifyPasswordAndGenerateSupervisionToken(user.id, user.email, password);
+  }
 }

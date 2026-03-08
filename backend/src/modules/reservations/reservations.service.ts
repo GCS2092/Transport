@@ -23,6 +23,7 @@ import { DriverLocation } from '../drivers/entities/driver-location.entity';
 import { v4 as uuidv4 } from 'uuid';
 import { ReservationStatus } from '../../common/enums/reservation-status.enum';
 import { DriverStatus } from '../../common/enums/driver-status.enum';
+import { PaymentStatus } from '../../common/enums/payment-status.enum';
 import { Language } from '../../common/enums/language.enum';
 
 export interface FindAllFilters {
@@ -32,6 +33,14 @@ export interface FindAllFilters {
   driverId?: string;
   dateFrom?: string;
   dateTo?: string;
+}
+
+export interface PaymentSupervisionFilters {
+  paymentStatus?: PaymentStatus;
+  dateFrom?: string;
+  dateTo?: string;
+  page?: number;
+  limit?: number;
 }
 
 @Injectable()
@@ -440,6 +449,17 @@ export class ReservationsService {
       }
     });
 
+    // Détecter quand paymentStatus passe à IMPAYE et notifier les admins
+    if (dto.paymentStatus === PaymentStatus.IMPAYE && reservation.paymentStatus !== PaymentStatus.IMPAYE) {
+      setImmediate(async () => {
+        try {
+          await this.notifyAdminUnpaidRide(updated);
+        } catch (e) {
+          this.logger.error('Failed to send unpaid ride notification', e?.message);
+        }
+      });
+    }
+
     if (dto.status === ReservationStatus.ANNULEE) {
       setImmediate(async () => {
         try {
@@ -681,6 +701,179 @@ export class ReservationsService {
     });
     
     return this.findById(id);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // PAYMENT SUPERVISION SYSTEM
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Chauffeur : changer le statut de paiement de sa course terminée
+   * Statuts autorisés : IMPAYE, PAIEMENT_COMPLET, ACOMPTE_VERSE
+   */
+  async updatePaymentStatusByDriver(
+    reservationId: string,
+    paymentStatus: PaymentStatus,
+    userId: string,
+  ): Promise<Reservation> {
+    // Vérifier que le statut demandé est autorisé
+    const allowedStatuses = [PaymentStatus.IMPAYE, PaymentStatus.PAIEMENT_COMPLET, PaymentStatus.ACOMPTE_VERSE];
+    if (!allowedStatuses.includes(paymentStatus)) {
+      throw new BadRequestException(`Statut de paiement non autorisé. Valeurs possibles: ${allowedStatuses.join(', ')}`);
+    }
+
+    // Récupérer la réservation avec le chauffeur
+    const reservation = await this.reservationsRepository.findOne({
+      where: { id: reservationId },
+      relations: ['driver', 'pickupZone', 'dropoffZone'],
+    });
+
+    if (!reservation) {
+      throw new NotFoundException('Réservation non trouvée');
+    }
+
+    // Vérifier que la course est terminée
+    if (reservation.status !== ReservationStatus.TERMINEE) {
+      throw new BadRequestException('Le statut de paiement ne peut être modifié que pour les courses terminées');
+    }
+
+    // Vérifier que le chauffeur qui fait la demande est bien celui assigné
+    const driver = await this.driversService.findByUserId(userId);
+    if (!driver || reservation.driverId !== driver.id) {
+      throw new ForbiddenException('Vous n\'êtes pas assigné à cette course');
+    }
+
+    const oldPaymentStatus = reservation.paymentStatus;
+
+    // Mettre à jour le statut
+    await this.reservationsRepository.update(reservationId, { paymentStatus });
+
+    // Audit log
+    await this.auditService.log({
+      userId: driver.userId,
+      action: 'UPDATE_PAYMENT_STATUS',
+      entityType: 'Reservation',
+      entityId: reservationId,
+      oldData: { paymentStatus: oldPaymentStatus },
+      newData: { paymentStatus },
+      description: `Chauffeur ${driver.firstName} ${driver.lastName} a changé le statut de paiement de ${oldPaymentStatus} à ${paymentStatus} pour la course ${reservation.code}`,
+    });
+
+    const updated = await this.findById(reservationId);
+
+    // Si IMPAYE, notifier les admins (déjà géré dans updateStatus via le hook, mais on double ici pour être sûr)
+    if (paymentStatus === PaymentStatus.IMPAYE && oldPaymentStatus !== PaymentStatus.IMPAYE) {
+      setImmediate(async () => {
+        try {
+          await this.notifyAdminUnpaidRide(updated);
+        } catch (e) {
+          this.logger.error('Failed to send unpaid ride notification', e?.message);
+        }
+      });
+    }
+
+    return updated;
+  }
+
+  /**
+   * Admin : supervision des paiements - liste avec filtres
+   */
+  async getPaymentSupervision(filters: PaymentSupervisionFilters): Promise<{ reservations: Reservation[]; total: number; page: number; limit: number }> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 50;
+    const skip = (page - 1) * limit;
+
+    const qb = this.reservationsRepository
+      .createQueryBuilder('r')
+      .leftJoinAndSelect('r.driver', 'driver')
+      .leftJoinAndSelect('r.pickupZone', 'pickupZone')
+      .leftJoinAndSelect('r.dropoffZone', 'dropoffZone')
+      .orderBy('r.pickupDateTime', 'DESC');
+
+    // Filtre par statut de paiement
+    if (filters.paymentStatus) {
+      qb.andWhere('r.paymentStatus = :paymentStatus', { paymentStatus: filters.paymentStatus });
+    }
+
+    // Filtre par date
+    if (filters.dateFrom) {
+      qb.andWhere('r.pickupDateTime >= :dateFrom', { dateFrom: new Date(filters.dateFrom) });
+    }
+    if (filters.dateTo) {
+      qb.andWhere('r.pickupDateTime <= :dateTo', { dateTo: new Date(filters.dateTo) });
+    }
+
+    const [reservations, total] = await qb.skip(skip).take(limit).getManyAndCount();
+
+    return {
+      reservations,
+      total,
+      page,
+      limit,
+    };
+  }
+
+  /**
+   * Admin : changer le statut de paiement d'une course
+   * Avec audit log et notification au chauffeur si passage IMPAYE -> PAIEMENT_COMPLET
+   */
+  async updatePaymentStatusByAdmin(
+    reservationId: string,
+    paymentStatus: PaymentStatus,
+    admin: { id: string; email: string },
+  ): Promise<Reservation> {
+    const reservation = await this.reservationsRepository.findOne({
+      where: { id: reservationId },
+      relations: ['driver', 'pickupZone', 'dropoffZone'],
+    });
+
+    if (!reservation) {
+      throw new NotFoundException('Réservation non trouvée');
+    }
+
+    const oldPaymentStatus = reservation.paymentStatus;
+
+    // Mettre à jour le statut
+    await this.reservationsRepository.update(reservationId, { paymentStatus });
+
+    // Audit log détaillé
+    await this.auditService.log({
+      userId: admin.id,
+      action: 'ADMIN_UPDATE_PAYMENT_STATUS',
+      entityType: 'Reservation',
+      entityId: reservationId,
+      oldData: { paymentStatus: oldPaymentStatus },
+      newData: { paymentStatus },
+      description: `Admin ${admin.email} a changé le statut de paiement de ${oldPaymentStatus} à ${paymentStatus} pour la course ${reservation.code}`,
+    });
+
+    const updated = await this.findById(reservationId);
+
+    // Si admin marque comme PAIEMENT_COMPLET alors qu'elle était IMPAYE, notifier le chauffeur
+    if (paymentStatus === PaymentStatus.PAIEMENT_COMPLET && oldPaymentStatus === PaymentStatus.IMPAYE) {
+      if (updated.driver?.email) {
+        setImmediate(async () => {
+          try {
+            await this.notificationsService.sendDriverPaymentRegularized(updated);
+          } catch (e) {
+            this.logger.error('Failed to send payment regularized notification', e?.message);
+          }
+        });
+      }
+    }
+
+    // Si admin marque comme IMPAYE, notifier les admins
+    if (paymentStatus === PaymentStatus.IMPAYE && oldPaymentStatus !== PaymentStatus.IMPAYE) {
+      setImmediate(async () => {
+        try {
+          await this.notifyAdminUnpaidRide(updated);
+        } catch (e) {
+          this.logger.error('Failed to send unpaid ride notification', e?.message);
+        }
+      });
+    }
+
+    return updated;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -1023,6 +1216,20 @@ export class ReservationsService {
       await this.notificationsService.sendAdminAllDriversDeclined(reservation, adminEmails);
     } catch (e) {
       this.logger.error('Failed to send admin notification', e?.message);
+    }
+  }
+
+  /**
+   * Notifie les admins qu'un chauffeur a marqué une course comme impayée
+   */
+  private async notifyAdminUnpaidRide(reservation: Reservation): Promise<void> {
+    try {
+      const admins = await this.usersService.findAdmins();
+      const adminEmails = admins.map(a => a.email);
+      const markedAt = new Date();
+      await this.notificationsService.sendAdminUnpaidRide(reservation, adminEmails, markedAt);
+    } catch (e) {
+      this.logger.error('Failed to send unpaid ride admin notification', e?.message);
     }
   }
 }

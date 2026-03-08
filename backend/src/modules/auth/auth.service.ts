@@ -69,6 +69,36 @@ export class AuthService {
     await this.refreshTokenRepository.update({ userId }, { isRevoked: true });
   }
 
+  async verifyPasswordAndGenerateSupervisionToken(
+    userId: string,
+    email: string,
+    password: string,
+  ): Promise<{ supervisionToken: string; expiresAt: Date }> {
+    const user = await this.usersService.findById(userId);
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const passwordValid = await argon2.verify(user.password, password);
+    if (!passwordValid) {
+      throw new UnauthorizedException('Invalid password');
+    }
+
+    // Generate a short-lived supervision token (30 minutes)
+    const supervisionToken = this.jwtService.sign(
+      { sub: userId, email, role: user.role, type: 'supervision' },
+      {
+        secret: process.env.JWT_ACCESS_SECRET,
+        expiresIn: '30m',
+      },
+    );
+
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 30);
+
+    return { supervisionToken, expiresAt };
+  }
+
   private async generateTokens(userId: string, email: string, role: string) {
     const payload = { sub: userId, email, role };
 
