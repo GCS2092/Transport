@@ -11,6 +11,7 @@ import { PdfModule } from '../pdf/pdf.module';
 import { DriversModule } from '../drivers/drivers.module';
 import { AuditModule } from '../audit/audit.module';
 import { PromoCodesModule } from '../promo-codes/promo-codes.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { PromoCodesModule } from '../promo-codes/promo-codes.module';
     DriversModule,
     AuditModule,
     PromoCodesModule,
+    UsersModule,
   ],
   controllers: [ReservationsController],
   providers: [ReservationsService],
