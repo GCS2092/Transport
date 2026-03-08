@@ -1,30 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { paymentSupervisionApi, PaymentSupervisionFilters } from '@/lib/api'
+import { paymentSupervisionApi, PaymentSupervisionFilters, Reservation } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-
-interface Reservation {
-  id: string
-  code: string
-  status: string
-  clientFirstName: string
-  clientLastName: string
-  clientPhone: string
-  pickupDateTime: string
-  amount: number
-  paymentStatus: string
-  driver?: {
-    firstName: string
-    lastName: string
-    phone: string
-    vehiclePlate?: string
-  }
-  pickupZone?: { name: string }
-  dropoffZone?: { name: string }
-}
 
 export default function PaymentSupervisionPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
