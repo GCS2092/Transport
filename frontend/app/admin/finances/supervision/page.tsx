@@ -13,17 +13,13 @@ export default function PaymentSupervisionPage() {
   const [tokenExpiry, setTokenExpiry] = useState<Date | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
-  // List state
+
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [filters, setFilters] = useState<PaymentSupervisionFilters>({
-    paymentStatus: 'IMPAYE',
-  })
+  const [filters, setFilters] = useState<PaymentSupervisionFilters>({ paymentStatus: 'IMPAYE' })
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
-  // Check for existing token on mount
   useEffect(() => {
     const savedToken = sessionStorage.getItem('supervision_token')
     const savedExpiry = sessionStorage.getItem('supervision_token_expiry')
@@ -34,14 +30,12 @@ export default function PaymentSupervisionPage() {
         setTokenExpiry(expiry)
         setIsAuthenticated(true)
       } else {
-        // Token expired, clear it
         sessionStorage.removeItem('supervision_token')
         sessionStorage.removeItem('supervision_token_expiry')
       }
     }
   }, [])
 
-  // Load data when authenticated
   useEffect(() => {
     if (isAuthenticated && supervisionToken) {
       loadReservations()
@@ -52,16 +46,12 @@ export default function PaymentSupervisionPage() {
     e.preventDefault()
     setLoading(true)
     setError(null)
-
     try {
       const response = await paymentSupervisionApi.verifyPassword(password)
       const { supervisionToken: token, expiresAt } = response.data
-      
       setSupervisionToken(token)
       setTokenExpiry(new Date(expiresAt))
       setIsAuthenticated(true)
-      
-      // Store in sessionStorage
       sessionStorage.setItem('supervision_token', token)
       sessionStorage.setItem('supervision_token_expiry', expiresAt)
     } catch (err: any) {
@@ -73,7 +63,6 @@ export default function PaymentSupervisionPage() {
 
   const loadReservations = async () => {
     if (!supervisionToken) return
-    
     setLoading(true)
     try {
       const response = await paymentSupervisionApi.getSupervisionList(
@@ -84,7 +73,6 @@ export default function PaymentSupervisionPage() {
       setTotal(response.data.total)
     } catch (err: any) {
       if (err.response?.status === 401) {
-        // Token expired
         setError('Session expirée. Veuillez réentrer votre mot de passe.')
         setIsAuthenticated(false)
         setSupervisionToken(null)
@@ -100,11 +88,9 @@ export default function PaymentSupervisionPage() {
 
   const handleUpdatePaymentStatus = async (id: string, newStatus: string) => {
     if (!supervisionToken) return
-    
     setUpdatingId(id)
     try {
       await paymentSupervisionApi.updatePaymentStatus(id, newStatus, supervisionToken)
-      // Refresh the list
       await loadReservations()
     } catch (err: any) {
       alert(err.response?.data?.message || 'Erreur lors de la mise à jour')
@@ -123,30 +109,49 @@ export default function PaymentSupervisionPage() {
 
   const getPaymentStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      'IMPAYE': 'bg-red-100 text-red-700 border-red-200',
-      'PAIEMENT_COMPLET': 'bg-emerald-100 text-emerald-700 border-emerald-200',
-      'ACOMPTE_VERSE': 'bg-amber-100 text-amber-700 border-amber-200',
-      'EN_ATTENTE': 'bg-gray-100 text-gray-700 border-gray-200',
+      IMPAYE: 'bg-red-100 text-red-700 border-red-200',
+      PAIEMENT_COMPLET: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      ACOMPTE_VERSE: 'bg-amber-100 text-amber-700 border-amber-200',
+      EN_ATTENTE: 'bg-gray-100 text-gray-700 border-gray-200',
     }
     return styles[status] || styles['EN_ATTENTE']
   }
 
-  // Password verification screen
+  const getPaymentStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      IMPAYE: 'IMPAYÉ',
+      PAIEMENT_COMPLET: 'PAYÉ',
+      ACOMPTE_VERSE: 'ACOMPTE',
+      EN_ATTENTE: 'EN ATTENTE',
+      REMBOURSE: 'REMBOURSÉ',
+    }
+    return labels[status] || status
+  }
+
+  const impayes = reservations.filter(r => r.paymentStatus === 'IMPAYE')
+  const montantImpaye = impayes.reduce((sum, r) => sum + r.amount, 0)
+
+  // ─── ÉCRAN DE CONNEXION ────────────────────────────────────────────────────
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8 max-w-md w-full">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 w-full max-w-sm">
+          {/* Icône */}
+          <div className="flex justify-center mb-6">
+            <div className="w-14 h-14 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center">
+              <svg className="w-7 h-7 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h1 className="text-xl font-bold text-gray-900">Supervision des Paiements</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Cette section est sécurisée. Veuillez confirmer votre mot de passe admin.
-            </p>
           </div>
+
+          <h1 className="text-lg font-bold text-gray-900 text-center mb-1">
+            Supervision des Paiements
+          </h1>
+          <p className="text-sm text-gray-500 text-center mb-6">
+            Confirmez votre mot de passe admin pour accéder à cette section sécurisée.
+          </p>
 
           <form onSubmit={handleVerifyPassword} className="space-y-4">
             <div>
@@ -157,14 +162,15 @@ export default function PaymentSupervisionPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
                 placeholder="••••••••"
                 required
+                autoFocus
               />
             </div>
 
             {error && (
-              <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg text-sm">
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
                 {error}
               </div>
             )}
@@ -172,190 +178,268 @@ export default function PaymentSupervisionPage() {
             <button
               type="submit"
               disabled={loading || !password}
-              className="w-full bg-[var(--primary)] text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+              className="w-full bg-gray-900 text-white py-3 rounded-xl text-sm font-semibold hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? 'Vérification...' : 'Accéder'}
             </button>
           </form>
 
           <p className="text-xs text-gray-400 text-center mt-4">
-            Le token de supervision est valable 30 minutes.
+            Session valable 30 minutes après connexion.
           </p>
         </div>
       </div>
     )
   }
 
-  // Main supervision interface
+  // ─── INTERFACE PRINCIPALE ──────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
-      <div className="max-w-7xl mx-auto px-4 pt-6">
-        
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <div className="max-w-7xl mx-auto px-4 pt-6 space-y-5">
+
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Supervision des Paiements</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Gestion des impayés et suivi des paiements
+            <h1 className="text-xl font-bold text-gray-900">Supervision des Paiements</h1>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Gestion des impayés et suivi des statuts
               {tokenExpiry && (
-                <span className="ml-2 text-amber-600">
-                  (Session expire à {format(tokenExpiry, 'HH:mm', { locale: fr })})
+                <span className="ml-2 text-amber-600 font-medium">
+                  · Session jusqu'à {format(tokenExpiry, 'HH:mm', { locale: fr })}
                 </span>
               )}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             <button
               onClick={loadReservations}
               disabled={loading}
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
             >
-              {loading ? 'Chargement...' : 'Actualiser'}
+              {loading ? 'Chargement...' : '↻ Actualiser'}
             </button>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100"
+              className="px-4 py-2 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors"
             >
-              Sécuriser la session
+              Verrouiller
             </button>
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-          <div className="flex flex-wrap gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Statut paiement</label>
+        {/* Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Total courses</p>
+            <p className="text-2xl font-bold text-gray-900">{total}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Impayés</p>
+            <p className="text-2xl font-bold text-red-600">{impayes.length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4 col-span-2 sm:col-span-1">
+            <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Montant impayé</p>
+            <p className="text-xl font-bold text-red-600">{formatCurrency(montantImpaye)}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4 hidden sm:block">
+            <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Page</p>
+            <p className="text-2xl font-bold text-gray-900">{page} / {Math.max(1, Math.ceil(total / 20))}</p>
+          </div>
+        </div>
+
+        {/* Filtres */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Filtres</p>
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex-1 min-w-[140px]">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Statut paiement</label>
               <select
                 value={filters.paymentStatus || ''}
-                onChange={(e) => setFilters({ ...filters, paymentStatus: e.target.value || undefined })}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[var(--primary)]"
+                onChange={(e) => { setPage(1); setFilters({ ...filters, paymentStatus: e.target.value || undefined }) }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
               >
                 <option value="">Tous</option>
-                <option value="IMPAYE">IMPAYÉ</option>
+                <option value="IMPAYE">Impayé</option>
                 <option value="PAIEMENT_COMPLET">Payé</option>
                 <option value="ACOMPTE_VERSE">Acompte</option>
                 <option value="EN_ATTENTE">En attente</option>
               </select>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Du</label>
+            <div className="flex-1 min-w-[130px]">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Du</label>
               <input
                 type="date"
                 value={filters.dateFrom || ''}
-                onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value || undefined })}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[var(--primary)]"
+                onChange={(e) => { setPage(1); setFilters({ ...filters, dateFrom: e.target.value || undefined }) }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Au</label>
+            <div className="flex-1 min-w-[130px]">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Au</label>
               <input
                 type="date"
                 value={filters.dateTo || ''}
-                onChange={(e) => setFilters({ ...filters, dateTo: e.target.value || undefined })}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[var(--primary)]"
+                onChange={(e) => { setPage(1); setFilters({ ...filters, dateTo: e.target.value || undefined }) }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
-            <div className="flex items-end">
-              <button
-                onClick={() => setFilters({ paymentStatus: 'IMPAYE' })}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
-              >
-                Réinitialiser
-              </button>
+            <button
+              onClick={() => { setPage(1); setFilters({ paymentStatus: 'IMPAYE' }) }}
+              className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition-colors"
+            >
+              Réinitialiser
+            </button>
+          </div>
+        </div>
+
+        {/* ─── VUE MOBILE : cartes ──────────────────────────────────────────── */}
+        <div className="block sm:hidden space-y-3">
+          {loading && reservations.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">
+              Chargement...
             </div>
-          </div>
+          ) : reservations.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">
+              Aucune course trouvée
+            </div>
+          ) : (
+            reservations.map((reservation) => (
+              <div
+                key={reservation.id}
+                className="bg-white rounded-xl border border-gray-200 p-4 space-y-3"
+              >
+                {/* Ligne 1 : code + badge statut */}
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-sm font-bold text-gray-900">
+                    #{reservation.code}
+                  </span>
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full border ${getPaymentStatusBadge(reservation.paymentStatus)}`}>
+                    {getPaymentStatusLabel(reservation.paymentStatus)}
+                  </span>
+                </div>
+
+                {/* Ligne 2 : client */}
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {reservation.clientFirstName} {reservation.clientLastName}
+                  </p>
+                  <p className="text-xs text-gray-500">{reservation.clientPhone}</p>
+                </div>
+
+                {/* Ligne 3 : chauffeur */}
+                {reservation.driver ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">
+                      {reservation.driver.firstName?.[0]}
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-700">
+                        {reservation.driver.firstName} {reservation.driver.lastName}
+                      </p>
+                      <p className="text-xs text-gray-400">{reservation.driver.phone}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">Aucun chauffeur assigné</p>
+                )}
+
+                {/* Ligne 4 : trajet */}
+                <div className="bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-600 space-y-0.5">
+                  <p>📍 {reservation.pickupZone?.name || 'Adresse personnalisée'}</p>
+                  <p>🏁 {reservation.dropoffZone?.name || 'Adresse personnalisée'}</p>
+                  <p className="text-gray-400">
+                    {format(new Date(reservation.pickupDateTime), 'dd/MM/yyyy à HH:mm', { locale: fr })}
+                  </p>
+                </div>
+
+                {/* Ligne 5 : montant + action */}
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-base font-bold text-gray-900">
+                    {formatCurrency(reservation.amount)}
+                  </span>
+                  {reservation.paymentStatus === 'IMPAYE' ? (
+                    <button
+                      onClick={() => handleUpdatePaymentStatus(reservation.id, 'PAIEMENT_COMPLET')}
+                      disabled={updatingId === reservation.id}
+                      className="px-4 py-2 bg-emerald-500 text-white text-xs font-semibold rounded-lg hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+                    >
+                      {updatingId === reservation.id ? '...' : '✓ Marquer payé'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleUpdatePaymentStatus(reservation.id, 'IMPAYE')}
+                      disabled={updatingId === reservation.id}
+                      className="px-4 py-2 bg-red-100 text-red-700 text-xs font-semibold rounded-lg hover:bg-red-200 disabled:opacity-50 transition-colors"
+                    >
+                      {updatingId === reservation.id ? '...' : 'Marquer impayé'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 uppercase font-semibold">Total</p>
-            <p className="text-2xl font-bold text-gray-900">{total}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 uppercase font-semibold">Impayés</p>
-            <p className="text-2xl font-bold text-red-600">
-              {reservations.filter(r => r.paymentStatus === 'IMPAYE').length}
-            </p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 uppercase font-semibold">Montant impayé</p>
-            <p className="text-2xl font-bold text-red-600">
-              {formatCurrency(
-                reservations
-                  .filter(r => r.paymentStatus === 'IMPAYE')
-                  .reduce((sum, r) => sum + r.amount, 0)
-              )}
-            </p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 uppercase font-semibold">Page</p>
-            <p className="text-2xl font-bold text-gray-900">{page} / {Math.ceil(total / 20)}</p>
-          </div>
-        </div>
-
-        {/* Reservations List */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        {/* ─── VUE DESKTOP : tableau ───────────────────────────────────────── */}
+        <div className="hidden sm:block bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Code</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Client</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Chauffeur</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Trajet</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Montant</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Statut</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Actions</th>
+                  {['Code', 'Client', 'Date', 'Chauffeur', 'Trajet', 'Montant', 'Statut', 'Action'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
-                {reservations.length === 0 ? (
+              <tbody className="divide-y divide-gray-100">
+                {loading && reservations.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={8} className="px-4 py-10 text-center text-gray-400 text-sm">
+                      Chargement...
+                    </td>
+                  </tr>
+                ) : reservations.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-10 text-center text-gray-400 text-sm">
                       Aucune course trouvée
                     </td>
                   </tr>
                 ) : (
                   reservations.map((reservation) => (
-                    <tr key={reservation.id} className="hover:bg-gray-50">
+                    <tr key={reservation.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
-                        <span className="font-mono text-sm font-medium text-gray-900">
+                        <span className="font-mono text-sm font-bold text-gray-900">
                           #{reservation.code}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="text-sm">
-                          <p className="font-medium text-gray-900">
-                            {reservation.clientFirstName} {reservation.clientLastName}
-                          </p>
-                          <p className="text-gray-500">{reservation.clientPhone}</p>
-                        </div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {reservation.clientFirstName} {reservation.clientLastName}
+                        </p>
+                        <p className="text-xs text-gray-500">{reservation.clientPhone}</p>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm text-gray-700">
-                          {format(new Date(reservation.pickupDateTime), 'dd/MM/yyyy HH:mm', { locale: fr })}
+                          {format(new Date(reservation.pickupDateTime), 'dd/MM/yy HH:mm', { locale: fr })}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         {reservation.driver ? (
-                          <div className="text-sm">
-                            <p className="font-medium text-gray-900">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
                               {reservation.driver.firstName} {reservation.driver.lastName}
                             </p>
-                            <p className="text-gray-500 text-xs">{reservation.driver.phone}</p>
+                            <p className="text-xs text-gray-500">{reservation.driver.phone}</p>
                           </div>
                         ) : (
-                          <span className="text-sm text-gray-400">Non assigné</span>
+                          <span className="text-xs text-gray-400 italic">Non assigné</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="text-sm text-gray-700">
-                          <p>{reservation.pickupZone?.name || 'Adresse pers.'}</p>
-                          <p className="text-gray-400">→ {reservation.dropoffZone?.name || 'Adresse pers.'}</p>
-                        </div>
+                        <p className="text-xs text-gray-700">{reservation.pickupZone?.name || 'Adresse pers.'}</p>
+                        <p className="text-xs text-gray-400">→ {reservation.dropoffZone?.name || 'Adresse pers.'}</p>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm font-bold text-gray-900">
@@ -363,33 +447,28 @@ export default function PaymentSupervisionPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${getPaymentStatusBadge(reservation.paymentStatus)}`}>
-                          {reservation.paymentStatus === 'IMPAYE' ? 'IMPAYÉ' : 
-                           reservation.paymentStatus === 'PAIEMENT_COMPLET' ? 'PAYÉ' :
-                           reservation.paymentStatus === 'ACOMPTE_VERSE' ? 'ACOMPTE' : 
-                           reservation.paymentStatus}
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getPaymentStatusBadge(reservation.paymentStatus)}`}>
+                          {getPaymentStatusLabel(reservation.paymentStatus)}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          {reservation.paymentStatus === 'IMPAYE' ? (
-                            <button
-                              onClick={() => handleUpdatePaymentStatus(reservation.id, 'PAIEMENT_COMPLET')}
-                              disabled={updatingId === reservation.id}
-                              className="px-3 py-1 bg-emerald-500 text-white text-xs font-medium rounded hover:bg-emerald-600 disabled:opacity-50"
-                            >
-                              {updatingId === reservation.id ? '...' : 'Marquer payé'}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleUpdatePaymentStatus(reservation.id, 'IMPAYE')}
-                              disabled={updatingId === reservation.id}
-                              className="px-3 py-1 bg-red-500 text-white text-xs font-medium rounded hover:bg-red-600 disabled:opacity-50"
-                            >
-                              {updatingId === reservation.id ? '...' : 'Marquer impayé'}
-                            </button>
-                          )}
-                        </div>
+                        {reservation.paymentStatus === 'IMPAYE' ? (
+                          <button
+                            onClick={() => handleUpdatePaymentStatus(reservation.id, 'PAIEMENT_COMPLET')}
+                            disabled={updatingId === reservation.id}
+                            className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-semibold rounded-lg hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+                          >
+                            {updatingId === reservation.id ? '...' : '✓ Marquer payé'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleUpdatePaymentStatus(reservation.id, 'IMPAYE')}
+                            disabled={updatingId === reservation.id}
+                            className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-semibold rounded-lg hover:bg-red-200 disabled:opacity-50 transition-colors"
+                          >
+                            {updatingId === reservation.id ? '...' : 'Impayé'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -401,26 +480,27 @@ export default function PaymentSupervisionPage() {
 
         {/* Pagination */}
         {total > 20 && (
-          <div className="flex items-center justify-center gap-2 mt-6">
+          <div className="flex items-center justify-center gap-3">
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm disabled:opacity-50"
+              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-gray-50 transition-colors"
             >
-              Précédent
+              ← Précédent
             </button>
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-gray-600 font-medium">
               Page {page} sur {Math.ceil(total / 20)}
             </span>
             <button
               onClick={() => setPage(p => p + 1)}
               disabled={page >= Math.ceil(total / 20)}
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm disabled:opacity-50"
+              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-gray-50 transition-colors"
             >
-              Suivant
+              Suivant →
             </button>
           </div>
         )}
+
       </div>
     </div>
   )
