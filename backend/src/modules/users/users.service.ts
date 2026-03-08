@@ -50,6 +50,13 @@ export class UsersService {
     return { data, total };
   }
 
+  async findAdmins(): Promise<User[]> {
+    return this.usersRepository.find({
+      where: { role: Role.ADMIN, isActive: true },
+      select: ['id', 'email', 'firstName', 'lastName'],
+    });
+  }
+
   async deactivate(id: string): Promise<void> {
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');

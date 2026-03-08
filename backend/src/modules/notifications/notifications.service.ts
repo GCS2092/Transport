@@ -334,6 +334,75 @@ export class NotificationsService {
     );
   }
 
+  // ─── Notifications Admin ─────────────────────────────────────────────────
+  async sendAdminNewReservation(reservation: Reservation, adminEmails: string[]): Promise<void> {
+    if (!adminEmails.length) return;
+
+    const pickup = this.getPickupAddress(reservation);
+    const dropoff = this.getDropoffAddress(reservation);
+
+    const title = '📢 Nouvelle réservation';
+    const body = `
+      <p>Une nouvelle réservation vient d'être créée.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Téléphone</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientPhone}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Email</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientEmail}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Trajet</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup} → ${dropoff}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Type</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.tripType}</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">Montant</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+      </table>
+      <p style="font-size:12px;color:#888;">Connectez-vous au tableau de bord admin pour assigner un chauffeur.</p>`;
+
+    const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`;
+
+    // Envoyer à tous les admins
+    for (const email of adminEmails) {
+      await this.sendEmail(
+        email,
+        `${title} — #${reservation.code}`,
+        html,
+        NotificationType.ADMIN_NEW_RESERVATION,
+        reservation.id,
+      );
+    }
+  }
+
+  async sendAdminDriverAssigned(reservation: Reservation, adminEmails: string[]): Promise<void> {
+    if (!adminEmails.length || !reservation.driver) return;
+
+    const pickup = this.getPickupAddress(reservation);
+    const dropoff = this.getDropoffAddress(reservation);
+
+    const title = '🚗 Chauffeur assigné';
+    const body = `
+      <p>Un chauffeur a été assigné à la course <strong>#${reservation.code}</strong>.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Chauffeur</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.driver.firstName} ${reservation.driver.lastName}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Tél. chauffeur</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.driver.phone || 'N/A'}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Trajet</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup} → ${dropoff}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">Montant</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+      </table>`;
+
+    const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`;
+
+    // Envoyer à tous les admins
+    for (const email of adminEmails) {
+      await this.sendEmail(
+        email,
+        `${title} — #${reservation.code}`,
+        html,
+        NotificationType.ADMIN_DRIVER_ASSIGNED,
+        reservation.id,
+      );
+    }
+  }
+
   // ─── Méthode privée — seule partie modifiée ────────────────────────────────
   private async sendEmail(
     to: string,

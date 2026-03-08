@@ -231,8 +231,29 @@ export function ReservationForm() {
   }
 
   const validateStep1 = () => {
-    if (!formData.pickupZoneId || !formData.dropoffZoneId) return f.selectZones
-    if (formData.pickupZoneId === formData.dropoffZoneId) return f.differentZones
+    // Vérifier que le départ est bien défini (zone OU adresse personnalisée)
+    const hasPickup = pickupType === 'zone' 
+      ? formData.pickupZoneId 
+      : (customPickupAddress.trim().length > 5)
+    
+    // Vérifier que l'arrivée est bien définie (zone OU adresse personnalisée)
+    const hasDropoff = dropoffType === 'zone'
+      ? formData.dropoffZoneId
+      : (customDropoffAddress.trim().length > 5)
+    
+    if (!hasPickup || !hasDropoff) return f.selectZones
+    
+    // Vérifier que les zones sont différentes seulement si les deux sont des zones prédéfinies
+    if (pickupType === 'zone' && dropoffType === 'zone' && formData.pickupZoneId === formData.dropoffZoneId) {
+      return f.differentZones
+    }
+    
+    // Vérifier que les adresses personnalisées ne sont pas identiques
+    if (pickupType === 'custom' && dropoffType === 'custom' && 
+        customPickupAddress.trim().toLowerCase() === customDropoffAddress.trim().toLowerCase()) {
+      return f.differentZones
+    }
+    
     if (!formData.pickupDateTime) return f.selectDate
     if (tripType === 'ALLER_RETOUR' && !formData.returnDateTime) return f.returnDateRequired
     return ''

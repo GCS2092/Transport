@@ -17,6 +17,7 @@ import { PdfService } from '../pdf/pdf.service';
 import { DriversService } from '../drivers/drivers.service';
 import { AuditService } from '../audit/audit.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
+import { UsersService } from '../users/users.service';
 import { DriverLocation } from '../drivers/entities/driver-location.entity';
 import { v4 as uuidv4 } from 'uuid';
 import { ReservationStatus } from '../../common/enums/reservation-status.enum';
@@ -48,6 +49,7 @@ export class ReservationsService {
     private driversService: DriversService,
     private auditService: AuditService,
     private promoCodesService: PromoCodesService,
+    private usersService: UsersService,
   ) {}
 
   private generateCode(): string {
@@ -133,6 +135,11 @@ export class ReservationsService {
     setImmediate(async () => {
       try {
         await this.notificationsService.sendReservationConfirmed(saved);
+        
+        // Notifier les admins
+        const admins = await this.usersService.findAdmins();
+        const adminEmails = admins.map(a => a.email);
+        await this.notificationsService.sendAdminNewReservation(saved, adminEmails);
       } catch (e) {
         this.logger.error('Failed to send confirmation email', e?.message);
       }
@@ -256,6 +263,11 @@ export class ReservationsService {
       try {
         await this.notificationsService.sendDriverAssigned(updated);
         await this.notificationsService.sendDriverNewRide(updated);
+        
+        // Notifier les admins
+        const admins = await this.usersService.findAdmins();
+        const adminEmails = admins.map(a => a.email);
+        await this.notificationsService.sendAdminDriverAssigned(updated, adminEmails);
       } catch (e) {
         this.logger.error('Failed to send driver assigned emails', e?.message);
       }
