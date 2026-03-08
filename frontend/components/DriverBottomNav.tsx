@@ -16,6 +16,27 @@ const TABS = [
     ),
   },
   {
+    href: '/chauffeur/paiements',
+    label: 'Paiements',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="12" y1="1" x2="12" y2="23"/>
+        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/chauffeur/historique',
+    label: 'Historique',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 3v5h5"/>
+        <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/>
+        <path d="M12 7v5l4 2"/>
+      </svg>
+    ),
+  },
+  {
     href: '/chauffeur/profil',
     label: 'Profil',
     icon: (
@@ -34,9 +55,7 @@ export function DriverBottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--primary)] border-t border-white/10">
       <div className="flex max-w-2xl mx-auto">
         {TABS.map(tab => {
-          const active = tab.href === '/chauffeur'
-            ? pathname === '/chauffeur'
-            : pathname.startsWith(tab.href)
+          const active = pathname === tab.href || (tab.href !== '/chauffeur' && pathname.startsWith(tab.href))
           return (
             <Link
               key={tab.href}
