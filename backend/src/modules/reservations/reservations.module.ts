@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ReservationsController } from './reservations.controller';
 import { ReservationsService } from './reservations.service';
 import { Reservation } from './entities/reservation.entity';
+import { DriverProposal } from './entities/driver-proposal.entity';
 import { DriverLocation } from '../drivers/entities/driver-location.entity';
 import { TariffsModule } from '../tariffs/tariffs.module';
 import { SettingsModule } from '../settings/settings.module';
@@ -15,7 +16,7 @@ import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Reservation, DriverLocation]),
+    TypeOrmModule.forFeature([Reservation, DriverLocation, DriverProposal]),
     TariffsModule,
     SettingsModule,
     NotificationsModule,

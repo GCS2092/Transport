@@ -403,7 +403,144 @@ export class NotificationsService {
     }
   }
 
-  // ─── Méthode privée — seule partie modifiée ────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // DRIVER PROPOSAL SYSTEM — Nouvelles méthodes pour assignation en cascade
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  async sendDriverProposal(proposal: any, reservation: Reservation): Promise<void> {
+    if (!proposal.driver?.email) return;
+
+    const pickup = this.getPickupAddress(reservation);
+    const dropoff = this.getDropoffAddress(reservation);
+    const frontendUrl = process.env.FRONTEND_URL || 'https://transport-six-xi.vercel.app';
+
+    const acceptUrl = `${frontendUrl}/api/reservations/proposals/accept/${proposal.token}`;
+    const declineUrl = `${frontendUrl}/api/reservations/proposals/decline/${proposal.token}`;
+
+    const title = '🚗 Nouvelle proposition de course';
+    const body = `
+      <p>Bonjour <strong>${proposal.driver.firstName}</strong>,</p>
+      <p>Une nouvelle course vous est proposée. Vous avez <strong>10 minutes</strong> pour répondre.</p>
+      
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;border:2px solid #16a34a;border-radius:8px;">
+        <tr style="background:#f0fdf4;"><td colspan="2" style="padding:12px;font-weight:bold;color:#166534;">📋 Détails de la course</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Téléphone client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientPhone}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Départ</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Destination</td><td style="padding:8px;border-bottom:1px solid #eee;">${dropoff}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Distance depuis vous</td><td style="padding:8px;border-bottom:1px solid #eee;">${proposal.distance.toFixed(1)} km</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">💰 Montant</td><td style="padding:8px;font-weight:bold;color:#16a34a;font-size:18px;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+      </table>
+      
+      ${reservation.notes ? `<p style="background:#fefce8;padding:8px;border-radius:4px;border-left:4px solid #eab308;"><strong>Note client :</strong> ${reservation.notes}</p>` : ''}
+      
+      <div style="margin:24px 0;text-align:center;">
+        <p style="margin-bottom:16px;font-weight:bold;">Que souhaitez-vous faire ?</p>
+        <a href="${acceptUrl}" style="display:inline-block;padding:14px 28px;background:#16a34a;color:white;text-decoration:none;border-radius:8px;font-weight:bold;margin-right:12px;">✅ CONFIRMER la course</a>
+        <a href="${declineUrl}" style="display:inline-block;padding:14px 28px;background:#ef4444;color:white;text-decoration:none;border-radius:8px;font-weight:bold;">❌ DÉCLINER</a>
+      </div>
+      
+      <p style="font-size:12px;color:#888;text-align:center;">
+        ⏰ Ce lien expire le ${new Date(proposal.expiresAt).toLocaleString('fr-FR')}<br>
+        En confirmant, vous serez immédiatement assigné à cette course.
+      </p>`;
+
+    await this.sendEmail(
+      proposal.driver.email,
+      `${title} — ${reservation.code} (10min pour répondre)`,
+      `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`,
+      NotificationType.DRIVER_NEW_RIDE,
+      reservation.id,
+    );
+  }
+
+  async sendDriverProposalTaken(driver: any, reservation: Reservation): Promise<void> {
+    if (!driver?.email) return;
+
+    const title = '❌ Course déjà assignée';
+    const body = `
+      <p>Bonjour <strong>${driver.firstName}</strong>,</p>
+      <p>La course <strong>#${reservation.code}</strong> qui vous était proposée a déjà été prise par un autre chauffeur.</p>
+      <p style="color:#888;">Pas d'inquiétude, d'autres opportunités arriveront bientôt !</p>`;
+
+    await this.sendEmail(
+      driver.email,
+      `${title} — #${reservation.code}`,
+      `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`,
+      NotificationType.DRIVER_NEW_RIDE,
+      reservation.id,
+    );
+  }
+
+  async sendAdminNoDriversAvailable(reservation: Reservation, adminEmails: string[]): Promise<void> {
+    if (!adminEmails.length) return;
+
+    const pickup = this.getPickupAddress(reservation);
+    const dropoff = this.getDropoffAddress(reservation);
+
+    const title = '🚨 Aucun chauffeur disponible';
+    const body = `
+      <p style="color:#dc2626;font-weight:bold;">Aucun chauffeur n'est actuellement disponible pour cette course.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Téléphone</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientPhone}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Trajet</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup} → ${dropoff}</td></tr>
+        <tr><td style="padding:8px;color:#666;">Date & Heure</td><td style="padding:8px;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
+      </table>
+      <p style="background:#fef2f2;padding:12px;border-radius:4px;border-left:4px solid #dc2626;">
+        <strong>Action requise :</strong> Assignez manuellement un chauffeur depuis le tableau de bord admin.
+      </p>`;
+
+    const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`;
+
+    for (const email of adminEmails) {
+      await this.sendEmail(
+        email,
+        `${title} — #${reservation.code}`,
+        html,
+        NotificationType.ADMIN_NEW_RESERVATION,
+        reservation.id,
+      );
+    }
+  }
+
+  async sendAdminAllDriversDeclined(reservation: Reservation, adminEmails: string[]): Promise<void> {
+    if (!adminEmails.length) return;
+
+    const pickup = this.getPickupAddress(reservation);
+    const dropoff = this.getDropoffAddress(reservation);
+
+    const title = '⚠️ Tous les chauffeurs ont décliné';
+    const body = `
+      <p style="color:#ea580c;font-weight:bold;">Tous les chauffeurs disponibles ont décliné ou n'ont pas répondu à la proposition.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Téléphone</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientPhone}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Trajet</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup} → ${dropoff}</td></tr>
+        <tr><td style="padding:8px;color:#666;">Date & Heure</td><td style="padding:8px;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
+      </table>
+      <p style="background:#fff7ed;padding:12px;border-radius:4px;border-left:4px solid #ea580c;">
+        <strong>Action requise :</strong> Créez une nouvelle proposition ou assignez directement un chauffeur depuis le tableau de bord.
+      </p>`;
+
+    const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`;
+
+    for (const email of adminEmails) {
+      await this.sendEmail(
+        email,
+        `${title} — #${reservation.code}`,
+        html,
+        NotificationType.ADMIN_NEW_RESERVATION,
+        reservation.id,
+      );
+    }
+  }
+
+  // ─── Méthode privée ──────────────────────────────────────────────────────────
   private async sendEmail(
     to: string,
     subject: string,

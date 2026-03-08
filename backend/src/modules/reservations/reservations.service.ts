@@ -6,8 +6,9 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In } from 'typeorm';
+import { Repository, Between, In, LessThan } from 'typeorm';
 import { Reservation } from './entities/reservation.entity';
+import { DriverProposal, ProposalStatus } from './entities/driver-proposal.entity';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { TariffsService } from '../tariffs/tariffs.service';
@@ -42,6 +43,8 @@ export class ReservationsService {
     private reservationsRepository: Repository<Reservation>,
     @InjectRepository(DriverLocation)
     private driverLocationRepository: Repository<DriverLocation>,
+    @InjectRepository(DriverProposal)
+    private driverProposalRepository: Repository<DriverProposal>,
     private tariffsService: TariffsService,
     private settingsService: SettingsService,
     private notificationsService: NotificationsService,
@@ -678,5 +681,348 @@ export class ReservationsService {
     });
     
     return this.findById(id);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // CASCADE AUTO-ASSIGNMENT SYSTEM
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Crée des propositions pour tous les chauffeurs disponibles, ordonnés par distance
+   * Envoie immédiatement au premier, les autres attendent en file
+   */
+  async createDriverProposals(reservationId: string): Promise<DriverProposal[]> {
+    const reservation = await this.findById(reservationId);
+
+    if (reservation.status !== ReservationStatus.EN_ATTENTE) {
+      throw new BadRequestException('Only pending reservations can have proposals created');
+    }
+
+    // Vérifier si des propositions existent déjà pour cette réservation
+    const existingProposals = await this.driverProposalRepository.find({
+      where: { reservationId },
+    });
+
+    if (existingProposals.length > 0) {
+      this.logger.warn(`Proposals already exist for reservation ${reservation.code}`);
+      return existingProposals;
+    }
+
+    const availableDrivers = await this.driversService.findAvailable();
+
+    if (availableDrivers.length === 0) {
+      // Aucun chauffeur disponible - alerter l'admin
+      await this.notifyAdminNoDriversAvailable(reservation);
+      throw new BadRequestException('No available drivers');
+    }
+
+    // Calculer la position de pickup
+    const pickupLat = Number(reservation.clientLatitude)
+      || Number(reservation.pickupLatitude)
+      || Number(reservation.pickupZone?.latitude);
+    const pickupLng = Number(reservation.clientLongitude)
+      || Number(reservation.pickupLongitude)
+      || Number(reservation.pickupZone?.longitude);
+
+    // Calculer les distances pour chaque chauffeur
+    const driversWithDistance = await Promise.all(
+      availableDrivers.map(async (driver) => {
+        try {
+          // Position GPS temps réel (< 30 min)
+          const location = await this.driverLocationRepository.findOne({
+            where: { driverId: driver.id },
+            order: { updatedAt: 'DESC' },
+          });
+
+          if (location) {
+            const ageMs = Date.now() - new Date(location.updatedAt).getTime();
+            if (ageMs < 30 * 60 * 1000) {
+              const distance = this.calculateDistance(
+                pickupLat || 0, pickupLng || 0,
+                Number(location.latitude), Number(location.longitude),
+              );
+              return { driver, distance };
+            }
+          }
+
+          // Fallback: dernière course terminée
+          const lastRide = await this.reservationsRepository.findOne({
+            where: { driverId: driver.id, status: ReservationStatus.TERMINEE },
+            order: { completedAt: 'DESC' },
+          });
+
+          if (lastRide) {
+            const dropLat = Number(lastRide.dropoffLatitude) || Number(lastRide.dropoffZone?.latitude);
+            const dropLng = Number(lastRide.dropoffLongitude) || Number(lastRide.dropoffZone?.longitude);
+            if (dropLat && dropLng && pickupLat && pickupLng) {
+              const distance = this.calculateDistance(pickupLat, pickupLng, dropLat, dropLng);
+              return { driver, distance };
+            }
+          }
+
+          return { driver, distance: Infinity };
+        } catch {
+          return { driver, distance: Infinity };
+        }
+      }),
+    );
+
+    // Trier par distance
+    driversWithDistance.sort((a, b) => a.distance - b.distance);
+
+    // Créer les propositions
+    const proposals: DriverProposal[] = [];
+    for (let i = 0; i < driversWithDistance.length; i++) {
+      const { driver, distance } = driversWithDistance[i];
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + 10); // 10 minutes pour répondre
+
+      const proposal = this.driverProposalRepository.create({
+        reservationId,
+        driverId: driver.id,
+        status: ProposalStatus.PENDING,
+        token: this.generateProposalToken(),
+        position: i + 1,
+        distance: distance === Infinity ? 999999 : distance,
+        expiresAt,
+      });
+
+      proposals.push(await this.driverProposalRepository.save(proposal));
+    }
+
+    this.logger.log(
+      `Created ${proposals.length} proposals for reservation ${reservation.code}, ` +
+      `closest: ${proposals[0]?.distance?.toFixed(2)}km`,
+    );
+
+    // Envoyer immédiatement au premier chauffeur
+    if (proposals.length > 0) {
+      await this.sendNextProposal(reservationId);
+    }
+
+    return proposals;
+  }
+
+  /**
+   * Envoie la proposition au prochain chauffeur dans la file
+   */
+  async sendNextProposal(reservationId: string): Promise<void> {
+    const reservation = await this.findById(reservationId);
+
+    // Trouver la proposition PENDING avec la plus petite position
+    const nextProposal = await this.driverProposalRepository.findOne({
+      where: { reservationId, status: ProposalStatus.PENDING },
+      order: { position: 'ASC' },
+      relations: ['driver', 'reservation'],
+    });
+
+    if (!nextProposal) {
+      this.logger.warn(`No pending proposals for reservation ${reservation.code}`);
+      // Tous les chauffeurs ont décliné ou expiré - alerter l'admin
+      await this.notifyAdminAllDriversDeclined(reservation);
+      return;
+    }
+
+    // Vérifier si la réservation est toujours en attente
+    if (reservation.status !== ReservationStatus.EN_ATTENTE) {
+      this.logger.log(`Reservation ${reservation.code} no longer pending, skipping proposal`);
+      return;
+    }
+
+    // Vérifier si le chauffeur est toujours disponible
+    const driver = await this.driversService.findById(nextProposal.driverId);
+    if (driver.status !== DriverStatus.DISPONIBLE) {
+      this.logger.log(`Driver ${driver.firstName} no longer available, skipping`);
+      // Marquer comme SKIPPED et passer au suivant
+      await this.driverProposalRepository.update(nextProposal.id, {
+        status: ProposalStatus.SKIPPED,
+      });
+      // Récursion pour passer au suivant
+      return this.sendNextProposal(reservationId);
+    }
+
+    // Envoyer l'email avec les boutons
+    await this.notificationsService.sendDriverProposal(nextProposal, reservation);
+
+    this.logger.log(
+      `Sent proposal to driver ${driver.firstName} ${driver.lastName} ` +
+      `for reservation ${reservation.code} (position ${nextProposal.position})`,
+    );
+  }
+
+  /**
+   * Chauffeur accepte une proposition
+   */
+  async acceptProposal(token: string): Promise<Reservation> {
+    const proposal = await this.driverProposalRepository.findOne({
+      where: { token },
+      relations: ['reservation', 'driver'],
+    });
+
+    if (!proposal) {
+      throw new NotFoundException('Proposal not found');
+    }
+
+    if (proposal.status !== ProposalStatus.PENDING) {
+      throw new BadRequestException(`Proposal already ${proposal.status.toLowerCase()}`);
+    }
+
+    if (proposal.expiresAt < new Date()) {
+      await this.driverProposalRepository.update(proposal.id, {
+        status: ProposalStatus.EXPIRED,
+      });
+      throw new BadRequestException('Proposal has expired');
+    }
+
+    const reservation = proposal.reservation;
+
+    // Vérifier que la réservation est toujours en attente (race condition)
+    const freshReservation = await this.findById(reservation.id);
+    if (freshReservation.status !== ReservationStatus.EN_ATTENTE) {
+      throw new BadRequestException('Reservation no longer pending');
+    }
+
+    // Transaction: assigner le chauffeur
+    await this.assignDriver(reservation.id, proposal.driverId);
+
+    // Marquer cette proposition comme ACCEPTED
+    await this.driverProposalRepository.update(proposal.id, {
+      status: ProposalStatus.ACCEPTED,
+      respondedAt: new Date(),
+    });
+
+    // Marquer les autres propositions comme SKIPPED et notifier les chauffeurs
+    const otherProposals = await this.driverProposalRepository.find({
+      where: { reservationId: reservation.id, status: ProposalStatus.PENDING },
+      relations: ['driver'],
+    });
+
+    for (const other of otherProposals) {
+      if (other.id !== proposal.id) {
+        await this.driverProposalRepository.update(other.id, {
+          status: ProposalStatus.SKIPPED,
+        });
+        // Notifier le chauffeur que la course a été prise par quelqu'un d'autre
+        if (other.driver?.email) {
+          await this.notificationsService.sendDriverProposalTaken(other.driver, reservation);
+        }
+      }
+    }
+
+    this.logger.log(
+      `Driver ${proposal.driver.firstName} ${proposal.driver.lastName} ` +
+      `accepted proposal for reservation ${reservation.code}`,
+    );
+
+    return this.findById(reservation.id);
+  }
+
+  /**
+   * Chauffeur décline une proposition
+   */
+  async declineProposal(token: string): Promise<void> {
+    const proposal = await this.driverProposalRepository.findOne({
+      where: { token },
+      relations: ['reservation', 'driver'],
+    });
+
+    if (!proposal) {
+      throw new NotFoundException('Proposal not found');
+    }
+
+    if (proposal.status !== ProposalStatus.PENDING) {
+      throw new BadRequestException(`Proposal already ${proposal.status.toLowerCase()}`);
+    }
+
+    if (proposal.expiresAt < new Date()) {
+      await this.driverProposalRepository.update(proposal.id, {
+        status: ProposalStatus.EXPIRED,
+      });
+      throw new BadRequestException('Proposal has expired');
+    }
+
+    // Marquer comme DECLINED
+    await this.driverProposalRepository.update(proposal.id, {
+      status: ProposalStatus.DECLINED,
+      respondedAt: new Date(),
+    });
+
+    this.logger.log(
+      `Driver ${proposal.driver.firstName} ${proposal.driver.lastName} ` +
+      `declined proposal for reservation ${proposal.reservation.code}`,
+    );
+
+    // Passer immédiatement au chauffeur suivant
+    await this.sendNextProposal(proposal.reservationId);
+  }
+
+  /**
+   * Traite les propositions expirées (appelé par le cron job)
+   */
+  async processExpiredProposals(): Promise<void> {
+    const now = new Date();
+
+    // Trouver les propositions PENDING qui ont expiré
+    const expiredProposals = await this.driverProposalRepository.find({
+      where: {
+        status: ProposalStatus.PENDING,
+        expiresAt: LessThan(now),
+      },
+      relations: ['reservation'],
+    });
+
+    this.logger.log(`Found ${expiredProposals.length} expired proposals to process`);
+
+    for (const proposal of expiredProposals) {
+      // Marquer comme EXPIRED
+      await this.driverProposalRepository.update(proposal.id, {
+        status: ProposalStatus.EXPIRED,
+      });
+
+      this.logger.log(
+        `Proposal ${proposal.id} for reservation ${proposal.reservation.code} expired`,
+      );
+
+      // Passer au suivant
+      await this.sendNextProposal(proposal.reservationId);
+    }
+  }
+
+  /**
+   * Génère un token unique pour une proposition
+   */
+  private generateProposalToken(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let token = '';
+    for (let i = 0; i < 32; i++) {
+      token += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return token;
+  }
+
+  /**
+   * Notifie l'admin qu'aucun chauffeur n'est disponible
+   */
+  private async notifyAdminNoDriversAvailable(reservation: Reservation): Promise<void> {
+    try {
+      const admins = await this.usersService.findAdmins();
+      const adminEmails = admins.map(a => a.email);
+      await this.notificationsService.sendAdminNoDriversAvailable(reservation, adminEmails);
+    } catch (e) {
+      this.logger.error('Failed to send admin notification', e?.message);
+    }
+  }
+
+  /**
+   * Notifie l'admin que tous les chauffeurs ont décliné
+   */
+  private async notifyAdminAllDriversDeclined(reservation: Reservation): Promise<void> {
+    try {
+      const admins = await this.usersService.findAdmins();
+      const adminEmails = admins.map(a => a.email);
+      await this.notificationsService.sendAdminAllDriversDeclined(reservation, adminEmails);
+    } catch (e) {
+      this.logger.error('Failed to send admin notification', e?.message);
+    }
   }
 }

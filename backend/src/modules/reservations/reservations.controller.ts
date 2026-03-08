@@ -138,6 +138,23 @@ export class ReservationsController {
     return this.reservationsService.autoAssignDriver(id);
   }
 
+  @Post(':id/proposals')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  createProposals(@Param('id') id: string) {
+    return this.reservationsService.createDriverProposals(id);
+  }
+
+  @Get('proposals/accept/:token')
+  async acceptProposal(@Param('token') token: string) {
+    return this.reservationsService.acceptProposal(token);
+  }
+
+  @Get('proposals/decline/:token')
+  async declineProposal(@Param('token') token: string) {
+    return this.reservationsService.declineProposal(token);
+  }
+
   @Put(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.DRIVER)

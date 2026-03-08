@@ -36,6 +36,16 @@ export class SchedulerService {
     }
   }
 
+  @Cron(CronExpression.EVERY_MINUTE)
+  async processExpiredProposals() {
+    this.logger.log('Checking for expired driver proposals...');
+    try {
+      await this.reservationsService.processExpiredProposals();
+    } catch (error) {
+      this.logger.error('Failed to process expired proposals', error?.message);
+    }
+  }
+
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async cleanExpiredTokens() {
     this.logger.log('Cleaning expired/revoked refresh tokens...');
