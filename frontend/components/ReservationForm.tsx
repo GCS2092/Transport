@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { zonesApi, tariffsApi, reservationsApi, Zone } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n'
@@ -160,6 +160,36 @@ export function ReservationForm() {
     { code: '+86', country: 'Chine', flag: '🇨🇳', placeholder: '138 1234 5678', format: 'XXX XXXX XXXX', hint: 'Chine: +86 138 1234 5678 (11 chiffres)', minLength: 11, maxLength: 14 },
   ]
   
+  // États pour le sélecteur de pays avec recherche
+  const [countrySearchQuery, setCountrySearchQuery] = useState('')
+  const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false)
+  const countryDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Fermer le dropdown quand on clique en dehors
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (countryDropdownRef.current && !countryDropdownRef.current.contains(event.target as Node)) {
+        setIsCountryDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Filtrer les pays selon la recherche
+  const filteredCountries = countrySearchQuery.trim() 
+    ? countryOptions.filter(c => 
+        c.country.toLowerCase().includes(countrySearchQuery.toLowerCase()) ||
+        c.code.includes(countrySearchQuery)
+      )
+    : countryOptions
+
+  const handleCountrySelect = (code: string) => {
+    setCountryCode(code)
+    setIsCountryDropdownOpen(false)
+    setCountrySearchQuery('')
+  }
+
   const currentCountry = countryOptions.find(c => c.code === countryCode) || countryOptions[0]
 
   const captureClientGps = () => {
@@ -845,30 +875,124 @@ export function ReservationForm() {
 
               <Field label={f.phoneField} hint={currentCountry.hint}>
                 <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
-                  <select 
-                    value={countryCode} 
-                    onChange={e => setCountryCode(e.target.value)}
-                    style={{ 
-                      width: '50px', 
-                      minWidth: '50px',
-                      maxWidth: '50px',
-                      height: '48px',
-                      padding: '0',
-                      borderRadius: '12px',
-                      border: '1px solid #e5e7eb',
-                      backgroundColor: 'white',
-                      fontSize: '20px',
-                      textAlign: 'center',
-                      textAlignLast: 'center',
-                      flex: 'none'
-                    }}
-                  >
-                    {countryOptions.map(opt => (
-                      <option key={opt.code} value={opt.code}>
-                        {opt.flag}
-                      </option>
-                    ))}
-                  </select>
+                  {/* Sélecteur de pays avec recherche */}
+                  <div ref={countryDropdownRef} style={{ position: 'relative', width: '50px', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
+                      style={{ 
+                        width: '50px', 
+                        height: '48px',
+                        padding: '0',
+                        borderRadius: '12px',
+                        border: '1px solid #e5e7eb',
+                        backgroundColor: 'white',
+                        fontSize: '20px',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {currentCountry.flag}
+                    </button>
+                    
+                    {/* Dropdown avec recherche */}
+                    {isCountryDropdownOpen && (
+                      <div style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 4px)',
+                        left: '0',
+                        width: '280px',
+                        maxHeight: '300px',
+                        backgroundColor: 'white',
+                        borderRadius: '12px',
+                        border: '1px solid #e5e7eb',
+                        boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+                        zIndex: 100,
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column'
+                      }}>
+                        {/* Input de recherche */}
+                        <div style={{ padding: '12px', borderBottom: '1px solid #f3f4f6' }}>
+                          <input
+                            type="text"
+                            value={countrySearchQuery}
+                            onChange={(e) => setCountrySearchQuery(e.target.value)}
+                            placeholder="Rechercher pays ou indicatif..."
+                            autoFocus
+                            style={{
+                              width: '100%',
+                              height: '36px',
+                              padding: '0 12px',
+                              borderRadius: '8px',
+                              border: '1px solid #e5e7eb',
+                              fontSize: '13px',
+                              outline: 'none'
+                            }}
+                          />
+                        </div>
+                        
+                        {/* Liste des pays filtrés */}
+                        <div style={{ 
+                          overflowY: 'auto', 
+                          maxHeight: '220px',
+                          padding: '4px 0'
+                        }}>
+                          {filteredCountries.length > 0 ? (
+                            filteredCountries.map(opt => (
+                              <button
+                                key={opt.code}
+                                type="button"
+                                onClick={() => handleCountrySelect(opt.code)}
+                                style={{
+                                  width: '100%',
+                                  padding: '10px 12px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '10px',
+                                  backgroundColor: countryCode === opt.code ? '#f0fdf4' : 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  textAlign: 'left',
+                                  fontSize: '14px'
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (countryCode !== opt.code) {
+                                    e.currentTarget.style.backgroundColor = '#f9fafb'
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (countryCode !== opt.code) {
+                                    e.currentTarget.style.backgroundColor = 'transparent'
+                                  }
+                                }}
+                              >
+                                <span style={{ fontSize: '20px' }}>{opt.flag}</span>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontWeight: 500, color: '#111827' }}>{opt.country}</div>
+                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{opt.code}</div>
+                                </div>
+                                {countryCode === opt.code && (
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                  </svg>
+                                )}
+                              </button>
+                            ))
+                          ) : (
+                            <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                              Aucun pays trouvé
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Input téléphone */}
                   <input 
                     type="tel" 
                     value={formData.clientPhone} 
@@ -877,14 +1001,14 @@ export function ReservationForm() {
                       set('clientPhone', val)
                     }} 
                     style={{
+                      flex: 1,
                       width: 'calc(100% - 58px)',
                       height: '48px',
                       padding: '0 12px',
                       borderRadius: '12px',
                       border: '1px solid #e5e7eb',
                       backgroundColor: 'white',
-                      fontSize: '16px',
-                      flex: 1
+                      fontSize: '16px'
                     }}
                     placeholder={currentCountry.placeholder}
                   />
