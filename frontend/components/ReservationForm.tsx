@@ -777,11 +777,12 @@ export function ReservationForm() {
               </Field>
 
               <Field label={f.phoneField} hint={currentCountry.hint}>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-[4rem_1fr] gap-2">
                   <select 
                     value={countryCode} 
                     onChange={e => setCountryCode(e.target.value)}
-                    className="shrink-0 w-16 px-2 py-3 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-center focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    style={{ width: '4rem' }}
+                    className="px-1 py-3 rounded-xl border border-gray-200 bg-white text-xs font-semibold text-center focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   >
                     {countryOptions.map(opt => (
                       <option key={opt.code} value={opt.code}>
@@ -796,7 +797,7 @@ export function ReservationForm() {
                       const val = e.target.value.replace(/[^0-9\s]/g, '')
                       set('clientPhone', val)
                     }} 
-                    className="flex-1 block w-full px-3 py-3 rounded-xl border border-gray-200 bg-white text-base focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 placeholder:text-gray-400" 
+                    className="w-full px-3 py-3 rounded-xl border border-gray-200 bg-white text-base focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 placeholder:text-gray-400" 
                     placeholder={currentCountry.placeholder}
                   />
                 </div>
