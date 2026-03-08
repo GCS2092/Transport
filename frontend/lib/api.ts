@@ -484,6 +484,41 @@ export const auditApi = {
     api.get<AuditLog[]>('/audit/entity', { params: { entityType, entityId } }),
 }
 
+// Payment Supervision API
+export interface PaymentSupervisionFilters {
+  paymentStatus?: string
+  dateFrom?: string
+  dateTo?: string
+  page?: number
+  limit?: number
+}
+
+export interface PaymentSupervisionResponse {
+  reservations: Reservation[]
+  total: number
+  page: number
+  limit: number
+}
+
+export const paymentSupervisionApi = {
+  // Vérifier le mot de passe et obtenir le token de supervision
+  verifyPassword: (password: string) =>
+    api.post<{ supervisionToken: string; expiresAt: string }>('/auth/verify-password', { password }),
+
+  // Lister les courses avec filtres de paiement (nécessite X-Supervision-Token)
+  getSupervisionList: (filters?: PaymentSupervisionFilters, supervisionToken?: string) =>
+    api.get<PaymentSupervisionResponse>('/reservations/payment/supervision', {
+      params: filters,
+      headers: supervisionToken ? { 'X-Supervision-Token': supervisionToken } : undefined,
+    }),
+
+  // Mettre à jour le statut de paiement par admin (nécessite X-Supervision-Token)
+  updatePaymentStatus: (id: string, paymentStatus: string, supervisionToken?: string) =>
+    api.patch<Reservation>(`/reservations/${id}/payment-status/admin`, { paymentStatus }, {
+      headers: supervisionToken ? { 'X-Supervision-Token': supervisionToken } : undefined,
+    }),
+}
+
 export const authApi = {
   login: (email: string, password: string) =>
     api.post<{ accessToken: string; user: { id: string; email: string; role: string } }>('/auth/login', { email, password }),

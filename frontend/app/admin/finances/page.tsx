@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { adminApi } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
+import Link from 'next/link'
 
 export default function AdminFinances() {
   const [loading, setLoading] = useState(true)
@@ -58,6 +59,29 @@ export default function AdminFinances() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Finances</h1>
           <p className="text-sm text-gray-500 mt-1">Statistiques financières détaillées</p>
+        </div>
+
+        {/* Supervision des Paiements */}
+        <div className="bg-gradient-to-r from-amber-50 to-red-50 border border-amber-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="font-semibold text-gray-900">Supervision des Paiements</h2>
+                <p className="text-sm text-gray-500">Gérer les courses impayées et suivre les paiements</p>
+              </div>
+            </div>
+            <Link
+              href="/admin/finances/supervision"
+              className="px-4 py-2 bg-amber-500 text-white rounded-lg font-medium text-sm hover:bg-amber-600 transition-colors"
+            >
+              Accéder
+            </Link>
+          </div>
         </div>
 
         {/* KPIs */}
