@@ -37,6 +37,7 @@ export default function DriverDashboard() {
   const [tab,     setTab]     = useState<'today' | 'upcoming' | 'done'>('today')
   const [loading, setLoading] = useState(true)
   const [toggling,setToggling]= useState(false)
+  const [markingPaid, setMarkingPaid] = useState<string | null>(null)
 
   const geo = useGeolocation({ watch: true, autoStart: true })
 
@@ -92,6 +93,24 @@ export default function DriverDashboard() {
     const dt = new Date(r.pickupDateTime); return dt >= today && dt < tomorrow
   }).length
   const doneCount = rides.filter(r => r.status === 'TERMINEE').length
+
+  const unpaidRides = rides.filter(r => r.status === 'TERMINEE' && r.paymentStatus !== 'PAIEMENT_COMPLET')
+  const totalUnpaid = unpaidRides.reduce((sum, r) => sum + Number(r.amount), 0)
+
+  const markAsPaid = async (rideId: string) => {
+    setMarkingPaid(rideId)
+    try {
+      const { reservationsApi } = await import('@/lib/api')
+      await reservationsApi.updatePaymentStatus(rideId, 'PAIEMENT_COMPLET')
+      // Refresh rides
+      const { data } = await driverApi.getMyRides()
+      setRides(data)
+    } catch (e) {
+      console.error('Erreur lors du marquage comme payé:', e)
+    } finally {
+      setMarkingPaid(null)
+    }
+  }
 
   if (authLoading || loading) {
     return (
@@ -163,6 +182,50 @@ export default function DriverDashboard() {
           </div>
         ))}
       </div>
+
+      {/* ── Section paiements en attente ─────────────────────── */}
+      {unpaidRides.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round">
+                <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+              <h3 className="text-sm font-bold text-amber-900">Paiements en attente</h3>
+            </div>
+            <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded-full">
+              {unpaidRides.length} course{unpaidRides.length > 1 ? 's' : ''}
+            </span>
+          </div>
+          
+          <p className="text-xs text-amber-700 mb-3">
+            Total à percevoir: <span className="font-bold">{totalUnpaid.toLocaleString()} FCFA</span>
+          </p>
+          
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {unpaidRides.map(ride => (
+              <div key={ride.id} className="bg-white rounded-xl p-3 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-gray-900">{ride.code}</p>
+                  <p className="text-xs text-gray-500">{ride.clientFirstName} {ride.clientLastName}</p>
+                  <p className="text-xs font-bold text-emerald-600">{Number(ride.amount).toLocaleString()} FCFA</p>
+                </div>
+                <button
+                  onClick={() => markAsPaid(ride.id)}
+                  disabled={markingPaid === ride.id}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                >
+                  {markingPaid === ride.id ? (
+                    <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12a8 8 0 018-8"/></svg>
+                  ) : (
+                    'Marquer payé'
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Onglets ───────────────────────────────────────────── */}
       <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
