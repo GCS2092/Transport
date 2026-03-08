@@ -79,18 +79,18 @@ export function ReservationForm() {
   // Pays et indicatifs téléphoniques avec formats spécifiques
   const [countryCode, setCountryCode] = useState('+221')
   const countryOptions = [
-    { code: '+221', country: 'Sénégal', flag: '🇸🇳', placeholder: '77 123 45 67', format: 'XX XXX XX XX', hint: 'Sénégal: +221 77 123 45 67 (9 chiffres)', minLength: 9, maxLength: 12 },
-    { code: '+33', country: 'France', flag: '🇫🇷', placeholder: '6 12 34 56 78', format: 'X XX XX XX XX', hint: 'France: +33 6 12 34 56 78 (10 chiffres)', minLength: 10, maxLength: 13 },
-    { code: '+212', country: 'Maroc', flag: '🇲🇦', placeholder: '612 345 678', format: 'XXX XXX XXX', hint: 'Maroc: +212 612 345 678 (9 chiffres)', minLength: 9, maxLength: 12 },
-    { code: '+225', country: 'Côte d\'Ivoire', flag: '🇨🇮', placeholder: '01 23 45 67', format: 'XX XX XX XX', hint: 'CI: +225 01 23 45 67 (8 chiffres)', minLength: 8, maxLength: 10 },
-    { code: '+224', country: 'Guinée', flag: '🇬🇳', placeholder: '621 34 56 78', format: 'XXX XX XX XX', hint: 'Guinée: +224 621 34 56 78 (9 chiffres)', minLength: 9, maxLength: 11 },
-    { code: '+227', country: 'Niger', flag: '🇳🇪', placeholder: '93 12 34 56', format: 'XX XX XX XX', hint: 'Niger: +227 93 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
-    { code: '+235', country: 'Tchad', flag: '��', placeholder: '62 12 34 56', format: 'XX XX XX XX', hint: 'Tchad: +235 62 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
-    { code: '+237', country: 'Cameroun', flag: '��', placeholder: '6 12 34 56 78', format: 'X XX XX XX XX', hint: 'Cameroun: +237 6 12 34 56 78 (9 chiffres)', minLength: 9, maxLength: 11 },
-    { code: '+228', country: 'Togo', flag: '🇹🇬', placeholder: '90 12 34 56', format: 'XX XX XX XX', hint: 'Togo: +228 90 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
-    { code: '+229', country: 'Bénin', flag: '🇧🇯', placeholder: '97 12 34 56', format: 'XX XX XX XX', hint: 'Bénin: +229 97 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
-    { code: '+232', country: 'Sierra Leone', flag: '🇸🇱', placeholder: '75 123456', format: 'XX XXXXXX', hint: 'Sierra Leone: +232 75 123456 (8 chiffres)', minLength: 8, maxLength: 10 },
-    { code: '+233', country: 'Ghana', flag: '🇬�', placeholder: '24 123 4567', format: 'XX XXX XXXX', hint: 'Ghana: +233 24 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+221', country: 'Sénégal', shortCode: 'SN', placeholder: '77 123 45 67', format: 'XX XXX XX XX', hint: 'Sénégal: +221 77 123 45 67 (9 chiffres)', minLength: 9, maxLength: 12 },
+    { code: '+33', country: 'France', shortCode: 'FR', placeholder: '6 12 34 56 78', format: 'X XX XX XX XX', hint: 'France: +33 6 12 34 56 78 (10 chiffres)', minLength: 10, maxLength: 13 },
+    { code: '+212', country: 'Maroc', shortCode: 'MA', placeholder: '612 345 678', format: 'XXX XXX XXX', hint: 'Maroc: +212 612 345 678 (9 chiffres)', minLength: 9, maxLength: 12 },
+    { code: '+225', country: 'Côte d\'Ivoire', shortCode: 'CI', placeholder: '01 23 45 67', format: 'XX XX XX XX', hint: 'CI: +225 01 23 45 67 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+224', country: 'Guinée', shortCode: 'GN', placeholder: '621 34 56 78', format: 'XXX XX XX XX', hint: 'Guinée: +224 621 34 56 78 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+227', country: 'Niger', shortCode: 'NE', placeholder: '93 12 34 56', format: 'XX XX XX XX', hint: 'Niger: +227 93 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+235', country: 'Tchad', shortCode: 'TD', placeholder: '62 12 34 56', format: 'XX XX XX XX', hint: 'Tchad: +235 62 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+237', country: 'Cameroun', shortCode: 'CM', placeholder: '6 12 34 56 78', format: 'X XX XX XX XX', hint: 'Cameroun: +237 6 12 34 56 78 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+228', country: 'Togo', shortCode: 'TG', placeholder: '90 12 34 56', format: 'XX XX XX XX', hint: 'Togo: +228 90 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+229', country: 'Bénin', shortCode: 'BJ', placeholder: '97 12 34 56', format: 'XX XX XX XX', hint: 'Bénin: +229 97 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+232', country: 'Sierra Leone', shortCode: 'SL', placeholder: '75 123456', format: 'XX XXXXXX', hint: 'Sierra Leone: +232 75 123456 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+233', country: 'Ghana', shortCode: 'GH', placeholder: '24 123 4567', format: 'XX XXX XXXX', hint: 'Ghana: +233 24 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
   ]
   
   const currentCountry = countryOptions.find(c => c.code === countryCode) || countryOptions[0]
@@ -777,15 +777,15 @@ export function ReservationForm() {
               </Field>
 
               <Field label={f.phoneField} hint={currentCountry.hint}>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-stretch">
                   <select 
                     value={countryCode} 
                     onChange={e => setCountryCode(e.target.value)}
-                    className={selectCls + ' w-16 flex-shrink-0 px-1 text-sm'}
+                    className={selectCls + ' w-14 sm:w-16 flex-shrink-0 px-1 sm:px-2 text-center text-xs sm:text-sm font-semibold'}
                   >
                     {countryOptions.map(opt => (
                       <option key={opt.code} value={opt.code}>
-                        {opt.flag}
+                        {opt.shortCode}
                       </option>
                     ))}
                   </select>
@@ -793,11 +793,10 @@ export function ReservationForm() {
                     type="tel" 
                     value={formData.clientPhone} 
                     onChange={e => {
-                      // Accepter chiffres et espaces uniquement
                       const val = e.target.value.replace(/[^0-9\s]/g, '')
                       set('clientPhone', val)
                     }} 
-                    className={inputCls + ' flex-1 min-w-0'} 
+                    className={inputCls + ' flex-1 min-w-0 text-base'} 
                     placeholder={currentCountry.placeholder}
                   />
                 </div>
