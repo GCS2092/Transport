@@ -79,18 +79,85 @@ export function ReservationForm() {
   // Pays et indicatifs téléphoniques avec formats spécifiques
   const [countryCode, setCountryCode] = useState('+221')
   const countryOptions = [
-    { code: '+221', country: 'Sénégal', shortCode: 'SN', placeholder: '77 123 45 67', format: 'XX XXX XX XX', hint: 'Sénégal: +221 77 123 45 67 (9 chiffres)', minLength: 9, maxLength: 12 },
-    { code: '+33', country: 'France', shortCode: 'FR', placeholder: '6 12 34 56 78', format: 'X XX XX XX XX', hint: 'France: +33 6 12 34 56 78 (10 chiffres)', minLength: 10, maxLength: 13 },
-    { code: '+212', country: 'Maroc', shortCode: 'MA', placeholder: '612 345 678', format: 'XXX XXX XXX', hint: 'Maroc: +212 612 345 678 (9 chiffres)', minLength: 9, maxLength: 12 },
-    { code: '+225', country: 'Côte d\'Ivoire', shortCode: 'CI', placeholder: '01 23 45 67', format: 'XX XX XX XX', hint: 'CI: +225 01 23 45 67 (8 chiffres)', minLength: 8, maxLength: 10 },
-    { code: '+224', country: 'Guinée', shortCode: 'GN', placeholder: '621 34 56 78', format: 'XXX XX XX XX', hint: 'Guinée: +224 621 34 56 78 (9 chiffres)', minLength: 9, maxLength: 11 },
-    { code: '+227', country: 'Niger', shortCode: 'NE', placeholder: '93 12 34 56', format: 'XX XX XX XX', hint: 'Niger: +227 93 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
-    { code: '+235', country: 'Tchad', shortCode: 'TD', placeholder: '62 12 34 56', format: 'XX XX XX XX', hint: 'Tchad: +235 62 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
-    { code: '+237', country: 'Cameroun', shortCode: 'CM', placeholder: '6 12 34 56 78', format: 'X XX XX XX XX', hint: 'Cameroun: +237 6 12 34 56 78 (9 chiffres)', minLength: 9, maxLength: 11 },
-    { code: '+228', country: 'Togo', shortCode: 'TG', placeholder: '90 12 34 56', format: 'XX XX XX XX', hint: 'Togo: +228 90 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
-    { code: '+229', country: 'Bénin', shortCode: 'BJ', placeholder: '97 12 34 56', format: 'XX XX XX XX', hint: 'Bénin: +229 97 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
-    { code: '+232', country: 'Sierra Leone', shortCode: 'SL', placeholder: '75 123456', format: 'XX XXXXXX', hint: 'Sierra Leone: +232 75 123456 (8 chiffres)', minLength: 8, maxLength: 10 },
-    { code: '+233', country: 'Ghana', shortCode: 'GH', placeholder: '24 123 4567', format: 'XX XXX XXXX', hint: 'Ghana: +233 24 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
+    // Afrique de l'Ouest
+    { code: '+221', country: 'Sénégal', flag: '🇸🇳', placeholder: '77 123 45 67', format: 'XX XXX XX XX', hint: 'Sénégal: +221 77 123 45 67 (9 chiffres)', minLength: 9, maxLength: 12 },
+    { code: '+225', country: 'Côte d\'Ivoire', flag: '🇨🇮', placeholder: '01 23 45 67', format: 'XX XX XX XX', hint: 'CI: +225 01 23 45 67 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+223', country: 'Mali', flag: '🇲🇱', placeholder: '70 12 34 56', format: 'XX XX XX XX', hint: 'Mali: +223 70 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+224', country: 'Guinée', flag: '🇬🇳', placeholder: '621 34 56 78', format: 'XXX XX XX XX', hint: 'Guinée: +224 621 34 56 78 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+233', country: 'Ghana', flag: '🇬🇭', placeholder: '24 123 4567', format: 'XX XXX XXXX', hint: 'Ghana: +233 24 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+226', country: 'Burkina Faso', flag: '🇧🇫', placeholder: '70 12 34 56', format: 'XX XX XX XX', hint: 'Burkina: +226 70 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+228', country: 'Togo', flag: '🇹🇬', placeholder: '90 12 34 56', format: 'XX XX XX XX', hint: 'Togo: +228 90 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+229', country: 'Bénin', flag: '🇧🇯', placeholder: '97 12 34 56', format: 'XX XX XX XX', hint: 'Bénin: +229 97 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+227', country: 'Niger', flag: '🇳🇪', placeholder: '93 12 34 56', format: 'XX XX XX XX', hint: 'Niger: +227 93 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+232', country: 'Sierra Leone', flag: '🇸🇱', placeholder: '75 123456', format: 'XX XXXXXX', hint: 'Sierra Leone: +232 75 123456 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+245', country: 'Guinée-Bissau', flag: '🇬🇼', placeholder: '955 123 456', format: 'XXX XXX XXX', hint: 'Guinée-Bissau: +245 955 123 456 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+220', country: 'Gambie', flag: '🇬🇲', placeholder: '301 2345', format: 'XXX XXXX', hint: 'Gambie: +220 301 2345 (7 chiffres)', minLength: 7, maxLength: 9 },
+    { code: '+234', country: 'Nigeria', flag: '🇳🇬', placeholder: '803 123 4567', format: 'XXX XXX XXXX', hint: 'Nigeria: +234 803 123 4567 (10 chiffres)', minLength: 10, maxLength: 12 },
+    { code: '+236', country: 'République centrafricaine', flag: '🇨🇫', placeholder: '70 12 34 56', format: 'XX XX XX XX', hint: 'RCA: +236 70 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    
+    // Afrique centrale
+    { code: '+237', country: 'Cameroun', flag: '🇨🇲', placeholder: '6 12 34 56 78', format: 'X XX XX XX XX', hint: 'Cameroun: +237 6 12 34 56 78 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+235', country: 'Tchad', flag: '🇹🇩', placeholder: '62 12 34 56', format: 'XX XX XX XX', hint: 'Tchad: +235 62 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+242', country: 'Congo', flag: '🇨🇬', placeholder: '06 123 4567', format: 'XX XXX XXXX', hint: 'Congo: +242 06 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+243', country: 'Congo RDC', flag: '🇨🇩', placeholder: '97 123 4567', format: 'XX XXX XXXX', hint: 'RDC: +243 97 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+241', country: 'Gabon', flag: '🇬🇦', placeholder: '04 12 34 56', format: 'XX XX XX XX', hint: 'Gabon: +241 04 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+240', country: 'Guinée équatoriale', flag: '🇬🇶', placeholder: '222 123 456', format: 'XXX XXX XXX', hint: 'Guinée équatoriale: +240 222 123 456 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+239', country: 'São Tomé', flag: '🇸🇹', placeholder: '981 2345', format: 'XXX XXXX', hint: 'São Tomé: +239 981 2345 (7 chiffres)', minLength: 7, maxLength: 9 },
+    
+    // Afrique de l'Est
+    { code: '+254', country: 'Kenya', flag: '🇰🇪', placeholder: '712 123456', format: 'XXX XXXXXX', hint: 'Kenya: +254 712 123456 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+255', country: 'Tanzanie', flag: '🇹🇿', placeholder: '712 123456', format: 'XXX XXXXXX', hint: 'Tanzanie: +255 712 123456 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+256', country: 'Ouganda', flag: '🇺🇬', placeholder: '712 123456', format: 'XXX XXXXXX', hint: 'Ouganda: +256 712 123456 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+250', country: 'Rwanda', flag: '🇷🇼', placeholder: '788 123 456', format: 'XXX XXX XXX', hint: 'Rwanda: +250 788 123 456 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+257', country: 'Burundi', flag: '🇧🇮', placeholder: '79 12 34 56', format: 'XX XX XX XX', hint: 'Burundi: +257 79 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+253', country: 'Djibouti', flag: '🇩🇯', placeholder: '77 12 34 56', format: 'XX XX XX XX', hint: 'Djibouti: +253 77 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+252', country: 'Somalie', flag: '🇸🇴', placeholder: '61 123 4567', format: 'XX XXX XXXX', hint: 'Somalie: +252 61 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+251', country: 'Éthiopie', flag: '🇪🇹', placeholder: '912 123456', format: 'XXX XXXXXX', hint: 'Éthiopie: +251 912 123456 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+249', country: 'Soudan', flag: '🇸🇩', placeholder: '99 123 4567', format: 'XX XXX XXXX', hint: 'Soudan: +249 99 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+211', country: 'Soudan du Sud', flag: '🇸🇸', placeholder: '99 123 4567', format: 'XX XXX XXXX', hint: 'Soudan du Sud: +211 99 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+246', country: 'Chagos', flag: '🇮🇴', placeholder: '123 4567', format: 'XXX XXXX', hint: 'Chagos: +246 123 4567 (7 chiffres)', minLength: 7, maxLength: 9 },
+    
+    // Afrique australe
+    { code: '+27', country: 'Afrique du Sud', flag: '🇿🇦', placeholder: '82 123 4567', format: 'XX XXX XXXX', hint: 'Afrique du Sud: +27 82 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+258', country: 'Mozambique', flag: '🇲🇿', placeholder: '82 123 4567', format: 'XX XXX XXXX', hint: 'Mozambique: +258 82 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+265', country: 'Malawi', flag: '🇲🇼', placeholder: '88 123 4567', format: 'XX XXX XXXX', hint: 'Malawi: +265 88 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+260', country: 'Zambie', flag: '🇿🇲', placeholder: '95 123 4567', format: 'XX XXX XXXX', hint: 'Zambie: +260 95 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+263', country: 'Zimbabwe', flag: '🇿🇼', placeholder: '77 123 4567', format: 'XX XXX XXXX', hint: 'Zimbabwe: +263 77 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+267', country: 'Botswana', flag: '🇧🇼', placeholder: '71 123 456', format: 'XX XXX XXX', hint: 'Botswana: +267 71 123 456 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+266', country: 'Lesotho', flag: '🇱🇸', placeholder: '56 12 34 56', format: 'XX XX XX XX', hint: 'Lesotho: +266 56 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+268', country: 'Eswatini', flag: '🇸🇿', placeholder: '76 12 34 56', format: 'XX XX XX XX', hint: 'Eswatini: +268 76 12 34 56 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+261', country: 'Madagascar', flag: '🇲🇬', placeholder: '32 12 345 67', format: 'XX XX XXX XX', hint: 'Madagascar: +261 32 12 345 67 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+262', country: 'Mayotte', flag: '🇾🇹', placeholder: '639 12 34 56', format: 'XXX XX XX XX', hint: 'Mayotte: +262 639 12 34 56 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+230', country: 'Maurice', flag: '🇲🇺', placeholder: '5 123 4567', format: 'X XXX XXXX', hint: 'Maurice: +230 5 123 4567 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+269', country: 'Comores', flag: '🇰🇲', placeholder: '321 23 45', format: 'XXX XX XX', hint: 'Comores: +269 321 23 45 (7 chiffres)', minLength: 7, maxLength: 9 },
+    { code: '+248', country: 'Seychelles', flag: '🇸🇨', placeholder: '2 123 456', format: 'X XXX XXX', hint: 'Seychelles: +248 2 123 456 (7 chiffres)', minLength: 7, maxLength: 9 },
+    
+    // Afrique du Nord
+    { code: '+212', country: 'Maroc', flag: '🇲🇦', placeholder: '612 345 678', format: 'XXX XXX XXX', hint: 'Maroc: +212 612 345 678 (9 chiffres)', minLength: 9, maxLength: 12 },
+    { code: '+213', country: 'Algérie', flag: '🇩🇿', placeholder: '5 12 34 56 78', format: 'X XX XX XX XX', hint: 'Algérie: +213 5 12 34 56 78 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+216', country: 'Tunisie', flag: '🇹🇳', placeholder: '20 123 456', format: 'XX XXX XXX', hint: 'Tunisie: +216 20 123 456 (8 chiffres)', minLength: 8, maxLength: 10 },
+    { code: '+218', country: 'Libye', flag: '🇱🇾', placeholder: '91 123 4567', format: 'XX XXX XXXX', hint: 'Libye: +218 91 123 4567 (9 chiffres)', minLength: 9, maxLength: 11 },
+    { code: '+20', country: 'Égypte', flag: '🇪🇬', placeholder: '10 1234 5678', format: 'XX XXXX XXXX', hint: 'Égypte: +20 10 1234 5678 (10 chiffres)', minLength: 10, maxLength: 12 },
+    
+    // Europe (présence en Afrique)
+    { code: '+33', country: 'France', flag: '🇫🇷', placeholder: '6 12 34 56 78', format: 'X XX XX XX XX', hint: 'France: +33 6 12 34 56 78 (10 chiffres)', minLength: 10, maxLength: 13 },
+    { code: '+44', country: 'Royaume-Uni', flag: '🇬🇧', placeholder: '7400 123456', format: 'XXXX XXXXXX', hint: 'UK: +44 7400 123456 (10 chiffres)', minLength: 10, maxLength: 13 },
+    { code: '+39', country: 'Italie', flag: '🇮🇹', placeholder: '312 345 6789', format: 'XXX XXX XXXX', hint: 'Italie: +39 312 345 6789 (10 chiffres)', minLength: 10, maxLength: 13 },
+    { code: '+49', country: 'Allemagne', flag: '🇩🇪', placeholder: '151 12345678', format: 'XXX XXXXXXXX', hint: 'Allemagne: +49 151 12345678 (11 chiffres)', minLength: 11, maxLength: 14 },
+    { code: '+32', country: 'Belgique', flag: '🇧🇪', placeholder: '470 12 34 56', format: 'XXX XX XX XX', hint: 'Belgique: +32 470 12 34 56 (9 chiffres)', minLength: 9, maxLength: 12 },
+    { code: '+31', country: 'Pays-Bas', flag: '🇳🇱', placeholder: '6 1234 5678', format: 'X XXXX XXXX', hint: 'Pays-Bas: +31 6 1234 5678 (9 chiffres)', minLength: 9, maxLength: 12 },
+    { code: '+41', country: 'Suisse', flag: '🇨🇭', placeholder: '78 123 45 67', format: 'XX XXX XX XX', hint: 'Suisse: +41 78 123 45 67 (9 chiffres)', minLength: 9, maxLength: 12 },
+    { code: '+34', country: 'Espagne', flag: '🇪🇸', placeholder: '612 34 56 78', format: 'XXX XX XX XX', hint: 'Espagne: +34 612 34 56 78 (9 chiffres)', minLength: 9, maxLength: 12 },
+    { code: '+351', country: 'Portugal', flag: '🇵🇹', placeholder: '912 345 678', format: 'XXX XXX XXX', hint: 'Portugal: +351 912 345 678 (9 chiffres)', minLength: 9, maxLength: 12 },
+    
+    // Amérique du Nord
+    { code: '+1', country: 'USA/Canada', flag: '🇺🇸', placeholder: '415 555 0123', format: '(XXX) XXX-XXXX', hint: 'USA: +1 415 555 0123 (10 chiffres)', minLength: 10, maxLength: 13 },
+    
+    // Asie/Moyen-Orient
+    { code: '+966', country: 'Arabie saoudite', flag: '🇸🇦', placeholder: '50 123 4567', format: 'XX XXX XXXX', hint: 'Arabie: +966 50 123 4567 (9 chiffres)', minLength: 9, maxLength: 12 },
+    { code: '+971', country: 'Emirats', flag: '🇦🇪', placeholder: '50 123 4567', format: 'XX XXX XXXX', hint: 'Emirats: +971 50 123 4567 (9 chiffres)', minLength: 9, maxLength: 12 },
+    { code: '+974', country: 'Qatar', flag: '🇶🇦', placeholder: '50 123 456', format: 'XX XXX XXX', hint: 'Qatar: +974 50 123 456 (8 chiffres)', minLength: 8, maxLength: 11 },
+    { code: '+86', country: 'Chine', flag: '🇨🇳', placeholder: '138 1234 5678', format: 'XXX XXXX XXXX', hint: 'Chine: +86 138 1234 5678 (11 chiffres)', minLength: 11, maxLength: 14 },
   ]
   
   const currentCountry = countryOptions.find(c => c.code === countryCode) || countryOptions[0]
@@ -777,50 +844,50 @@ export function ReservationForm() {
               </Field>
 
               <Field label={f.phoneField} hint={currentCountry.hint}>
-                <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr', gap: '8px', width: '100%' }}>
-                  <div style={{ width: '60px', flexShrink: 0 }}>
-                    <select 
-                      value={countryCode} 
-                      onChange={e => setCountryCode(e.target.value)}
-                      style={{ 
-                        width: '60px', 
-                        height: '48px',
-                        padding: '0 4px',
-                        borderRadius: '12px',
-                        border: '1px solid #e5e7eb',
-                        backgroundColor: 'white',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        textAlign: 'center'
-                      }}
-                    >
-                      {countryOptions.map(opt => (
-                        <option key={opt.code} value={opt.code}>
-                          {opt.shortCode}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <input 
-                      type="tel" 
-                      value={formData.clientPhone} 
-                      onChange={e => {
-                        const val = e.target.value.replace(/[^0-9\s]/g, '')
-                        set('clientPhone', val)
-                      }} 
-                      style={{
-                        width: '100%',
-                        height: '48px',
-                        padding: '0 12px',
-                        borderRadius: '12px',
-                        border: '1px solid #e5e7eb',
-                        backgroundColor: 'white',
-                        fontSize: '16px'
-                      }}
-                      placeholder={currentCountry.placeholder}
-                    />
-                  </div>
+                <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                  <select 
+                    value={countryCode} 
+                    onChange={e => setCountryCode(e.target.value)}
+                    style={{ 
+                      width: '50px', 
+                      minWidth: '50px',
+                      maxWidth: '50px',
+                      height: '48px',
+                      padding: '0',
+                      borderRadius: '12px',
+                      border: '1px solid #e5e7eb',
+                      backgroundColor: 'white',
+                      fontSize: '20px',
+                      textAlign: 'center',
+                      textAlignLast: 'center',
+                      flex: 'none'
+                    }}
+                  >
+                    {countryOptions.map(opt => (
+                      <option key={opt.code} value={opt.code}>
+                        {opt.flag}
+                      </option>
+                    ))}
+                  </select>
+                  <input 
+                    type="tel" 
+                    value={formData.clientPhone} 
+                    onChange={e => {
+                      const val = e.target.value.replace(/[^0-9\s]/g, '')
+                      set('clientPhone', val)
+                    }} 
+                    style={{
+                      width: 'calc(100% - 58px)',
+                      height: '48px',
+                      padding: '0 12px',
+                      borderRadius: '12px',
+                      border: '1px solid #e5e7eb',
+                      backgroundColor: 'white',
+                      fontSize: '16px',
+                      flex: 1
+                    }}
+                    placeholder={currentCountry.placeholder}
+                  />
                 </div>
               </Field>
 
