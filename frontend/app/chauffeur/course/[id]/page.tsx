@@ -46,6 +46,8 @@ export default function RideDetail() {
   const [loading, setLoading] = useState(true)
   const [acting,  setActing]  = useState(false)
   const [error,   setError]   = useState('')
+  const [showPaymentConfirm, setShowPaymentConfirm] = useState(false)
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null)
   const [routeCoords, setRouteCoords] = useState<Array<[number, number]>>([])
   const [routeInfo, setRouteInfo]     = useState<{ distance: number; duration: number } | null>(null)
   const [isHttps,   setIsHttps]       = useState(true)
@@ -126,6 +128,27 @@ export default function RideDetail() {
 
   const updateStatus = async (status: string) => {
     if (!ride || acting) return
+    
+    // Vérification : ne peut démarrer que si <= 30 min avant l'heure de départ
+    if (status === 'EN_COURS') {
+      const now = new Date()
+      const pickupTime = new Date(ride.pickupDateTime)
+      const diffMs = pickupTime.getTime() - now.getTime()
+      const diffMinutes = Math.floor(diffMs / 60000)
+      
+      if (diffMinutes > 30) {
+        setError(`Vous ne pouvez démarrer la course que 30 minutes avant l'heure de départ. Il reste encore ${diffMinutes} minutes.`)
+        return
+      }
+    }
+    
+    // Si on termine la course, demander confirmation du paiement
+    if (status === 'TERMINEE' && ride.paymentStatus !== 'PAIEMENT_COMPLET') {
+      setPendingStatus(status)
+      setShowPaymentConfirm(true)
+      return
+    }
+    
     setActing(true); setError('')
     try {
       const { data } = await reservationsApi.updateStatus(ride.id, status)
@@ -133,6 +156,50 @@ export default function RideDetail() {
     } catch (e: any) {
       setError(e.response?.data?.message || 'Erreur')
     } finally { setActing(false) }
+  }
+
+  const confirmCompleteRide = async (markAsPaid: boolean) => {
+    if (!ride || !pendingStatus) return
+    
+    setActing(true); setError('')
+    try {
+      // Si marqué comme payé, mettre à jour le statut de paiement d'abord
+      if (markAsPaid) {
+        await reservationsApi.updatePaymentStatus(ride.id, 'PAIEMENT_COMPLET')
+      }
+      
+      // Puis terminer la course
+      const { data } = await reservationsApi.updateStatus(ride.id, pendingStatus)
+      setRide(data)
+      setShowPaymentConfirm(false)
+      setPendingStatus(null)
+    } catch (e: any) {
+      setError(e.response?.data?.message || 'Erreur')
+    } finally { setActing(false) }
+  }
+
+  const canStartRide = () => {
+    if (!ride) return false
+    const now = new Date()
+    const pickupTime = new Date(ride.pickupDateTime)
+    const diffMs = pickupTime.getTime() - now.getTime()
+    const diffMinutes = Math.floor(diffMs / 60000)
+    return diffMinutes <= 30
+  }
+
+  const getTimeUntilPickup = () => {
+    if (!ride) return ''
+    const now = new Date()
+    const pickupTime = new Date(ride.pickupDateTime)
+    const diffMs = pickupTime.getTime() - now.getTime()
+    const diffMinutes = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMinutes / 60)
+    const remainingMinutes = diffMinutes % 60
+    
+    if (diffMinutes > 0) {
+      return `${diffHours > 0 ? diffHours + 'h ' : ''}${remainingMinutes}min`
+    }
+    return 'Maintenant'
   }
 
   const updatePaymentStatus = async (paymentStatus: string) => {
@@ -374,18 +441,30 @@ export default function RideDetail() {
 
       {/* ── Actions ───────────────────────────────────────── */}
       {ride.status === 'ASSIGNEE' && (
-        <button
-          onClick={() => updateStatus('EN_COURS')}
-          disabled={acting}
-          className="w-full py-4 rounded-2xl bg-[var(--primary)] text-white font-bold text-base hover:bg-[var(--primary-hover)] active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
-        >
-          {acting ? (
-            <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 12a8 8 0 018-8"/></svg>
-          ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <div className="space-y-3">
+          {!canStartRide() && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <p className="text-sm text-amber-800 font-semibold">
+                ⏰ Départ dans {getTimeUntilPickup()}
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                Vous ne pourrez démarrer cette course que 30 minutes avant l'heure de prise en charge.
+              </p>
+            </div>
           )}
-          Démarrer la course
-        </button>
+          <button
+            onClick={() => updateStatus('EN_COURS')}
+            disabled={acting || !canStartRide()}
+            className="w-full py-4 rounded-2xl bg-[var(--primary)] text-white font-bold text-base hover:bg-[var(--primary-hover)] active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            {acting ? (
+              <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 12a8 8 0 018-8"/></svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            )}
+            Démarrer la course
+          </button>
+        </div>
       )}
 
       {ride.status === 'EN_COURS' && (
@@ -401,6 +480,42 @@ export default function RideDetail() {
           )}
           Terminer la course
         </button>
+      )}
+
+      {/* Dialog de confirmation paiement */}
+      {showPaymentConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full space-y-4">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">Confirmer le paiement</h3>
+              <p className="text-sm text-gray-500 mt-2">
+                Le client a-t-il payé la course de {formatCurrency(ride.amount)} ?
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => confirmCompleteRide(false)}
+                disabled={acting}
+                className="py-3 rounded-xl border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
+              >
+                Non payé
+              </button>
+              <button
+                onClick={() => confirmCompleteRide(true)}
+                disabled={acting}
+                className="py-3 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-60"
+              >
+                Payé
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 text-center">
+              Vous pourrez modifier le statut de paiement plus tard si nécessaire.
+            </p>
+          </div>
+        </div>
       )}
 
       {/* Bouton pour marquer le paiement comme effectué */}

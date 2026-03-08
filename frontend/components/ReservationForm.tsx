@@ -256,8 +256,35 @@ export function ReservationForm() {
       return f.differentZones
     }
     
+    // Validation des dates
     if (!formData.pickupDateTime) return f.selectDate
-    if (tripType === 'ALLER_RETOUR' && !formData.returnDateTime) return f.returnDateRequired
+    
+    const now = new Date()
+    const pickupDate = new Date(formData.pickupDateTime)
+    const twoMonthsFromNow = new Date()
+    twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2)
+    const oneYearFromNow = new Date()
+    oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1)
+    
+    // Date ne peut pas être dans le passé
+    if (pickupDate < now) return 'La date de départ ne peut pas être dans le passé'
+    
+    // Max 2 mois à l'avance
+    if (pickupDate > twoMonthsFromNow) return 'Les réservations sont limitées à 2 mois à l\'avance'
+    
+    // Max 1 an à l'avance (sécurité supplémentaire)
+    if (pickupDate > oneYearFromNow) return 'La date ne peut pas dépasser 1 an'
+    
+    // Validation date de retour
+    if (tripType === 'ALLER_RETOUR') {
+      if (!formData.returnDateTime) return f.returnDateRequired
+      
+      const returnDate = new Date(formData.returnDateTime)
+      
+      if (returnDate < pickupDate) return 'La date de retour doit être après la date de départ'
+      if (returnDate > twoMonthsFromNow) return 'Les réservations sont limitées à 2 mois à l\'avance'
+    }
+    
     return ''
   }
 
@@ -754,11 +781,11 @@ export function ReservationForm() {
                   <select 
                     value={countryCode} 
                     onChange={e => setCountryCode(e.target.value)}
-                    className={selectCls + ' w-20 flex-shrink-0 px-2'}
+                    className={selectCls + ' w-16 flex-shrink-0 px-1 text-sm'}
                   >
                     {countryOptions.map(opt => (
                       <option key={opt.code} value={opt.code}>
-                        {opt.flag} {opt.code}
+                        {opt.flag}
                       </option>
                     ))}
                   </select>
