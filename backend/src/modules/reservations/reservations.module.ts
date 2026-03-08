@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { JwtModule } from '@nestjs/jwt';          // ← ajoute cet import
 import { ReservationsController } from './reservations.controller';
 import { ReservationsService } from './reservations.service';
 import { Reservation } from './entities/reservation.entity';
@@ -17,6 +18,7 @@ import { UsersModule } from '../users/users.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Reservation, DriverLocation, DriverProposal]),
+    JwtModule,          // ← ajoute cette ligne
     TariffsModule,
     SettingsModule,
     NotificationsModule,
