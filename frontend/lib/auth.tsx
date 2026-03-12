@@ -11,6 +11,12 @@ export interface AuthUser {
   lastName: string
 }
 
+declare global {
+  interface Window {
+    OneSignalDeferred?: Array<(OneSignal: any) => void | Promise<void>>
+  }
+}
+
 interface AuthCtx {
   user: AuthUser | null
   loading: boolean
@@ -36,6 +42,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false)
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!window.OneSignalDeferred) return
+
+    const roleTag = user?.role === 'DRIVER' ? 'chauffeur' : 'client'
+    const userId = user?.id
+
+    window.OneSignalDeferred.push(async function (OneSignal) {
+      try {
+        if (userId) {
+          // Associe la souscription à un user "external id"
+          await OneSignal.login(userId)
+        }
+        OneSignal.User.addTags({ role: roleTag })
+      } catch {}
+    })
+  }, [user?.id, user?.role])
+
   const login = async (email: string, password: string): Promise<AuthUser> => {
     const { data } = await api.post('/auth/login', { email, password })
     const { accessToken, refreshToken, user: u } = data
@@ -55,6 +79,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('vtc_refresh_token')
     localStorage.removeItem('vtc_user_id')
     delete api.defaults.headers.common['Authorization']
+
+    if (typeof window !== 'undefined' && window.OneSignalDeferred) {
+      window.OneSignalDeferred.push(async function (OneSignal) {
+        try {
+          // Retour au profil "client" quand on se déconnecte
+          if (typeof OneSignal.logout === 'function') await OneSignal.logout()
+          OneSignal.User.addTags({ role: 'client' })
+        } catch {}
+      })
+    }
   }
 
   return (

@@ -65,6 +65,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const onesignalAppId =
+    process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "bb43c885-d20b-4f1b-b363-57c9c9289314";
+
   return (
     <html lang="fr">
       <head>
@@ -78,6 +81,30 @@ export default function RootLayout({
         <link rel="apple-touch-icon" sizes="180x180" href="/images/FOND.jpeg" />
         {/* Viewport mobile */}
         <meta name="mobile-web-app-capable" content="yes" />
+
+        <script
+          src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
+          defer
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.OneSignalDeferred = window.OneSignalDeferred || [];
+              OneSignalDeferred.push(async function(OneSignal) {
+                await OneSignal.init({
+                  appId: ${JSON.stringify(onesignalAppId)},
+                  safari_web_id: "web.onesignal.auto.0818a4e7-118f-4fc1-b0e2-07892e811a2a",
+                  notifyButton: { enable: true },
+                });
+
+                // Par défaut (utilisateurs non connectés), on considère "client"
+                try {
+                  OneSignal.User.addTags({ role: "client" });
+                } catch (e) {}
+              });
+            `,
+          }}
+        />
       </head>
       <body className="min-h-screen flex flex-col">
         <LanguageProvider>

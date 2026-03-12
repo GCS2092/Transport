@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Resend } from 'resend';
+import { createTransport, Transporter } from 'nodemailer';
 import { EmailLog } from './entities/email-log.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { NotificationType } from '../../common/enums/notification-type.enum';
@@ -11,12 +12,58 @@ import { Language } from '../../common/enums/language.enum';
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
   private resend: Resend;
+  private gmailTransporter: Transporter | null = null;
 
   constructor(
     @InjectRepository(EmailLog)
     private emailLogRepository: Repository<EmailLog>,
   ) {
     this.resend = new Resend(process.env.RESEND_API_KEY);
+  }
+
+  private getReplyTo(): string {
+    return process.env.REPLY_TO_EMAIL || 'wenddtransport@gmail.com';
+  }
+
+  private getFromResend(): string {
+    const name = process.env.MAIL_FROM_NAME || "WEND'D Transport";
+    const email = process.env.MAIL_FROM || 'noreply@wenddtransport.com';
+    return `${name} <${email}>`;
+  }
+
+  private getGmailTransporter(): Transporter {
+    if (!this.gmailTransporter) {
+      this.gmailTransporter = createTransport({
+        host: process.env.GMAIL_HOST || 'smtp.gmail.com',
+        port: parseInt(process.env.GMAIL_PORT || '587', 10),
+        secure: false,
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_APP_PASSWORD,
+        },
+      });
+    }
+    return this.gmailTransporter;
+  }
+
+  private async sendWithGmail(
+    to: string,
+    subject: string,
+    html: string,
+    attachments: { filename: string; content: string }[] = [],
+  ): Promise<void> {
+    const transporter = this.getGmailTransporter();
+    await transporter.sendMail({
+      from: `WEND'D Transport <${process.env.GMAIL_USER || 'wenddtransport@gmail.com'}>`,
+      to,
+      subject,
+      html,
+      replyTo: this.getReplyTo(),
+      attachments: attachments.map(a => ({
+        filename: a.filename,
+        content: Buffer.from(a.content, 'base64'),
+      })),
+    });
   }
 
   private getPickupAddress(reservation: Reservation): string {
@@ -638,29 +685,46 @@ export class NotificationsService {
     });
 
     try {
+      // 1) Tentative avec Resend (principal)
       await this.resend.emails.send({
-        from: `${process.env.MAIL_FROM_NAME || "WEND'D Transport"} <${process.env.MAIL_FROM}>`,
+        from: this.getFromResend(),
         to,
         subject,
         html,
+        replyTo: this.getReplyTo(),
         attachments,
       });
 
       log.status = 'ENVOYE';
       await this.emailLogRepository.save(log);
-      this.logger.log(`Email sent [${type}] to ${to}`);
+      this.logger.log(`Email sent via Resend [${type}] to ${to}`);
     } catch (error) {
-      log.status = 'ECHEC';
-      log.errorMessage = error?.message;
-      await this.emailLogRepository.save(log);
-      this.logger.error(`Email failed [${type}] to ${to} (attempt ${attempt}): ${error?.message}`);
+      this.logger.error(
+        `Resend failed [${type}] to ${to} (attempt ${attempt}): ${error?.message}`,
+      );
 
-      if (attempt < 3) {
-        const delay = attempt * 2000;
-        setTimeout(
-          () => this.sendEmail(to, subject, html, type, reservationId, attachments, attempt + 1),
-          delay,
+      try {
+        // 2) Fallback automatique via SMTP Gmail
+        await this.sendWithGmail(to, subject, html, attachments);
+        log.status = 'ENVOYE';
+        log.errorMessage = `Resend failed, sent via Gmail: ${error?.message}`;
+        await this.emailLogRepository.save(log);
+        this.logger.log(`Email sent via Gmail fallback [${type}] to ${to}`);
+      } catch (gmailError) {
+        log.status = 'ECHEC';
+        log.errorMessage = `Resend error: ${error?.message} | Gmail error: ${gmailError?.message}`;
+        await this.emailLogRepository.save(log);
+        this.logger.error(
+          `Email failed via Resend & Gmail [${type}] to ${to} (attempt ${attempt}): ${gmailError?.message}`,
         );
+
+        if (attempt < 3) {
+          const delay = attempt * 2000;
+          setTimeout(
+            () => this.sendEmail(to, subject, html, type, reservationId, attachments, attempt + 1),
+            delay,
+          );
+        }
       }
     }
   }
