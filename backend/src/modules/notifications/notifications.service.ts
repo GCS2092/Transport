@@ -74,7 +74,7 @@ export class NotificationsService {
     return process.env.ONESIGNAL_REST_API_KEY;
   }
 
-  private async sendPush(
+  private async sendPushNotification(
     externalUserIds: string[],
     title: string,
     message: string,
@@ -116,6 +116,38 @@ export class NotificationsService {
       where: { reservationId, notificationType: type, status: 'ENVOYE' },
     });
     return !!existing;
+  }
+
+  async sendAdminArchiveReport(
+    adminEmails: string[],
+    subject: string,
+    html: string,
+    filename: string,
+    xlsxBuffer: Buffer,
+  ): Promise<void> {
+    if (!adminEmails.length) return;
+    const attachment = {
+      filename,
+      content: xlsxBuffer.toString('base64'),
+    };
+
+    for (const email of adminEmails) {
+      await this.sendEmail(
+        email,
+        subject,
+        html,
+        NotificationType.ADMIN_ARCHIVE,
+        'archive',
+        [attachment],
+      );
+    }
+
+    await this.sendPushNotification(
+      adminEmails.map(e => (e || '').trim().toLowerCase()).filter(Boolean),
+      'Archivage terminé',
+      'Un fichier Excel d’archivage a été généré et envoyé par email.',
+      {},
+    );
   }
 
   private getPickupAddress(reservation: Reservation): string {
@@ -223,7 +255,7 @@ export class NotificationsService {
       reservation.id,
     );
 
-    await this.sendPush(
+    await this.sendPushNotification(
       [reservation.clientEmail?.trim().toLowerCase()].filter(Boolean),
       this.t(lang, 'Réservation confirmée', 'Booking confirmed'),
       this.t(
@@ -260,7 +292,7 @@ export class NotificationsService {
       reservation.id,
     );
 
-    await this.sendPush(
+    await this.sendPushNotification(
       [reservation.clientEmail?.trim().toLowerCase()].filter(Boolean),
       this.t(lang, 'Chauffeur assigné', 'Driver assigned'),
       this.t(
@@ -319,7 +351,7 @@ export class NotificationsService {
       reservation.id,
     );
 
-    await this.sendPush(
+    await this.sendPushNotification(
       [reservation.clientEmail?.trim().toLowerCase()].filter(Boolean),
       title,
       this.t(
@@ -346,6 +378,17 @@ export class NotificationsService {
       this.buildEmailHtml(reservation, title, body),
       NotificationType.RESERVATION_CANCELLED,
       reservation.id,
+    );
+
+    await this.sendPushNotification(
+      [reservation.clientEmail?.trim().toLowerCase()].filter(Boolean),
+      title,
+      this.t(
+        lang,
+        `Votre réservation ${reservation.code} a été annulée.`,
+        `Your booking ${reservation.code} has been cancelled.`,
+      ),
+      { reservationCode: reservation.code },
     );
   }
 
@@ -380,7 +423,7 @@ export class NotificationsService {
     );
 
     const driverExternalId = reservation.driver.userId || reservation.driver.email;
-    await this.sendPush(
+    await this.sendPushNotification(
       [driverExternalId].filter(Boolean),
       'Nouvelle course assignée',
       `Course ${reservation.code} — ${pickup} → ${dropoff}`,
@@ -411,6 +454,45 @@ export class NotificationsService {
       `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`,
       NotificationType.RESERVATION_CANCELLED,
       reservation.id,
+    );
+
+    const driverExternalId = reservation.driver.userId || reservation.driver.email;
+    await this.sendPushNotification(
+      [driverExternalId].filter(Boolean),
+      title,
+      `Course #${reservation.code} annulée.`,
+      { reservationCode: reservation.code },
+    );
+  }
+
+  async sendDriverRideModified(reservation: Reservation): Promise<void> {
+    if (!reservation.driver?.email) return;
+    const pickup = this.getPickupAddress(reservation);
+    const dropoff = this.getDropoffAddress(reservation);
+    const title = 'Course modifiée';
+    const body = `
+      <p>Bonjour <strong>${reservation.driver.firstName}</strong>,</p>
+      <p>La course <strong>#${reservation.code}</strong> a été modifiée.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Départ</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Destination</td><td style="padding:8px;border-bottom:1px solid #eee;">${dropoff}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
+      </table>`;
+
+    await this.sendEmail(
+      reservation.driver.email,
+      `${title} — #${reservation.code}`,
+      `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`,
+      NotificationType.DRIVER_RIDE_MODIFIED,
+      reservation.id,
+    );
+
+    const driverExternalId = reservation.driver.userId || reservation.driver.email;
+    await this.sendPushNotification(
+      [driverExternalId].filter(Boolean),
+      title,
+      `La course ${reservation.code} a été modifiée. Ouvrez l'app pour voir les détails.`,
+      { reservationCode: reservation.code },
     );
   }
 
@@ -469,7 +551,7 @@ export class NotificationsService {
       attachments,
     );
 
-    await this.sendPush(
+    await this.sendPushNotification(
       [reservation.clientEmail?.trim().toLowerCase()].filter(Boolean),
       this.t(lang, 'Reçu disponible', 'Receipt available'),
       this.t(
@@ -544,6 +626,13 @@ export class NotificationsService {
         reservation.id,
       );
     }
+
+    await this.sendPushNotification(
+      adminEmails.map(e => (e || '').trim().toLowerCase()).filter(Boolean),
+      title,
+      `Nouvelle réservation ${reservation.code} — ${reservation.clientFirstName} ${reservation.clientLastName}`,
+      { reservationCode: reservation.code },
+    );
   }
 
   async sendAdminDriverAssigned(reservation: Reservation, adminEmails: string[]): Promise<void> {

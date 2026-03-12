@@ -37,6 +37,25 @@ export class SchedulerService {
     }
   }
 
+  // Archivage automatique (anonymisation + XLSX + purge dashboard)
+  @Cron(CronExpression.EVERY_DAY_AT_1AM)
+  async autoArchiveSensitiveData() {
+    const enabled = (process.env.AUTO_ARCHIVE_ENABLED || 'true').toLowerCase() === 'true';
+    const days = parseInt(process.env.ARCHIVE_AFTER_DAYS || '90', 10);
+    if (!enabled) return;
+
+    this.logger.log(`Running auto-archive job (olderThanDays=${days})...`);
+    try {
+      await this.reservationsService.archiveToExcelAndPurge({
+        olderThanDays: days,
+        statuses: [ReservationStatus.TERMINEE, ReservationStatus.ANNULEE],
+        reason: 'auto',
+      });
+    } catch (error) {
+      this.logger.error('Auto-archive job failed', error?.message);
+    }
+  }
+
   @Cron(CronExpression.EVERY_MINUTE)
   async sendH1Reminders() {
     this.logger.log('Running H-1 reminder job...');

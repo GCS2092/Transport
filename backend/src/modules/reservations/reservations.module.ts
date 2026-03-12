@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';          // ← ajoute cet import
 import { ReservationsController } from './reservations.controller';
 import { ReservationsService } from './reservations.service';
 import { Reservation } from './entities/reservation.entity';
+import { ReservationArchive } from './entities/reservation-archive.entity';
 import { DriverProposal } from './entities/driver-proposal.entity';
 import { DriverLocation } from '../drivers/entities/driver-location.entity';
 import { TariffsModule } from '../tariffs/tariffs.module';
@@ -17,7 +18,7 @@ import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Reservation, DriverLocation, DriverProposal]),
+    TypeOrmModule.forFeature([Reservation, ReservationArchive, DriverLocation, DriverProposal]),
     JwtModule,          // ← ajoute cette ligne
     TariffsModule,
     SettingsModule,

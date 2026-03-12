@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, In, LessThan } from 'typeorm';
 import { Reservation } from './entities/reservation.entity';
+import { ReservationArchive } from './entities/reservation-archive.entity';
 import { DriverProposal, ProposalStatus } from './entities/driver-proposal.entity';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
@@ -25,6 +26,8 @@ import { ReservationStatus } from '../../common/enums/reservation-status.enum';
 import { DriverStatus } from '../../common/enums/driver-status.enum';
 import { PaymentStatus } from '../../common/enums/payment-status.enum';
 import { Language } from '../../common/enums/language.enum';
+import { createHash } from 'crypto';
+import ExcelJS from 'exceljs';
 
 export interface FindAllFilters {
   page?: number;
@@ -50,6 +53,8 @@ export class ReservationsService {
   constructor(
     @InjectRepository(Reservation)
     private reservationsRepository: Repository<Reservation>,
+    @InjectRepository(ReservationArchive)
+    private reservationArchiveRepository: Repository<ReservationArchive>,
     @InjectRepository(DriverLocation)
     private driverLocationRepository: Repository<DriverLocation>,
     @InjectRepository(DriverProposal)
@@ -678,19 +683,122 @@ export class ReservationsService {
   }
 
   async archiveCompleted(olderThanDays: number): Promise<{ archived: number }> {
+    // Legacy endpoint: on archive + anonymise + export excel + purge
+    const { archived } = await this.archiveToExcelAndPurge({
+      olderThanDays,
+      statuses: [ReservationStatus.TERMINEE, ReservationStatus.ANNULEE],
+      reason: 'manual',
+    });
+    return { archived };
+  }
+
+  private hashClient(email?: string | null): string | null {
+    if (!email) return null;
+    const salt = process.env.ARCHIVE_HASH_SALT || 'wendd-transport';
+    return createHash('sha256').update(`${salt}:${email.trim().toLowerCase()}`).digest('hex');
+  }
+
+  async archiveToExcelAndPurge(opts: {
+    olderThanDays: number;
+    statuses: ReservationStatus[];
+    reason: 'manual' | 'auto';
+  }): Promise<{ archived: number }> {
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+    cutoffDate.setDate(cutoffDate.getDate() - opts.olderThanDays);
 
-    const result = await this.reservationsRepository
-      .createQueryBuilder()
-      .delete()
-      .where('status IN (:...statuses)', {
-        statuses: [ReservationStatus.TERMINEE, ReservationStatus.ANNULEE],
-      })
-      .andWhere('createdAt < :cutoffDate', { cutoffDate })
-      .execute();
+    const rows = await this.reservationsRepository.find({
+      where: {
+        status: In(opts.statuses),
+        createdAt: LessThan(cutoffDate),
+      } as any,
+      relations: ['pickupZone', 'dropoffZone', 'driver'],
+      order: { createdAt: 'ASC' },
+    });
 
-    return { archived: result.affected || 0 };
+    if (!rows.length) return { archived: 0 };
+
+    // 1) Générer XLSX
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "WEND'D Transport";
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Archives');
+    ws.columns = [
+      { header: 'Code', key: 'code', width: 14 },
+      { header: 'Statut', key: 'status', width: 12 },
+      { header: 'Type', key: 'tripType', width: 14 },
+      { header: 'Langue', key: 'language', width: 8 },
+      { header: 'Départ', key: 'pickup', width: 22 },
+      { header: 'Arrivée', key: 'dropoff', width: 22 },
+      { header: 'Pickup', key: 'pickupDateTime', width: 20 },
+      { header: 'Montant', key: 'amount', width: 12 },
+      { header: 'ChauffeurId', key: 'driverId', width: 38 },
+      { header: 'ClientHash', key: 'clientHash', width: 66 },
+      { header: 'Archivé le', key: 'archivedAt', width: 20 },
+    ];
+
+    const archivedAt = new Date();
+    for (const r of rows) {
+      ws.addRow({
+        code: r.code,
+        status: r.status,
+        tripType: r.tripType,
+        language: r.language,
+        pickup: r.pickupCustomAddress || r.pickupZone?.name || '',
+        dropoff: r.dropoffCustomAddress || r.dropoffZone?.name || '',
+        pickupDateTime: new Date(r.pickupDateTime).toISOString(),
+        amount: Number(r.amount),
+        driverId: r.driverId || '',
+        clientHash: this.hashClient(r.clientEmail) || '',
+        archivedAt: archivedAt.toISOString(),
+      });
+    }
+
+    ws.getRow(1).font = { bold: true };
+    ws.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: ws.columns.length },
+    };
+
+    const xlsxBuffer = Buffer.from(await wb.xlsx.writeBuffer());
+    const filename = `archives-${opts.reason}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    // 2) Sauver en table archive (sans PII)
+    const archiveEntities = rows.map(r =>
+      this.reservationArchiveRepository.create({
+        code: r.code,
+        status: r.status,
+        tripType: r.tripType,
+        language: r.language,
+        pickupDateTime: r.pickupDateTime,
+        completedAt: r.completedAt,
+        amount: r.amount,
+        driverId: r.driverId,
+        pickupLabel: r.pickupCustomAddress || r.pickupZone?.name || null,
+        dropoffLabel: r.dropoffCustomAddress || r.dropoffZone?.name || null,
+        clientHash: this.hashClient(r.clientEmail),
+      }),
+    );
+    await this.reservationArchiveRepository.save(archiveEntities);
+
+    // 3) Envoyer à l'admin par email (et push)
+    const admins = await this.usersService.findAdmins();
+    const adminEmails = admins.map(a => a.email).filter(Boolean);
+    await this.notificationsService.sendAdminArchiveReport(
+      adminEmails,
+      `Archivage ${opts.reason} — ${rows.length} réservations`,
+      `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">
+        <h2>Archivage terminé</h2>
+        <p><strong>${rows.length}</strong> réservations ont été archivées et supprimées du dashboard.</p>
+        <p>Pièce jointe : <strong>${filename}</strong></p>
+      </body></html>`,
+      filename,
+      xlsxBuffer,
+    );
+
+    // 4) Purger la table principale (vider le dashboard)
+    await this.reservationsRepository.delete(rows.map(r => r.id));
+
+    return { archived: rows.length };
   }
 
   async updateReservation(id: string, updates: Partial<CreateReservationDto>): Promise<Reservation> {
@@ -717,8 +825,21 @@ export class ReservationsService {
       newData: updateData,
       description: `Reservation ${reservation.code} updated by admin`,
     });
-    
-    return this.findById(id);
+
+    const updated = await this.findById(id);
+
+    setImmediate(async () => {
+      try {
+        // Notifier le chauffeur si la course est déjà assignée
+        if (updated.driverId) {
+          await this.notificationsService.sendDriverRideModified(updated);
+        }
+      } catch (e) {
+        this.logger.error('Failed to send ride modified notification', e?.message);
+      }
+    });
+
+    return updated;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
