@@ -110,6 +110,21 @@ function SuiviContent() {
     try {
       const { data } = await reservationsApi.getByCode(c.trim())
       setReservation(data)
+
+      // Associer OneSignal au client (external user id = email) pour recevoir les notifs
+      try {
+        const email = (data as any)?.clientEmail
+        if (typeof window !== 'undefined' && window.OneSignalDeferred && typeof email === 'string' && email.trim()) {
+          const normalized = email.trim().toLowerCase()
+          window.OneSignalDeferred.push(async function (OneSignal) {
+            try {
+              await OneSignal.login(normalized)
+              OneSignal.User.addTags({ role: 'client' })
+            } catch {}
+          })
+        }
+      } catch {}
+
       // Mettre à jour le statut dans l'historique localStorage
       updateReservationStatus(data.code, data.status)
       // Déclencher un événement pour rafraîchir l'historique
@@ -132,9 +147,14 @@ function SuiviContent() {
     try {
       await reservationsApi.cancel(code, cancelToken)
       // Supprimer le code de localStorage si c'est celui affiché
-      const lastCode = localStorage.getItem('vtc_last_code')
+      let lastCode: string | null = null
+      try {
+        lastCode = localStorage.getItem('vtc_last_code')
+      } catch {}
       if (lastCode === code) {
-        localStorage.removeItem('vtc_last_code')
+        try {
+          localStorage.removeItem('vtc_last_code')
+        } catch {}
         window.dispatchEvent(new Event('vtc_code_cleared'))
       }
       await doSearch(code)

@@ -496,10 +496,25 @@ export function ReservationForm() {
         amount: data.amount,
         status: data.status,
       })
+
+      // Associer OneSignal au client (external user id = email) pour recevoir les notifs
+      try {
+        if (typeof window !== 'undefined' && window.OneSignalDeferred && formData.clientEmail) {
+          const email = formData.clientEmail.trim().toLowerCase()
+          window.OneSignalDeferred.push(async function (OneSignal) {
+            try {
+              await OneSignal.login(email)
+              OneSignal.User.addTags({ role: 'client' })
+            } catch {}
+          })
+        }
+      } catch {}
       
       setSuccess(true)
       setReservationCode(data.code)
-      localStorage.setItem('vtc_last_code', data.code)
+      try {
+        localStorage.setItem('vtc_last_code', data.code)
+      } catch {}
       window.dispatchEvent(new Event('vtc_code_saved'))
     } catch (e: any) {
       const msg = e.response?.data?.message

@@ -8,8 +8,16 @@ import { LandingPage } from '@/components/LandingPage'
 export function HomeClient() {
   const [visited, setVisited] = useState<boolean | null>(null)
 
+  const safeGet = (key: string) => {
+    try {
+      return localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  }
+
   useEffect(() => {
-    setVisited(!!localStorage.getItem('vtc_visited'))
+    setVisited(!!safeGet('vtc_visited'))
     const handler = () => setVisited(false)
     window.addEventListener('vtc_go_home', handler)
     return () => window.removeEventListener('vtc_go_home', handler)
@@ -19,7 +27,9 @@ export function HomeClient() {
 
   if (!visited) {
     return <LandingPage onEnter={() => {
-      localStorage.setItem('vtc_visited', '1')
+      try {
+        localStorage.setItem('vtc_visited', '1')
+      } catch {}
       setVisited(true)
     }} />
   }

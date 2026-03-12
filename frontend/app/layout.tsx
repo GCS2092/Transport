@@ -65,8 +65,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const onesignalAppId =
-    process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "bb43c885-d20b-4f1b-b363-57c9c9289314";
+  const onesignalAppId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
 
   return (
     <html lang="fr">
@@ -82,29 +81,43 @@ export default function RootLayout({
         {/* Viewport mobile */}
         <meta name="mobile-web-app-capable" content="yes" />
 
-        <script
-          src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
-          defer
-        />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.OneSignalDeferred = window.OneSignalDeferred || [];
-              OneSignalDeferred.push(async function(OneSignal) {
-                await OneSignal.init({
-                  appId: ${JSON.stringify(onesignalAppId)},
-                  safari_web_id: "web.onesignal.auto.0818a4e7-118f-4fc1-b0e2-07892e811a2a",
-                  notifyButton: { enable: true },
-                });
+        {onesignalAppId && (
+          <>
+            <script
+              src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
+              defer
+            />
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `
+                  window.OneSignalDeferred = window.OneSignalDeferred || [];
+                  OneSignalDeferred.push(async function(OneSignal) {
+                    await OneSignal.init({
+                      appId: ${JSON.stringify(onesignalAppId)},
+                      safari_web_id: "web.onesignal.auto.0818a4e7-118f-4fc1-b0e2-07892e811a2a",
+                      notifyButton: { enable: true },
+                    });
 
-                // Par défaut (utilisateurs non connectés), on considère "client"
-                try {
-                  OneSignal.User.addTags({ role: "client" });
-                } catch (e) {}
-              });
-            `,
-          }}
-        />
+                    // Tag par défaut (visiteurs / clients non connectés)
+                    try { OneSignal.User.addTags({ role: "client" }); } catch (e) {}
+
+                    // Demander l'autorisation sur 1ère interaction (évite blocage auto)
+                    try {
+                      const handler = async () => {
+                        try {
+                          if (OneSignal.Slidedown?.promptPush) await OneSignal.Slidedown.promptPush();
+                          else if (OneSignal.Notifications?.requestPermission) await OneSignal.Notifications.requestPermission();
+                        } catch (e) {}
+                      };
+                      document.addEventListener("click", handler, { once: true, passive: true });
+                      document.addEventListener("touchstart", handler, { once: true, passive: true });
+                    } catch (e) {}
+                  });
+                `,
+              }}
+            />
+          </>
+        )}
       </head>
       <body className="min-h-screen flex flex-col">
         <LanguageProvider>

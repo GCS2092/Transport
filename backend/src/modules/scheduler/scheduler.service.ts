@@ -7,6 +7,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
 import { ReservationStatus } from '../../common/enums/reservation-status.enum';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
+import { NotificationType } from '../../common/enums/notification-type.enum';
 
 @Injectable()
 export class SchedulerService {
@@ -33,6 +34,23 @@ export class SchedulerService {
       }
     } catch (error) {
       this.logger.error('J-1 reminder job failed', error?.message);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async sendH1Reminders() {
+    this.logger.log('Running H-1 reminder job...');
+    try {
+      const reservations = await this.reservationsService.findUpcomingForH1Reminder();
+      if (!reservations.length) return;
+
+      for (const reservation of reservations) {
+        const already = await this.notificationsService.hasSent(reservation.id, NotificationType.REMINDER_H1);
+        if (already) continue;
+        await this.notificationsService.sendReminderH1(reservation);
+      }
+    } catch (error) {
+      this.logger.error('H-1 reminder job failed', error?.message);
     }
   }
 

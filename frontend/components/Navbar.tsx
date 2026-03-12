@@ -38,6 +38,40 @@ export function Navbar() {
   const [showLogin,   setShowLogin]   = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
 
+  const promptNotifications = () => {
+    try {
+      if (!window.OneSignalDeferred) {
+        alert('Notifications indisponibles (OneSignal non chargé).')
+        return
+      }
+      window.OneSignalDeferred.push(async function (OneSignal) {
+        try {
+          if (OneSignal.Slidedown?.promptPush) await OneSignal.Slidedown.promptPush()
+          else if (OneSignal.Notifications?.requestPermission) await OneSignal.Notifications.requestPermission()
+          else alert('Impossible de demander l’autorisation (API OneSignal).')
+        } catch {
+          alert("Impossible d'activer les notifications sur ce navigateur.")
+        }
+      })
+    } catch {
+      alert("Impossible d'activer les notifications.")
+    }
+  }
+
+  const safeGet = (key: string) => {
+    try {
+      return localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  }
+
+  const safeRemove = (key: string) => {
+    try {
+      localStorage.removeItem(key)
+    } catch {}
+  }
+
   /* Horloge */
   useEffect(() => {
     const tick = () => {
@@ -51,8 +85,8 @@ export function Navbar() {
 
   /* Dernier code */
   useEffect(() => {
-    setLastCode(localStorage.getItem('vtc_last_code'))
-    const handler = () => setLastCode(localStorage.getItem('vtc_last_code'))
+    setLastCode(safeGet('vtc_last_code'))
+    const handler = () => setLastCode(safeGet('vtc_last_code'))
     window.addEventListener('vtc_code_saved', handler)
     // Écouter l'événement d'annulation pour supprimer le code
     const clearHandler = () => setLastCode(null)
@@ -74,97 +108,113 @@ export function Navbar() {
     <>
       {/* ── Top header ──────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 bg-[var(--primary)] shadow-sm">
-        <div className="flex items-center justify-between px-4 h-12 max-w-2xl mx-auto gap-2">
+        <div className="px-4 py-2 max-w-2xl mx-auto">
+          <div className="flex items-center justify-between gap-2">
 
-          {/* Logo → retour landing */}
-          <Link
-            href="/"
-            onClick={() => {
-              localStorage.removeItem('vtc_visited')
-              window.dispatchEvent(new Event('vtc_go_home'))
-            }}
-            className="flex items-center gap-1.5 flex-shrink-0"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 17H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1l2-4h10l2 4h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/>
-              <circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
-            </svg>
-            <span className="text-sm font-bold text-white tracking-tight">
-              WEND'D <span className="text-[var(--accent)]">Transport</span>
-            </span>
-          </Link>
-
-          {/* Spacer */}
-          <div className="flex-1" />
-
-          {/* Dernier code de réservation (avant l'heure) */}
-          {lastCode && (
+            {/* Logo → retour landing */}
             <Link
-              href={`/suivi?code=${lastCode}`}
-              className="flex items-center gap-1 bg-white/10 hover:bg-white/15 px-2.5 py-1 rounded-full transition-colors flex-shrink-0"
+              href="/"
+              onClick={() => {
+                safeRemove('vtc_visited')
+                window.dispatchEvent(new Event('vtc_go_home'))
+              }}
+              className="flex items-center gap-1.5 flex-shrink-0"
             >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              <span className="text-white font-mono text-[11px] font-bold tracking-wide">{lastCode}</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 17H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1l2-4h10l2 4h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/>
+                <circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
+              </svg>
+              <span className="text-sm font-bold text-white tracking-tight">
+                WEND'D <span className="text-[var(--accent)]">Transport</span>
+              </span>
             </Link>
-          )}
 
-          {/* Horloge */}
-          {time && (
-            <span className={`text-white/60 text-xs font-mono tabular-nums flex-shrink-0 ${lastCode ? 'hidden sm:inline' : ''}`}>{time}</span>
-          )}
+            {/* Spacer */}
+            <div className="flex-1" />
 
-          {/* Toggle langue */}
+            {/* Toggle langue */}
+            <button
+              onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}
+              className="flex items-center gap-0.5 bg-white/10 hover:bg-white/20 px-2 py-1 rounded-full text-[11px] font-bold text-white transition-colors flex-shrink-0"
+              aria-label="Changer de langue"
+            >
+              <span className={lang === 'fr' ? 'text-[var(--accent)]' : 'text-white/50'}>FR</span>
+              <span className="text-white/30 mx-0.5">|</span>
+              <span className={lang === 'en' ? 'text-[var(--accent)]' : 'text-white/50'}>EN</span>
+            </button>
+
+          {/* Notifications */}
           <button
-            onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}
-            className="flex items-center gap-0.5 bg-white/10 hover:bg-white/20 px-2 py-1 rounded-full text-[11px] font-bold text-white transition-colors flex-shrink-0"
-            aria-label="Changer de langue"
+            onClick={promptNotifications}
+            className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-full text-white text-[11px] font-semibold transition-colors flex-shrink-0"
+            aria-label="Activer les notifications"
+            title="Activer les notifications"
           >
-            <span className={lang === 'fr' ? 'text-[var(--accent)]' : 'text-white/50'}>FR</span>
-            <span className="text-white/30 mx-0.5">|</span>
-            <span className={lang === 'en' ? 'text-[var(--accent)]' : 'text-white/50'}>EN</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            <span className="hidden sm:inline">Notif</span>
           </button>
 
-          {/* Auth */}
-          {user ? (
-            <div className="relative flex-shrink-0">
-              <button
-                onClick={() => setShowUserMenu(v => !v)}
-                className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-full transition-colors"
-              >
-                <div className="w-5 h-5 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-[9px] font-bold">
-                  {user.firstName[0]}{user.lastName[0]}
-                </div>
-                <span className="text-white text-[11px] font-semibold max-w-[70px] truncate">{user.firstName}</span>
-              </button>
-              {showUserMenu && (
-                <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-100 py-1 min-w-[160px] z-50">
-                  <div className="px-4 py-2 border-b border-gray-100">
-                    <p className="text-xs font-bold text-gray-900 truncate">{user.firstName} {user.lastName}</p>
-                    <p className="text-[10px] text-gray-400 uppercase">{user.role}</p>
+            {/* Auth */}
+            {user ? (
+              <div className="relative flex-shrink-0">
+                <button
+                  onClick={() => setShowUserMenu(v => !v)}
+                  className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-full transition-colors"
+                >
+                  <div className="w-5 h-5 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-[9px] font-bold">
+                    {user.firstName[0]}{user.lastName[0]}
                   </div>
-                  <button
-                    onClick={() => { logout(); setShowUserMenu(false) }}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-                    </svg>
-                    {t.nav.signOut}
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowLogin(true)}
-              className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-full text-white text-[11px] font-semibold transition-colors flex-shrink-0"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-              </svg>
-              {t.nav.signIn}
-            </button>
-          )}
+                  <span className="text-white text-[11px] font-semibold max-w-[70px] truncate">{user.firstName}</span>
+                </button>
+                {showUserMenu && (
+                  <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-100 py-1 min-w-[160px] z-50">
+                    <div className="px-4 py-2 border-b border-gray-100">
+                      <p className="text-xs font-bold text-gray-900 truncate">{user.firstName} {user.lastName}</p>
+                      <p className="text-[10px] text-gray-400 uppercase">{user.role}</p>
+                    </div>
+                    <button
+                      onClick={() => { logout(); setShowUserMenu(false) }}
+                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                      </svg>
+                      {t.nav.signOut}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowLogin(true)}
+                className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-full text-white text-[11px] font-semibold transition-colors flex-shrink-0"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+                {t.nav.signIn}
+              </button>
+            )}
+          </div>
+
+          {/* 2e ligne (mobile-friendly) : code + horloge */}
+          <div className="flex items-center justify-end gap-2 mt-2 min-h-[28px]">
+            {lastCode && (
+              <Link
+                href={`/suivi?code=${lastCode}`}
+                className="flex items-center gap-1 bg-white/10 hover:bg-white/15 px-2.5 py-1 rounded-full transition-colors max-w-[65vw]"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span className="text-white font-mono text-[11px] font-bold tracking-wide truncate">{lastCode}</span>
+              </Link>
+            )}
+            {time && (
+              <span className="text-white/60 text-xs font-mono tabular-nums">{time}</span>
+            )}
+          </div>
         </div>
       </header>
 

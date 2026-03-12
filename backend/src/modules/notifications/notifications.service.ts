@@ -66,6 +66,58 @@ export class NotificationsService {
     });
   }
 
+  private getOneSignalAppId(): string | undefined {
+    return process.env.ONESIGNAL_APP_ID || process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
+  }
+
+  private getOneSignalRestApiKey(): string | undefined {
+    return process.env.ONESIGNAL_REST_API_KEY;
+  }
+
+  private async sendPush(
+    externalUserIds: string[],
+    title: string,
+    message: string,
+    data: Record<string, string> = {},
+  ): Promise<void> {
+    const appId = this.getOneSignalAppId();
+    const restApiKey = this.getOneSignalRestApiKey();
+    if (!appId || !restApiKey) return;
+    const ids = externalUserIds.filter(Boolean);
+    if (!ids.length) return;
+
+    try {
+      const res = await fetch('https://onesignal.com/api/v1/notifications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Key ${restApiKey}`,
+        },
+        body: JSON.stringify({
+          app_id: appId,
+          include_external_user_ids: ids,
+          channel_for_external_user_ids: 'push',
+          headings: { fr: title, en: title },
+          contents: { fr: message, en: message },
+          data,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        this.logger.warn(`OneSignal push failed (${res.status}): ${err}`);
+      }
+    } catch (e) {
+      this.logger.warn(`OneSignal push error: ${e?.message}`);
+    }
+  }
+
+  async hasSent(reservationId: string, type: NotificationType): Promise<boolean> {
+    const existing = await this.emailLogRepository.findOne({
+      where: { reservationId, notificationType: type, status: 'ENVOYE' },
+    });
+    return !!existing;
+  }
+
   private getPickupAddress(reservation: Reservation): string {
     return reservation.pickupCustomAddress || reservation.pickupZone?.name || 'Adresse de départ';
   }
@@ -170,6 +222,17 @@ export class NotificationsService {
       NotificationType.RESERVATION_CONFIRMED,
       reservation.id,
     );
+
+    await this.sendPush(
+      [reservation.clientEmail?.trim().toLowerCase()].filter(Boolean),
+      this.t(lang, 'Réservation confirmée', 'Booking confirmed'),
+      this.t(
+        lang,
+        `Votre réservation ${reservation.code} est confirmée.`,
+        `Your booking ${reservation.code} is confirmed.`,
+      ),
+      { reservationCode: reservation.code },
+    );
   }
 
   async sendDriverAssigned(reservation: Reservation): Promise<void> {
@@ -196,6 +259,17 @@ export class NotificationsService {
       NotificationType.DRIVER_ASSIGNED,
       reservation.id,
     );
+
+    await this.sendPush(
+      [reservation.clientEmail?.trim().toLowerCase()].filter(Boolean),
+      this.t(lang, 'Chauffeur assigné', 'Driver assigned'),
+      this.t(
+        lang,
+        `Un chauffeur est assigné à la réservation ${reservation.code}.`,
+        `A driver is assigned to booking ${reservation.code}.`,
+      ),
+      { reservationCode: reservation.code },
+    );
   }
 
   async sendReminderJ1(reservation: Reservation): Promise<void> {
@@ -218,6 +292,42 @@ export class NotificationsService {
       this.buildEmailHtml(reservation, title, body, waLink),
       NotificationType.REMINDER_J1,
       reservation.id,
+    );
+  }
+
+  async sendReminderH1(reservation: Reservation): Promise<void> {
+    const lang = reservation.language;
+    const title = this.t(lang, 'Rappel — Votre course dans 1 heure', 'Reminder — Your ride in 1 hour');
+    const pickup = this.getPickupAddress(reservation);
+    const dropoff = this.getDropoffAddress(reservation);
+
+    const body = `
+      <p>${this.t(lang, `Bonjour <strong>${reservation.clientFirstName}</strong>,`, `Hello <strong>${reservation.clientFirstName}</strong>,`)}</p>
+      <p>${this.t(lang, 'Petit rappel : votre course commence dans environ 1 heure.', 'Quick reminder: your ride starts in about 1 hour.')}</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Code', 'Code')}</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Départ', 'From')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Destination', 'To')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${dropoff}</td></tr>
+        <tr><td style="padding:8px;color:#666;">${this.t(lang, 'Heure', 'Time')}</td><td style="padding:8px;">${new Date(reservation.pickupDateTime).toLocaleString(lang === Language.EN ? 'en-GB' : 'fr-FR')}</td></tr>
+      </table>`;
+
+    await this.sendEmail(
+      reservation.clientEmail,
+      `${title} — #${reservation.code}`,
+      this.buildEmailHtml(reservation, title, body),
+      NotificationType.REMINDER_H1,
+      reservation.id,
+    );
+
+    await this.sendPush(
+      [reservation.clientEmail?.trim().toLowerCase()].filter(Boolean),
+      title,
+      this.t(
+        lang,
+        `Rappel : votre course ${reservation.code} commence dans 1 heure.`,
+        `Reminder: your ride ${reservation.code} starts in 1 hour.`,
+      ),
+      { reservationCode: reservation.code },
     );
   }
 
@@ -267,6 +377,14 @@ export class NotificationsService {
       `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`,
       NotificationType.DRIVER_NEW_RIDE,
       reservation.id,
+    );
+
+    const driverExternalId = reservation.driver.userId || reservation.driver.email;
+    await this.sendPush(
+      [driverExternalId].filter(Boolean),
+      'Nouvelle course assignée',
+      `Course ${reservation.code} — ${pickup} → ${dropoff}`,
+      { reservationCode: reservation.code },
     );
   }
 
@@ -349,6 +467,17 @@ export class NotificationsService {
       NotificationType.RIDE_COMPLETED,
       reservation.id,
       attachments,
+    );
+
+    await this.sendPush(
+      [reservation.clientEmail?.trim().toLowerCase()].filter(Boolean),
+      this.t(lang, 'Reçu disponible', 'Receipt available'),
+      this.t(
+        lang,
+        `Votre reçu pour la réservation ${reservation.code} est disponible.`,
+        `Your receipt for booking ${reservation.code} is available.`,
+      ),
+      { reservationCode: reservation.code },
     );
   }
 

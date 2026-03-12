@@ -600,6 +600,24 @@ export class ReservationsService {
       .getMany();
   }
 
+  async findUpcomingForH1Reminder(): Promise<Reservation[]> {
+    const now = new Date();
+    const start = new Date(now.getTime() + 60 * 60 * 1000); // +1h
+    const end = new Date(start.getTime() + 60 * 1000); // fenêtre 1 minute
+
+    return this.reservationsRepository
+      .createQueryBuilder('r')
+      .leftJoinAndSelect('r.driver', 'driver')
+      .leftJoinAndSelect('r.pickupZone', 'pickupZone')
+      .leftJoinAndSelect('r.dropoffZone', 'dropoffZone')
+      .where('r.pickupDateTime >= :start', { start })
+      .andWhere('r.pickupDateTime < :end', { end })
+      .andWhere('r.status IN (:...statuses)', {
+        statuses: [ReservationStatus.EN_ATTENTE, ReservationStatus.ASSIGNEE],
+      })
+      .getMany();
+  }
+
   async exportToCsv(filters: Omit<FindAllFilters, 'page' | 'limit'>): Promise<string> {
     const qb = this.reservationsRepository
       .createQueryBuilder('r')
