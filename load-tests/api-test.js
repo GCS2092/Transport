@@ -34,7 +34,7 @@ export const options = {
     http_req_failed: ['rate<0.05'],                   // Taux d'erreur HTTP < 5%
     errors: ['rate<0.1'],                             // Taux d'erreur métier < 10%
   },
-};
+}; 
 
 // ══════════════════════════════════════════════════════════════════════════════
 // DONNÉES DE TEST
