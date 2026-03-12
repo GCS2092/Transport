@@ -8,9 +8,36 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://wenddtransport.com"),
   title: "WEND'D Transport - Transferts Aéroport & VTC à Dakar",
   description: "Réservez votre transfert aéroport à Dakar en 2 minutes. Tarifs fixes, chauffeurs professionnels disponibles 24h/24. Service VTC premium pour AIBD et toutes zones de Dakar.",
   manifest: "/manifest.json",
+  robots: {
+    index: true,
+    follow: true,
+  },
+  openGraph: {
+    type: "website",
+    locale: "fr_FR",
+    url: "https://wenddtransport.com",
+    siteName: "WEND'D Transport",
+    title: "WEND'D Transport - Transferts Aéroport & VTC à Dakar",
+    description: "Réservez votre transfert aéroport à Dakar en 2 minutes. Tarifs fixes, chauffeurs professionnels disponibles 24h/24.",
+    images: [
+      {
+        url: "/images/FOND.jpeg",
+        width: 1200,
+        height: 630,
+        alt: "WEND'D Transport - VTC Dakar",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "WEND'D Transport - Transferts Aéroport & VTC à Dakar",
+    description: "Réservez votre transfert aéroport à Dakar en 2 minutes. Tarifs fixes, chauffeurs pro 24h/24.",
+    images: ["/images/FOND.jpeg"],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

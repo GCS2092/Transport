@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next'
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://transport-six-xi.vercel.app'
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://wenddtransport.com'
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -8,7 +8,13 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/admin/', '/chauffeur/', '/driver/', '/login'],
+        disallow: [
+          '/admin/',
+          '/chauffeur/',
+          '/driver/',
+          '/login',
+          '/api/',
+        ],
       },
     ],
     sitemap: `${BASE_URL}/sitemap.xml`,
