@@ -1,8 +1,3 @@
-import type { Metadata } from "next";
-
-
-// ─── Composant page (inchangé) ───────────────────────────────────────────────
- 
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'

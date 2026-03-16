@@ -1,9 +1,3 @@
-import type { Metadata } from "next";
-
-
-
-// ─── Composant page (inchangé) ───────────────────────────────────────────────
-
 'use client'
 
 import { useTranslation } from '@/lib/i18n'
