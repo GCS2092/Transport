@@ -28,15 +28,61 @@ const NAV_ICONS = [
   </svg>,
 ]
 
-export function Navbar() {
-  const pathname            = usePathname()
-  const { t, lang, setLang } = useTranslation()
-  const { user, logout }    = useAuth()
+const DRIVER_NAV = [
+  {
+    href: '/chauffeur',
+    label: 'Courses',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M5 17H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1l2-4h10l2 4h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/>
+        <circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/chauffeur/historique',
+    label: 'Historique',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/chauffeur/paiements',
+    label: 'Paiements',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+        <line x1="1" y1="10" x2="23" y2="10"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/chauffeur/profil',
+    label: 'Profil',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+        <circle cx="12" cy="7" r="4"/>
+      </svg>
+    ),
+  },
+]
 
-  const [lastCode,    setLastCode]    = useState<string | null>(null)
-  const [time,        setTime]        = useState('')
-  const [showLogin,   setShowLogin]   = useState(false)
+export function Navbar() {
+  const pathname              = usePathname()
+  const { t, lang, setLang } = useTranslation()
+  const { user, logout }      = useAuth()
+
+  const [lastCode,     setLastCode]     = useState<string | null>(null)
+  const [time,         setTime]         = useState('')
+  const [showLogin,    setShowLogin]    = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
+
+  const isDriverRoute = pathname.startsWith('/chauffeur')
+  const isAdminRoute  = pathname.startsWith('/admin')
 
   const promptNotifications = () => {
     try {
@@ -48,7 +94,7 @@ export function Navbar() {
         try {
           if (OneSignal.Slidedown?.promptPush) await OneSignal.Slidedown.promptPush()
           else if (OneSignal.Notifications?.requestPermission) await OneSignal.Notifications.requestPermission()
-          else alert('Impossible de demander l’autorisation (API OneSignal).')
+          else alert("Impossible de demander l'autorisation (API OneSignal).")
         } catch {
           alert("Impossible d'activer les notifications sur ce navigateur.")
         }
@@ -59,17 +105,11 @@ export function Navbar() {
   }
 
   const safeGet = (key: string) => {
-    try {
-      return localStorage.getItem(key)
-    } catch {
-      return null
-    }
+    try { return localStorage.getItem(key) } catch { return null }
   }
 
   const safeRemove = (key: string) => {
-    try {
-      localStorage.removeItem(key)
-    } catch {}
+    try { localStorage.removeItem(key) } catch {}
   }
 
   /* Horloge */
@@ -86,13 +126,12 @@ export function Navbar() {
   /* Dernier code */
   useEffect(() => {
     setLastCode(safeGet('vtc_last_code'))
-    const handler = () => setLastCode(safeGet('vtc_last_code'))
-    window.addEventListener('vtc_code_saved', handler)
-    // Écouter l'événement d'annulation pour supprimer le code
+    const handler      = () => setLastCode(safeGet('vtc_last_code'))
     const clearHandler = () => setLastCode(null)
+    window.addEventListener('vtc_code_saved',   handler)
     window.addEventListener('vtc_code_cleared', clearHandler)
     return () => {
-      window.removeEventListener('vtc_code_saved', handler)
+      window.removeEventListener('vtc_code_saved',   handler)
       window.removeEventListener('vtc_code_cleared', clearHandler)
     }
   }, [])
@@ -111,7 +150,7 @@ export function Navbar() {
         <div className="px-4 py-2 max-w-2xl mx-auto">
           <div className="flex items-center justify-between gap-2">
 
-            {/* Logo → retour landing */}
+            {/* Logo */}
             <Link
               href="/"
               onClick={() => {
@@ -129,7 +168,6 @@ export function Navbar() {
               </span>
             </Link>
 
-            {/* Spacer */}
             <div className="flex-1" />
 
             {/* Toggle langue */}
@@ -143,19 +181,19 @@ export function Navbar() {
               <span className={lang === 'en' ? 'text-[var(--accent)]' : 'text-white/50'}>EN</span>
             </button>
 
-          {/* Notifications */}
-          <button
-            onClick={promptNotifications}
-            className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-full text-white text-[11px] font-semibold transition-colors flex-shrink-0"
-            aria-label="Activer les notifications"
-            title="Activer les notifications"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-            </svg>
-            <span className="hidden sm:inline">Notif</span>
-          </button>
+            {/* Notifications */}
+            <button
+              onClick={promptNotifications}
+              className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-full text-white text-[11px] font-semibold transition-colors flex-shrink-0"
+              aria-label="Activer les notifications"
+              title="Activer les notifications"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
+              <span className="hidden sm:inline">Notif</span>
+            </button>
 
             {/* Auth */}
             {user ? (
@@ -180,7 +218,9 @@ export function Navbar() {
                       className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
                       </svg>
                       {t.nav.signOut}
                     </button>
@@ -193,21 +233,24 @@ export function Navbar() {
                 className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-full text-white text-[11px] font-semibold transition-colors flex-shrink-0"
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
                 </svg>
                 {t.nav.signIn}
               </button>
             )}
           </div>
 
-          {/* 2e ligne (mobile-friendly) : code + horloge */}
+          {/* 2e ligne : code + horloge */}
           <div className="flex items-center justify-end gap-2 mt-2 min-h-[28px]">
             {lastCode && (
               <Link
                 href={`/suivi?code=${lastCode}`}
                 className="flex items-center gap-1 bg-white/10 hover:bg-white/15 px-2.5 py-1 rounded-full transition-colors max-w-[65vw]"
               >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
                 <span className="text-white font-mono text-[11px] font-bold tracking-wide truncate">{lastCode}</span>
               </Link>
             )}
@@ -218,29 +261,57 @@ export function Navbar() {
         </div>
       </header>
 
-      {/* ── Bottom nav bar fixe (client uniquement) ─────────────────── */}
-      {!pathname.startsWith('/chauffeur') && <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--primary)] border-t border-white/10">
-        <div className="flex max-w-2xl mx-auto">
-          {NAV_LINKS.map((link, i) => {
-            const active = pathname === link.href
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={cn(
-                  'flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold tracking-wide transition-colors',
-                  active ? 'text-[var(--accent)]' : 'text-white/50 hover:text-white/80'
-                )}
-              >
-                <span className={cn('transition-transform', active && 'scale-110')}>
-                  {NAV_ICONS[i]}
-                </span>
-                {link.label}
-              </Link>
-            )
-          })}
-        </div>
-      </nav>}
+      {/* ── Barre navigation CLIENT (bas d'écran) ───────────────────── */}
+      {!isDriverRoute && !isAdminRoute && (
+        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--primary)] border-t border-white/10">
+          <div className="flex max-w-2xl mx-auto">
+            {NAV_LINKS.map((link, i) => {
+              const active = pathname === link.href
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={cn(
+                    'flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold tracking-wide transition-colors',
+                    active ? 'text-[var(--accent)]' : 'text-white/50 hover:text-white/80'
+                  )}
+                >
+                  <span className={cn('transition-transform', active && 'scale-110')}>
+                    {NAV_ICONS[i]}
+                  </span>
+                  {link.label}
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
+      )}
+
+      {/* ── Barre navigation CHAUFFEUR (bas d'écran) ────────────────── */}
+      {isDriverRoute && (
+        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--primary)] border-t border-white/10">
+          <div className="flex max-w-2xl mx-auto">
+            {DRIVER_NAV.map(link => {
+              const active = pathname === link.href
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={cn(
+                    'flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold tracking-wide transition-colors',
+                    active ? 'text-[var(--accent)]' : 'text-white/50 hover:text-white/80'
+                  )}
+                >
+                  <span className={cn('transition-transform', active && 'scale-110')}>
+                    {link.icon}
+                  </span>
+                  {link.label}
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
+      )}
 
       {/* ── Login modal ─────────────────────────────────────────────── */}
       {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
