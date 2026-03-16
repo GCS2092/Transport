@@ -8,8 +8,6 @@ import { driverApi, Driver, Reservation } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import { useGeolocation } from '@/hooks/useGeolocation'
 
-// Empêche l'indexation de cette page privée
-
 const STATUS_DRIVER: Record<string, { label: string; color: string; dot: string }> = {
   DISPONIBLE:  { label: 'Disponible',   color: 'text-emerald-700', dot: 'bg-emerald-500' },
   EN_COURSE:   { label: 'En course',    color: 'text-amber-700',   dot: 'bg-amber-400'  },
@@ -34,12 +32,12 @@ export default function DriverDashboard() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
 
-  const [driver,  setDriver]  = useState<Driver | null>(null)
-  const [rides,   setRides]   = useState<Reservation[]>([])
-  const [tab,     setTab]     = useState<'today' | 'upcoming'>('today')
-  const [loading, setLoading] = useState(true)
-  const [toggling,setToggling]= useState(false)
-  const [markingPaid, setMarkingPaid] = useState<string | null>(null)
+  const [driver,   setDriver]   = useState<Driver | null>(null)
+  const [rides,    setRides]    = useState<Reservation[]>([])
+  const [tab,      setTab]      = useState<'today' | 'upcoming'>('today')
+  const [loading,  setLoading]  = useState(true)
+  const [toggling, setToggling] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
 
   const geo = useGeolocation({ watch: true, autoStart: true })
 
@@ -62,13 +60,19 @@ export default function DriverDashboard() {
   useEffect(() => {
     if (authLoading) return
     if (!user || user.role !== 'DRIVER') { router.replace('/'); return }
+
     Promise.all([
       driverApi.getMe(),
       driverApi.getMyRides(),
     ]).then(([dRes, rRes]) => {
       setDriver(dRes.data)
       setRides(rRes.data)
-    }).catch(() => {}).finally(() => setLoading(false))
+    }).catch((err) => {
+      console.error('Erreur API chauffeur:', err)
+      const message = err?.response?.data?.message || err?.message || 'Erreur inconnue'
+      const status  = err?.response?.status || ''
+      setApiError(`${status} — ${message}`)
+    }).finally(() => setLoading(false))
   }, [authLoading, user, router])
 
   const toggleStatus = async () => {
@@ -96,15 +100,11 @@ export default function DriverDashboard() {
     const dt = new Date(r.pickupDateTime)
     return dt >= today && dt < tomorrow && r.status !== 'TERMINEE' && r.status !== 'ANNULEE'
   }).length
-  
+
   const pendingCount = rides.filter(r => {
     const dt = new Date(r.pickupDateTime)
     return dt >= tomorrow && r.status !== 'TERMINEE' && r.status !== 'ANNULEE'
   }).length
-
-  const markAsPaid = async (rideId: string) => {
-    console.log('markAsPaid moved to /chauffeur/paiements')
-  }
 
   if (authLoading || loading) {
     return (
@@ -115,6 +115,26 @@ export default function DriverDashboard() {
       </div>
     )
   }
+
+  // Afficher l'erreur API clairement au lieu d'une page blanche
+  if (apiError) {
+    return (
+      <div className="max-w-lg mx-auto px-4 py-10 text-center space-y-4">
+        <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center mx-auto">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <h2 className="text-lg font-bold text-gray-900">Erreur de chargement</h2>
+        <p className="text-sm text-red-600 font-mono bg-red-50 rounded-xl px-4 py-3">{apiError}</p>
+        <button
+          onClick={() => { setApiError(null); setLoading(true); window.location.reload() }}
+          className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-semibold"
+        >
+          Réessayer
+        </button>
+      </div>
+    )
+  }
+
   if (!driver) return null
 
   const ds = STATUS_DRIVER[driver.status] || STATUS_DRIVER.HORS_LIGNE
