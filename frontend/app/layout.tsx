@@ -10,7 +10,8 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 export const metadata: Metadata = {
   metadataBase: new URL("https://wenddtransport.com"),
   title: "WEND'D Transport - Transferts Aéroport & VTC à Dakar",
-  description: "Réservez votre transfert aéroport à Dakar en 2 minutes. Tarifs fixes, chauffeurs professionnels disponibles 24h/24. Service VTC premium pour AIBD et toutes zones de Dakar.",
+  description:
+    "Réservez votre transfert aéroport à Dakar en 2 minutes. Tarifs fixes, chauffeurs professionnels disponibles 24h/24. Service VTC premium pour AIBD et toutes zones de Dakar.",
   manifest: "/manifest.json",
   robots: {
     index: true,
@@ -22,7 +23,8 @@ export const metadata: Metadata = {
     url: "https://wenddtransport.com",
     siteName: "WEND'D Transport",
     title: "WEND'D Transport - Transferts Aéroport & VTC à Dakar",
-    description: "Réservez votre transfert aéroport à Dakar en 2 minutes. Tarifs fixes, chauffeurs professionnels disponibles 24h/24.",
+    description:
+      "Réservez votre transfert aéroport à Dakar en 2 minutes. Tarifs fixes, chauffeurs professionnels disponibles 24h/24.",
     images: [
       {
         url: "/images/FOND.jpeg",
@@ -35,12 +37,13 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "WEND'D Transport - Transferts Aéroport & VTC à Dakar",
-    description: "Réservez votre transfert aéroport à Dakar en 2 minutes. Tarifs fixes, chauffeurs pro 24h/24.",
+    description:
+      "Réservez votre transfert aéroport à Dakar en 2 minutes. Tarifs fixes, chauffeurs pro 24h/24.",
     images: ["/images/FOND.jpeg"],
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "WEND'D Transport",
   },
   formatDetection: {
@@ -70,17 +73,7 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <head>
-        <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#0D3B2E" />
-        {/* iOS PWA */}
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="WEND'D Transport" />
-        <link rel="apple-touch-icon" href="/images/FOND.jpeg" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/images/FOND.jpeg" />
-        {/* Viewport mobile */}
-        <meta name="mobile-web-app-capable" content="yes" />
-
+        {/* OneSignal uniquement — toutes les autres balises sont gérées par l'objet metadata ci-dessus */}
         {onesignalAppId && (
           <>
             <script
@@ -98,10 +91,8 @@ export default function RootLayout({
                       notifyButton: { enable: true },
                     });
 
-                    // Tag par défaut (visiteurs / clients non connectés)
                     try { OneSignal.User.addTags({ role: "client" }); } catch (e) {}
 
-                    // Demander l'autorisation sur 1ère interaction (évite blocage auto)
                     try {
                       const handler = async () => {
                         try {
@@ -136,12 +127,8 @@ export default function RootLayout({
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', () => {
                   navigator.serviceWorker.register('/sw.js').then(
-                    (registration) => {
-                      console.log('SW registered:', registration);
-                    },
-                    (err) => {
-                      console.log('SW registration failed:', err);
-                    }
+                    (registration) => { console.log('SW registered:', registration); },
+                    (err) => { console.log('SW registration failed:', err); }
                   );
                 });
               }

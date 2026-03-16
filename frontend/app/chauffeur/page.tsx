@@ -8,6 +8,8 @@ import { driverApi, Driver, Reservation } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import { useGeolocation } from '@/hooks/useGeolocation'
 
+// Empêche l'indexation de cette page privée
+
 const STATUS_DRIVER: Record<string, { label: string; color: string; dot: string }> = {
   DISPONIBLE:  { label: 'Disponible',   color: 'text-emerald-700', dot: 'bg-emerald-500' },
   EN_COURSE:   { label: 'En course',    color: 'text-amber-700',   dot: 'bg-amber-400'  },
@@ -84,7 +86,6 @@ export default function DriverDashboard() {
   const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1)
   const filtered = rides.filter(r => {
     const dt = new Date(r.pickupDateTime)
-    // Seulement les courses non terminées et non annulées
     if (r.status === 'TERMINEE' || r.status === 'ANNULEE') return false
     if (tab === 'today')    return dt >= today && dt < tomorrow
     if (tab === 'upcoming') return dt >= tomorrow
@@ -102,7 +103,6 @@ export default function DriverDashboard() {
   }).length
 
   const markAsPaid = async (rideId: string) => {
-    // Fonction déplacée vers la page /chauffeur/paiements
     console.log('markAsPaid moved to /chauffeur/paiements')
   }
 

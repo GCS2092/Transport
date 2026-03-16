@@ -1,11 +1,13 @@
-import type { ReactNode } from 'react'
-import { DriverBottomNav } from '@/components/DriverBottomNav'
+import type { Metadata } from "next";
 
-export default function DriverLayout({ children }: { children: ReactNode }) {
-  return (
-    <>
-      {children}
-      <DriverBottomNav />
-    </>
-  )
+export const metadata: Metadata = {
+  title: "Espace Chauffeur - WEND'D Transport",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
+
+export default function ChauffeursLayout({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
 }

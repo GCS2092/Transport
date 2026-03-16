@@ -1,3 +1,24 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Suivi de réservation - WEND'D Transport | Suivi en temps réel",
+  description:
+    "Suivez votre réservation WEND'D Transport en temps réel. Entrez votre numéro de réservation pour voir le statut et la position de votre chauffeur.",
+  openGraph: {
+    title: "Suivi de réservation - WEND'D Transport | Suivi en temps réel",
+    description:
+      "Suivez votre réservation WEND'D Transport en temps réel. Entrez votre numéro de réservation pour voir le statut et la position de votre chauffeur.",
+    url: "https://wenddtransport.com/suivi",
+  },
+  twitter: {
+    title: "Suivi de réservation - WEND'D Transport | Suivi en temps réel",
+    description:
+      "Suivez votre réservation WEND'D Transport en temps réel. Entrez votre numéro de réservation pour voir le statut et la position de votre chauffeur.",
+  },
+};
+
+// ─── Composant page (inchangé) ───────────────────────────────────────────────
+
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
@@ -8,7 +29,7 @@ import { useTranslation } from '@/lib/i18n'
 import { updateReservationStatus } from '@/lib/clientStorage'
 import { calculateRoute, formatDuration, formatDistance } from '@/lib/geocoding'
 import dynamic from 'next/dynamic'
-
+ 
 const Map = dynamic(() => import('@/components/Map').then(mod => ({ default: mod.Map })), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-gray-100 rounded-xl animate-pulse" />
@@ -52,7 +73,6 @@ function SuiviContent() {
     if (c) { setCode(c); doSearch(c) }
   }, [])
 
-  // Polling pour la position du chauffeur si course EN_COURS
   useEffect(() => {
     if (!reservation || reservation.status !== 'EN_COURS') {
       setDriverLocation(null)
@@ -71,12 +91,10 @@ function SuiviContent() {
     }
 
     fetchDriverLocation()
-    const interval = setInterval(fetchDriverLocation, 10000) // 10 secondes
-
+    const interval = setInterval(fetchDriverLocation, 10000)
     return () => clearInterval(interval)
   }, [reservation])
 
-  // Calculer l'itinéraire du chauffeur vers le client
   useEffect(() => {
     if (!driverLocation || !reservation) {
       setRouteCoordinates([])
@@ -111,7 +129,6 @@ function SuiviContent() {
       const { data } = await reservationsApi.getByCode(c.trim())
       setReservation(data)
 
-      // Associer OneSignal au client (external user id = email) pour recevoir les notifs
       try {
         const email = (data as any)?.clientEmail
         if (typeof window !== 'undefined' && window.OneSignalDeferred && typeof email === 'string' && email.trim()) {
@@ -125,9 +142,7 @@ function SuiviContent() {
         }
       } catch {}
 
-      // Mettre à jour le statut dans l'historique localStorage
       updateReservationStatus(data.code, data.status)
-      // Déclencher un événement pour rafraîchir l'historique
       window.dispatchEvent(new Event('vtc_code_saved'))
     } catch (err: any) {
       setError(err.response?.data?.message || tr.notFound)
@@ -146,15 +161,10 @@ function SuiviContent() {
     setCancelLoading(true)
     try {
       await reservationsApi.cancel(code, cancelToken)
-      // Supprimer le code de localStorage si c'est celui affiché
       let lastCode: string | null = null
-      try {
-        lastCode = localStorage.getItem('vtc_last_code')
-      } catch {}
+      try { lastCode = localStorage.getItem('vtc_last_code') } catch {}
       if (lastCode === code) {
-        try {
-          localStorage.removeItem('vtc_last_code')
-        } catch {}
+        try { localStorage.removeItem('vtc_last_code') } catch {}
         window.dispatchEvent(new Event('vtc_code_cleared'))
       }
       await doSearch(code)
@@ -197,7 +207,6 @@ function SuiviContent() {
           </button>
         </form>
 
-        {/* Erreur */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 flex gap-2">
             <svg className="flex-shrink-0 mt-0.5" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -205,11 +214,9 @@ function SuiviContent() {
           </div>
         )}
 
-        {/* Résultat */}
         {reservation && statusConf && (
           <div className="space-y-3">
 
-            {/* Header carte */}
             <div className="bg-[var(--primary)] rounded-2xl p-5 text-white">
               <div className="flex justify-between items-start mb-4">
                 <div>
@@ -224,7 +231,6 @@ function SuiviContent() {
                 </span>
               </div>
 
-              {/* Timeline */}
               {reservation.status !== 'ANNULEE' && (
                 <div className="flex items-center">
                   {STATUS_ORDER.map((s, i) => (
@@ -252,7 +258,6 @@ function SuiviContent() {
               )}
             </div>
 
-            {/* Trajet */}
             <div className="bg-white rounded-2xl border border-[var(--border)] p-5">
               <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide mb-3">{tr.trip}</p>
               <div className="flex items-center gap-3">
@@ -266,7 +271,7 @@ function SuiviContent() {
                 <div className="flex-1 text-right">
                   <p className="text-xs text-[var(--muted)]">{tr.arrival}</p>
                   <p className="font-bold text-[var(--ink)]">
-                    {reservation.dropoffCustomAddress || reservation.dropoffZone?.name || 'Adresse d\'arrivée'}
+                    {reservation.dropoffCustomAddress || reservation.dropoffZone?.name || "Adresse d'arrivée"}
                   </p>
                 </div>
               </div>
@@ -276,7 +281,6 @@ function SuiviContent() {
               </div>
             </div>
 
-            {/* Détails */}
             <div className="bg-white rounded-2xl border border-[var(--border)] divide-y divide-[var(--border)]">
               {[
                 { label: tr.dateTime, value: new Date(reservation.pickupDateTime).toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) },
@@ -291,12 +295,9 @@ function SuiviContent() {
               ))}
             </div>
 
-            {/* Carte de suivi en temps réel */}
             {reservation.status === 'EN_COURS' && driverLocation && (
               <div className="bg-white rounded-2xl border border-[var(--border)] p-5">
                 <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide mb-3">📍 Suivi en temps réel</p>
-                
-                {/* ETA et Distance */}
                 {routeInfo && (
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg p-3 text-white text-center">
@@ -309,16 +310,11 @@ function SuiviContent() {
                     </div>
                   </div>
                 )}
-
                 <Map
                   center={[driverLocation.latitude, driverLocation.longitude]}
                   zoom={14}
                   markers={[
-                    {
-                      position: [driverLocation.latitude, driverLocation.longitude],
-                      popup: 'Votre chauffeur',
-                      icon: 'driver'
-                    },
+                    { position: [driverLocation.latitude, driverLocation.longitude], popup: 'Votre chauffeur', icon: 'driver' },
                     ...(reservation.pickupLatitude && reservation.pickupLongitude ? [{
                       position: [reservation.pickupLatitude, reservation.pickupLongitude] as [number, number],
                       popup: reservation.pickupCustomAddress || 'Point de départ',
@@ -338,7 +334,6 @@ function SuiviContent() {
               </div>
             )}
 
-            {/* Télécharger le reçu si terminée */}
             {reservation.status === 'TERMINEE' && (
               <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-5 text-white">
                 <div className="flex items-center justify-between mb-3">
@@ -360,7 +355,6 @@ function SuiviContent() {
               </div>
             )}
 
-            {/* Chauffeur assigné */}
             {reservation.driver && (
               <div className="bg-white rounded-2xl border border-[var(--border)] p-5">
                 <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide mb-3">{tr.driver}</p>
@@ -381,10 +375,8 @@ function SuiviContent() {
                 </div>
                 <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-200">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--primary)] flex-shrink-0">
-                    <path d="M5 17h14v-4H5v4z"/>
-                    <path d="M5 13V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v6"/>
-                    <circle cx="7" cy="17" r="2"/>
-                    <circle cx="17" cy="17" r="2"/>
+                    <path d="M5 17h14v-4H5v4z"/><path d="M5 13V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v6"/>
+                    <circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
                   </svg>
                   <div className="flex-1">
                     <p className="text-xs text-[var(--muted)] font-medium">Plaque d'immatriculation</p>
@@ -394,7 +386,6 @@ function SuiviContent() {
               </div>
             )}
 
-            {/* Notes */}
             {reservation.notes && (
               <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
                 <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">{tr.notes}</p>
@@ -402,7 +393,6 @@ function SuiviContent() {
               </div>
             )}
 
-            {/* Annulation */}
             {reservation.status !== 'ANNULEE' && reservation.status !== 'TERMINEE' && (
               <div>
                 {!showCancelForm ? (

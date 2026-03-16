@@ -1,7 +1,28 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Contact - WEND'D Transport | Transferts Aéroport Dakar",
+  description:
+    "Contactez WEND'D Transport par téléphone, WhatsApp ou email. Service disponible 24h/24 pour vos transferts aéroport et VTC à Dakar.",
+  openGraph: {
+    title: "Contact - WEND'D Transport | Transferts Aéroport Dakar",
+    description:
+      "Contactez WEND'D Transport par téléphone, WhatsApp ou email. Service disponible 24h/24 pour vos transferts aéroport et VTC à Dakar.",
+    url: "https://wenddtransport.com/contact",
+  },
+  twitter: {
+    title: "Contact - WEND'D Transport | Transferts Aéroport Dakar",
+    description:
+      "Contactez WEND'D Transport par téléphone, WhatsApp ou email. Service disponible 24h/24 pour vos transferts aéroport et VTC à Dakar.",
+  },
+};
+
+// ─── Composant page (inchangé) ───────────────────────────────────────────────
+
 'use client'
 
 import { useTranslation } from '@/lib/i18n'
-
+ 
 export default function ContactPage() {
   const { t } = useTranslation()
   const c = t.contact
