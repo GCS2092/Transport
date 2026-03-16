@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+// Ligne 1 — ajoutez Delete dans les imports
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -13,7 +14,7 @@ import { Reservation } from '../reservations/entities/reservation.entity';
 import { ReservationStatus } from '../../common/enums/reservation-status.enum';
 import { DriverStatus } from '../../common/enums/driver-status.enum';
 import { IsEmail, IsString, IsNotEmpty, MinLength, Matches, IsOptional } from 'class-validator';
-
+ 
 class CreateDriverUserDto {
   @IsEmail()
   email: string;
@@ -222,7 +223,16 @@ export class AdminController {
     }
     return this.usersService.deactivate(id);
   }
-
+@Delete('users/:id')
+async deleteUser(
+  @Param('id') id: string,
+  @CurrentUser() currentUser: { id: string },
+) {
+  if (id === currentUser.id) {
+    throw new BadRequestException('You cannot delete your own account');
+  }
+  return this.usersService.delete(id);
+}
   @Put('users/:id/activate')
   activateUser(@Param('id') id: string) {
     return this.usersService.activate(id);

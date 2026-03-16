@@ -441,7 +441,9 @@ export const adminApi = {
   deactivateUser: (id: string) =>
     api.post(`/admin/users/${id}/deactivate`),
   activateUser: (id: string) =>
-    api.put(`/admin/users/${id}/activate`),
+     api.put(`/admin/users/${id}/activate`),
+  deleteUser: (id: string) =>         
+    api.delete(`/admin/users/${id}`),
   getEmailLogs: (params?: { page?: number; limit?: number; status?: string }) =>
     api.get<{ data: EmailLog[]; total: number }>('/admin/email-logs', { params }),
   getClients: (params?: { page?: number; limit?: number }) =>
@@ -453,7 +455,7 @@ export const adminApi = {
       reservations: Reservation[];
     }>(`/admin/clients/${encodeURIComponent(email)}/history`),
   getFinancialStats: () =>
-    api.get<{
+    api.get<{ 
       dailyRevenue: { date: string; revenue: number }[];
       monthlyRevenue: { month: string; revenue: number }[];
       topDrivers: { name: string; revenue: number }[];

@@ -36,9 +36,22 @@ const IconUserX = () => (
   </svg>
 )
 
+const IconTrash = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+    <path d="M10 11v6M14 11v6"/>
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+  </svg>
+)
+
+const ADMIN_PASSWORD = 'Admin_VTC_2024!'
+
 export default function AdminUsers() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
+
+  // ── Création ──────────────────────────────────────────────
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [formData, setFormData] = useState<CreateDriverUserDto>({
     email: '',
@@ -54,6 +67,12 @@ export default function AdminUsers() {
   const [adminPassword, setAdminPassword] = useState('')
   const [adminPasswordValid, setAdminPasswordValid] = useState(false)
   const [showAdminPassword, setShowAdminPassword] = useState(false)
+
+  // ── Suppression ───────────────────────────────────────────
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     loadUsers()
@@ -74,11 +93,10 @@ export default function AdminUsers() {
   const handleCreateDriver = async (e: React.FormEvent) => {
     e.preventDefault()
     if (creating) return
-    
+
     try {
       setCreating(true)
       if (adminMode) {
-        // Créer un admin
         await adminApi.createUser({
           email: formData.email,
           password: formData.password,
@@ -88,19 +106,10 @@ export default function AdminUsers() {
           role: 'ADMIN'
         })
       } else {
-        // Créer un chauffeur
         await adminApi.createDriverUser(formData)
       }
       setShowCreateModal(false)
-      setFormData({
-        email: '',
-        password: '',
-        firstName: '',
-        lastName: '',
-        phone: '',
-        vehicleType: '',
-        vehiclePlate: '',
-      })
+      setFormData({ email: '', password: '', firstName: '', lastName: '', phone: '', vehicleType: '', vehiclePlate: '' })
       setAdminMode(false)
       setAdminPassword('')
       setAdminPasswordValid(false)
@@ -116,8 +125,7 @@ export default function AdminUsers() {
 
   const handleAdminPasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    // Mot de passe admin - à remplacer par une vérification sécurisée
-    if (adminPassword === 'Admin_VTC_2024!') {
+    if (adminPassword === ADMIN_PASSWORD) {
       setAdminPasswordValid(true)
       setAdminMode(true)
       setShowAdminPassword(false)
@@ -140,10 +148,44 @@ export default function AdminUsers() {
     }
   }
 
+  // ── Suppression ───────────────────────────────────────────
+  const openDeleteModal = (user: User) => {
+    setDeleteTarget(user)
+    setDeletePassword('')
+    setDeleteError('')
+  }
+
+  const closeDeleteModal = () => {
+    setDeleteTarget(null)
+    setDeletePassword('')
+    setDeleteError('')
+  }
+
+  const handleDelete = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!deleteTarget || deleting) return
+
+    if (deletePassword !== ADMIN_PASSWORD) {
+      setDeleteError('Mot de passe admin incorrect')
+      return
+    }
+
+    setDeleting(true)
+    try {
+      await adminApi.deleteUser(deleteTarget.id)
+      closeDeleteModal()
+      loadUsers()
+    } catch (err: any) {
+      setDeleteError(err.response?.data?.message || 'Erreur lors de la suppression')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="bg-gray-50 pb-6">
       <div className="max-w-6xl mx-auto px-4 pt-6">
-        
+
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Gestion des utilisateurs</h1>
@@ -166,15 +208,15 @@ export default function AdminUsers() {
           <div className="space-y-3">
             {users.map(user => (
               <div key={user.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <p className="text-base font-bold text-gray-900">
                         {user.firstName} {user.lastName}
                       </p>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        user.role === 'ADMIN' 
-                          ? 'bg-purple-100 text-purple-800' 
+                        user.role === 'ADMIN'
+                          ? 'bg-purple-100 text-purple-800'
                           : 'bg-blue-100 text-blue-800'
                       }`}>
                         {user.role}
@@ -190,19 +232,31 @@ export default function AdminUsers() {
                       Créé le {format(new Date(user.createdAt), 'dd MMM yyyy', { locale: fr })}
                     </p>
                   </div>
-                  
+
                   {user.role === 'DRIVER' && (
-                    <button
-                      onClick={() => handleToggleActive(user)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                        user.isActive
-                          ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                          : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
-                      }`}
-                    >
-                      {user.isActive ? <IconUserX /> : <IconUserCheck />}
-                      {user.isActive ? 'Désactiver' : 'Activer'}
-                    </button>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* Activer / Désactiver */}
+                      <button
+                        onClick={() => handleToggleActive(user)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                          user.isActive
+                            ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                            : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                        }`}
+                      >
+                        {user.isActive ? <IconUserX /> : <IconUserCheck />}
+                        {user.isActive ? 'Désactiver' : 'Activer'}
+                      </button>
+
+                      {/* Supprimer */}
+                      <button
+                        onClick={() => openDeleteModal(user)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+                      >
+                        <IconTrash />
+                        Supprimer
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -210,7 +264,69 @@ export default function AdminUsers() {
           </div>
         )}
 
-        {/* Modal création chauffeur/admin */}
+        {/* ── Modal suppression ──────────────────────────────── */}
+        {deleteTarget && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl max-w-sm w-full p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Supprimer le chauffeur</h3>
+                <button onClick={closeDeleteModal} className="text-gray-400 hover:text-gray-600">
+                  <IconX />
+                </button>
+              </div>
+
+              {/* Info chauffeur */}
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5">
+                <p className="text-sm font-semibold text-red-800">
+                  {deleteTarget.firstName} {deleteTarget.lastName}
+                </p>
+                <p className="text-xs text-red-600 mt-0.5">{deleteTarget.email}</p>
+                <p className="text-xs text-red-500 mt-2">
+                  ⚠️ Cette action est irréversible. Toutes les données du chauffeur seront supprimées.
+                </p>
+              </div>
+
+              <form onSubmit={handleDelete} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                    Mot de passe admin pour confirmer
+                  </label>
+                  <input
+                    type="password"
+                    value={deletePassword}
+                    onChange={e => { setDeletePassword(e.target.value); setDeleteError('') }}
+                    placeholder="••••••••"
+                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                    required
+                    autoFocus
+                  />
+                  {deleteError && (
+                    <p className="text-xs text-red-600 mt-1.5 font-medium">{deleteError}</p>
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={closeDeleteModal}
+                    className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={deleting || !deletePassword}
+                    className="flex-1 py-2.5 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    {deleting ? 'Suppression...' : 'Supprimer'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── Modal création chauffeur/admin ─────────────────── */}
         {showCreateModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl max-w-md w-full p-6 my-8">
@@ -218,14 +334,14 @@ export default function AdminUsers() {
                 <h3 className="text-lg font-bold text-gray-900">
                   {adminMode ? 'Nouveau compte admin' : 'Nouveau chauffeur'}
                 </h3>
-                <button 
+                <button
                   onClick={() => {
                     setShowCreateModal(false)
                     setAdminMode(false)
                     setAdminPassword('')
                     setAdminPasswordValid(false)
                     setShowAdminPassword(false)
-                  }} 
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <IconX />
@@ -397,12 +513,12 @@ export default function AdminUsers() {
                     type="submit"
                     disabled={creating}
                     className={`flex-1 py-2.5 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 ${
-                      adminMode 
-                        ? 'bg-purple-600 hover:bg-purple-700' 
+                      adminMode
+                        ? 'bg-purple-600 hover:bg-purple-700'
                         : 'bg-[var(--primary)] hover:bg-[var(--primary-hover)]'
                     }`}
                   >
-                    {creating ? 'Création...' : `Créer ${adminMode ? 'l\'admin' : 'le chauffeur'}`}
+                    {creating ? 'Création...' : `Créer ${adminMode ? "l'admin" : 'le chauffeur'}`}
                   </button>
                 </div>
               </form>
