@@ -65,47 +65,17 @@ export const viewport: Viewport = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   const onesignalAppId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
 
   return (
     <html lang="fr">
       <head>
-        {/* OneSignal uniquement — toutes les autres balises sont gérées par l'objet metadata ci-dessus */}
         {onesignalAppId && (
           <>
             <script
               src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
               defer
-            />
-            <script
-              dangerouslySetInnerHTML={{
-                __html: `
-                  window.OneSignalDeferred = window.OneSignalDeferred || [];
-                  OneSignalDeferred.push(async function(OneSignal) {
-                    await OneSignal.init({
-                      appId: ${JSON.stringify(onesignalAppId)},
-                      safari_web_id: "web.onesignal.auto.0818a4e7-118f-4fc1-b0e2-07892e811a2a",
-                      notifyButton: { enable: true },
-                    });
-
-                    try { OneSignal.User.addTags({ role: "client" }); } catch (e) {}
-
-                    try {
-                      const handler = async () => {
-                        try {
-                          if (OneSignal.Slidedown?.promptPush) await OneSignal.Slidedown.promptPush();
-                          else if (OneSignal.Notifications?.requestPermission) await OneSignal.Notifications.requestPermission();
-                        } catch (e) {}
-                      };
-                      document.addEventListener("click", handler, { once: true, passive: true });
-                      document.addEventListener("touchstart", handler, { once: true, passive: true });
-                    } catch (e) {}
-                  });
-                `,
-              }}
             />
           </>
         )}
@@ -119,16 +89,64 @@ export default function RootLayout({
             </main>
           </AuthProvider>
         </LanguageProvider>
+
         <Analytics />
         <SpeedInsights />
+
+        {onesignalAppId && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                window.OneSignalDeferred = window.OneSignalDeferred || [];
+                OneSignalDeferred.push(async function(OneSignal) {
+                  await OneSignal.init({
+                    appId: ${JSON.stringify(onesignalAppId)},
+                    safari_web_id: "web.onesignal.auto.0818a4e7-118f-4fc1-b0e2-07892e811a2a",
+                    notifyButton: { enable: true },
+                  });
+
+                  // 🔹 LOGIN USER AUTOMATIQUE
+                  try {
+                    const user = JSON.parse(localStorage.getItem("user"));
+                    if (user?.email) {
+                      await OneSignal.login(user.email.toLowerCase());
+                      console.log("OneSignal user linked:", user.email);
+                    }
+                  } catch (e) { console.log("OneSignal login error", e); }
+
+                  // 🔹 TAG ROLE
+                  try { OneSignal.User.addTags({ role: "client" }); } catch (e) {}
+
+                  // 🔹 DEMANDE PERMISSION PUSH
+                  try {
+                    const handler = async () => {
+                      try {
+                        if (OneSignal.Slidedown?.promptPush) {
+                          await OneSignal.Slidedown.promptPush();
+                        } else if (OneSignal.Notifications?.requestPermission) {
+                          await OneSignal.Notifications.requestPermission();
+                        }
+                      } catch (e) {}
+                    };
+                    document.addEventListener("click", handler, { once: true, passive: true });
+                    document.addEventListener("touchstart", handler, { once: true, passive: true });
+                    setTimeout(handler, 3000); // fallback automatique
+                  } catch (e) {}
+                });
+              `,
+            }}
+          />
+        )}
+
+        {/* Enregistrement Service Worker pour PWA */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', () => {
                   navigator.serviceWorker.register('/sw.js').then(
-                    (registration) => { console.log('SW registered:', registration); },
-                    (err) => { console.log('SW registration failed:', err); }
+                    registration => console.log('SW registered:', registration),
+                    err => console.log('SW registration failed:', err)
                   );
                 });
               }

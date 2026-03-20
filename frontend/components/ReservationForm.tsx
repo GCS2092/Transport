@@ -295,23 +295,20 @@ export function ReservationForm() {
   }, [formData.pickupZoneId, formData.dropoffZoneId, pickupType, dropoffType, customPickupAddress, customDropoffAddress, tripType])
 
   const loadZones = async () => {
-    try {
-      const { data } = await zonesApi.getActive()
-      setZones(data)
-      const savedInfo = getClientInfo()
-      if (savedInfo?.lastPickupZoneId && savedInfo?.lastDropoffZoneId) {
-        setFormData(p => ({ 
-          ...p, 
-          pickupZoneId: savedInfo.lastPickupZoneId || '', 
-          dropoffZoneId: savedInfo.lastDropoffZoneId || '' 
-        }))
-      } else {
-        const aibd = data.find((z: Zone) => z.name.toLowerCase().includes('aibd'))
-        const alma = data.find((z: Zone) => z.name.toLowerCase().includes('almad'))
-        if (aibd && alma) setFormData(p => ({ ...p, pickupZoneId: aibd.id, dropoffZoneId: alma.id }))
-      }
-    } catch {}
-  }
+  try {
+    const { data } = await zonesApi.getActive()
+    setZones(data)
+    const savedInfo = getClientInfo()
+    if (savedInfo?.lastPickupZoneId && savedInfo?.lastDropoffZoneId) {
+      setFormData(p => ({
+        ...p,
+        pickupZoneId: savedInfo.lastPickupZoneId || '',
+        dropoffZoneId: savedInfo.lastDropoffZoneId || ''
+      }))
+    }
+    // Le useEffect [tripType, zones] s'occupe du forçage AIBD automatiquement
+  } catch {}
+}
 
   const loadSavedClientInfo = () => {
     const savedInfo = getClientInfo()

@@ -65,6 +65,7 @@ export default function RideDetail() {
   const [routeCoords, setRouteCoords] = useState<Array<[number, number]>>([])
   const [routeInfo, setRouteInfo]     = useState<{ distance: number; duration: number } | null>(null)
   const [isHttps,   setIsHttps]       = useState(true)
+  const [nearPickup, setNearPickup]   = useState(false)
   const routeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastRoutePos  = useRef<{ lat: number; lng: number } | null>(null)
 
@@ -73,6 +74,24 @@ export default function RideDetail() {
   useEffect(() => {
     setIsHttps(window.location.protocol === 'https:' || window.location.hostname === 'localhost')
   }, [])
+
+
+  // Détecter quand le chauffeur est à moins de 100m du pickup client
+  useEffect(() => {
+    if (!ride || ride.status !== 'ASSIGNEE') { setNearPickup(false); return }
+    if (!geo.latitude || !geo.longitude) return
+
+    const destLat = ride.clientLatitude ?? ride.pickupLatitude ?? ride.pickupZone?.latitude
+    const destLng = ride.clientLongitude ?? ride.pickupLongitude ?? ride.pickupZone?.longitude
+    if (!destLat || !destLng) return
+
+    // Haversine simplifié — précision suffisante pour 100m
+    const dlat = (geo.latitude - destLat) * 111000
+    const dlng = (geo.longitude - destLng) * 111000 * Math.cos(geo.latitude * Math.PI / 180)
+    const distanceMeters = Math.sqrt(dlat * dlat + dlng * dlng)
+
+    setNearPickup(distanceMeters < 100)
+  }, [geo.latitude, geo.longitude, ride])
 
   // Envoyer la position GPS au backend toutes les 15s (visible admin map)
   useEffect(() => {
@@ -399,7 +418,7 @@ export default function RideDetail() {
           {geo.latitude && geo.longitude ? (
             <Map
               center={[geo.latitude, geo.longitude]}
-              zoom={ride.status === 'EN_COURS' ? 15 : 14}
+              zoom={ride.status === 'EN_COURS' ? 16 : 13}
               autoFollow={ride.status === 'EN_COURS'}
               markers={[
                 { position: [geo.latitude, geo.longitude], popup: 'Ma position', icon: 'driver' },
@@ -415,7 +434,7 @@ export default function RideDetail() {
                   : []),
               ]}
               route={routeCoords.length > 0 ? routeCoords : undefined}
-              className={`rounded-xl overflow-hidden ${ride.status === 'EN_COURS' ? 'h-72' : 'h-56'}`}
+              className="rounded-xl overflow-hidden"
             />
           ) : geo.permission === 'denied' ? (
             <div className="h-40 rounded-xl bg-gray-50 border border-gray-200 flex flex-col items-center justify-center gap-2">
@@ -488,7 +507,20 @@ export default function RideDetail() {
       {/* ── Actions ───────────────────────────────────────── */}
       {ride.status === 'ASSIGNEE' && (
         <div className="space-y-3">
-          {!canStartRide() && (
+
+          {/* Bannière arrivée chez le client */}
+          {nearPickup && (
+            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+              <div>
+                <p className="text-sm font-bold text-emerald-800">Vous êtes arrivé chez le client !</p>
+                <p className="text-xs text-emerald-600 mt-0.5">Le client peut monter à bord.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Avertissement départ trop tôt — seulement si pas encore proche */}
+          {!nearPickup && !canStartRide() && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
               <p className="text-sm text-amber-800 font-semibold">
                 ⏰ Départ dans {getTimeUntilPickup()}
@@ -498,17 +530,22 @@ export default function RideDetail() {
               </p>
             </div>
           )}
+
           <button
             onClick={() => updateStatus('EN_COURS')}
             disabled={acting || !canStartRide()}
-            className="w-full py-4 rounded-2xl bg-[var(--primary)] text-white font-bold text-base hover:bg-[var(--primary-hover)] active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+            className={`w-full py-4 rounded-2xl text-white font-bold text-base active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2 ${
+              nearPickup
+                ? 'bg-emerald-600 hover:bg-emerald-700'
+                : 'bg-[var(--primary)] hover:bg-[var(--primary-hover)]'
+            }`}
           >
             {acting ? (
               <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 12a8 8 0 018-8"/></svg>
             ) : (
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             )}
-            Démarrer la course
+            {nearPickup ? 'Client à bord — Démarrer' : 'Démarrer la course'}
           </button>
         </div>
       )}
