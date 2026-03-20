@@ -60,20 +60,29 @@ export class ReservationsController {
   @Get('code/:code/receipt')
   async downloadReceipt(@Param('code') code: string, @Res() res: Response) {
     const reservation = await this.reservationsService.findByCode(code);
-    
+
     if (reservation.status !== 'TERMINEE') {
       throw new BadRequestException('Receipt only available for completed reservations');
     }
 
     const pdfBuffer = await this.reservationsService.generateReceipt(reservation);
-    
+
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="recu-${reservation.code}.pdf"`,
       'Content-Length': pdfBuffer.length,
     });
-    
+
     res.send(pdfBuffer);
+  }
+
+  // ─── Renvoyer le code d'annulation par email ──────────────────────────────
+  // Throttle strict : 3 tentatives max par heure pour éviter l'abus
+  @Post('code/:code/resend-cancel-token')
+  @Throttle({ default: { limit: 3, ttl: 3600000 } })
+  @HttpCode(HttpStatus.OK)
+  resendCancelToken(@Param('code') code: string) {
+    return this.reservationsService.resendCancelToken(code);
   }
 
   @Patch('code/:code')
@@ -100,13 +109,13 @@ export class ReservationsController {
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
-    return this.reservationsService.findAll({ 
-      page: page ? parseInt(page, 10) : undefined, 
-      limit: limit ? parseInt(limit, 10) : undefined, 
-      status: status as any, 
-      driverId, 
-      dateFrom, 
-      dateTo 
+    return this.reservationsService.findAll({
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      status: status as any,
+      driverId,
+      dateFrom,
+      dateTo,
     });
   }
 
@@ -194,7 +203,7 @@ export class ReservationsController {
       dateFrom,
       dateTo,
     });
-    
+
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="reservations-${new Date().toISOString().split('T')[0]}.csv"`);
     res.send(csv);
@@ -213,9 +222,6 @@ export class ReservationsController {
   // PAYMENT SUPERVISION SYSTEM
   // ═══════════════════════════════════════════════════════════════════════════════
 
-  /**
-   * Chauffeur : changer le statut de paiement de sa course (IMPAYE, PAIEMENT_COMPLET, ACOMPTE_VERSE)
-   */
   @Patch(':id/payment-status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.DRIVER)
@@ -227,10 +233,6 @@ export class ReservationsController {
     return this.reservationsService.updatePaymentStatusByDriver(id, paymentStatus, user.id);
   }
 
-  /**
-   * Admin : supervision des paiements - liste toutes les courses avec filtres paiement
-   * Protégé par SupervisionGuard (nécessite mot de passe admin + token supervision)
-   */
   @Get('payment/supervision')
   @UseGuards(JwtAuthGuard, RolesGuard, SupervisionGuard)
   @Roles(Role.ADMIN)
@@ -250,10 +252,6 @@ export class ReservationsController {
     });
   }
 
-  /**
-   * Admin : changer le statut de paiement d'une course (avec audit log)
-   * Protégé par SupervisionGuard (nécessite mot de passe admin + token supervision)
-   */
   @Patch(':id/payment-status/admin')
   @UseGuards(JwtAuthGuard, RolesGuard, SupervisionGuard)
   @Roles(Role.ADMIN)
@@ -265,4 +263,3 @@ export class ReservationsController {
     return this.reservationsService.updatePaymentStatusByAdmin(id, paymentStatus, user);
   }
 }
-

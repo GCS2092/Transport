@@ -145,7 +145,7 @@ export class NotificationsService {
     await this.sendPushNotification(
       adminEmails.map(e => (e || '').trim().toLowerCase()).filter(Boolean),
       'Archivage terminé',
-      'Un fichier Excel d’archivage a été généré et envoyé par email.',
+      'Un fichier Excel d\'archivage a été généré et envoyé par email.',
       {},
     );
   }
@@ -267,6 +267,47 @@ export class NotificationsService {
     );
   }
 
+  // ─── Renvoi du code d'annulation (pour réservations existantes) ───────────
+  async sendCancelTokenReminder(reservation: Reservation): Promise<void> {
+    const lang = reservation.language;
+
+    const title = this.t(lang, "Votre code d'annulation", 'Your cancellation code');
+    const body = `
+      <p>${this.t(lang, `Bonjour <strong>${reservation.clientFirstName}</strong>,`, `Hello <strong>${reservation.clientFirstName}</strong>,`)}</p>
+      <p>${this.t(lang, "Voici votre code d'annulation pour la réservation ci-dessous.", 'Here is your cancellation code for the booking below.')}</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Code réservation', 'Booking code')}</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Date', 'Date')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${new Date(reservation.pickupDateTime).toLocaleString(lang === Language.EN ? 'en-GB' : 'fr-FR')}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Départ', 'From')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${this.getPickupAddress(reservation)}</td></tr>
+        <tr><td style="padding:8px;color:#666;">${this.t(lang, 'Destination', 'To')}</td><td style="padding:8px;">${this.getDropoffAddress(reservation)}</td></tr>
+      </table>
+      <div style="margin:20px 0;padding:16px;background:#fff8e1;border:2px dashed #f59e0b;border-radius:8px;text-align:center;">
+        <p style="margin:0 0 8px;font-size:12px;color:#92400e;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">
+          ${this.t(lang, "Code d'annulation", 'Cancellation Code')}
+        </p>
+        <p style="margin:0 0 8px;font-size:28px;font-family:monospace;font-weight:bold;color:#1a1a2e;letter-spacing:6px;">
+          ${reservation.cancelToken}
+        </p>
+        <p style="margin:0;font-size:11px;color:#78350f;">
+          ${this.t(lang, 'Utilisez ce code sur la page Suivi pour annuler votre réservation.', 'Use this code on the Tracking page to cancel your booking.')}
+        </p>
+      </div>
+      <p style="margin-top:16px;">
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:3001'}/suivi?code=${reservation.code}"
+           style="display:inline-block;padding:10px 20px;background:#1a1a2e;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">
+          ${this.t(lang, 'Aller sur la page Suivi', 'Go to Tracking page')}
+        </a>
+      </p>`;
+
+    await this.sendEmail(
+      reservation.clientEmail,
+      `${title} — #${reservation.code}`,
+      this.buildEmailHtml(reservation, title, body),
+      NotificationType.CANCEL_TOKEN_REMINDER,
+      reservation.id,
+    );
+  }
+
   async sendDriverAssigned(reservation: Reservation): Promise<void> {
     const lang = reservation.language;
     const waLink = this.buildWhatsAppLink(reservation);
@@ -370,7 +411,7 @@ export class NotificationsService {
     const body = `
       <p>${this.t(lang, `Bonjour <strong>${reservation.clientFirstName}</strong>,`, `Hello <strong>${reservation.clientFirstName}</strong>,`)}</p>
       <p>${this.t(lang, `Votre réservation <strong>${reservation.code}</strong> a été annulée.`, `Your booking <strong>${reservation.code}</strong> has been cancelled.`)}</p>
-      <p>${this.t(lang, 'Si vous pensez qu\'il s\'agit d\'une erreur, contactez-nous.', 'If you believe this is an error, please contact us.')}</p>`;
+      <p>${this.t(lang, "Si vous pensez qu'il s'agit d'une erreur, contactez-nous.", 'If you believe this is an error, please contact us.')}</p>`;
 
     await this.sendEmail(
       reservation.clientEmail,
@@ -452,7 +493,7 @@ export class NotificationsService {
       reservation.driver.email,
       `${title} — #${reservation.code}`,
       `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`,
-      NotificationType.RESERVATION_CANCELLED,
+      NotificationType.DRIVER_RIDE_CANCELLED,
       reservation.id,
     );
 
@@ -528,7 +569,7 @@ export class NotificationsService {
     const title = this.t(lang, 'Course terminée', 'Ride completed');
     const body = `
       <p>${this.t(lang, 'Bonjour', 'Hello')} <strong>${reservation.clientFirstName}</strong>,</p>
-      <p>${this.t(lang, 'Votre course est terminée. Merci d\'avoir utilisé nos services !', 'Your ride is completed. Thank you for using our services!')}</p>
+      <p>${this.t(lang, "Votre course est terminée. Merci d'avoir utilisé nos services !", 'Your ride is completed. Thank you for using our services!')}</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Code', 'Code')}</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Trajet', 'Route')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup} → ${dropoff}</td></tr>
@@ -536,7 +577,6 @@ export class NotificationsService {
       </table>
       <p style="font-size:13px;color:#888;">${this.t(lang, 'À bientôt pour une prochaine course !', 'See you soon for your next ride!')}</p>`;
 
-    // Resend accepte les pièces jointes en base64
     const attachments = pdfBuffer ? [{
       filename: `recu-${reservation.code}.pdf`,
       content: pdfBuffer.toString('base64'),
@@ -587,7 +627,7 @@ export class NotificationsService {
       reservation.driver.email,
       `${title} — #${reservation.code}`,
       `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`,
-      NotificationType.REMINDER_J1,
+      NotificationType.DRIVER_REMINDER_J1,
       reservation.id,
     );
   }
@@ -616,7 +656,6 @@ export class NotificationsService {
 
     const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`;
 
-    // Envoyer à tous les admins
     for (const email of adminEmails) {
       await this.sendEmail(
         email,
@@ -656,7 +695,6 @@ export class NotificationsService {
 
     const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`;
 
-    // Envoyer à tous les admins
     for (const email of adminEmails) {
       await this.sendEmail(
         email,
@@ -669,7 +707,7 @@ export class NotificationsService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // DRIVER PROPOSAL SYSTEM — Nouvelles méthodes pour assignation en cascade
+  // DRIVER PROPOSAL SYSTEM
   // ═══════════════════════════════════════════════════════════════════════════════
 
   async sendDriverProposal(proposal: any, reservation: Reservation): Promise<void> {
@@ -686,7 +724,6 @@ export class NotificationsService {
     const body = `
       <p>Bonjour <strong>${proposal.driver.firstName}</strong>,</p>
       <p>Une nouvelle course vous est proposée. Vous avez <strong>10 minutes</strong> pour répondre.</p>
-      
       <table style="width:100%;border-collapse:collapse;margin:16px 0;border:2px solid #16a34a;border-radius:8px;">
         <tr style="background:#f0fdf4;"><td colspan="2" style="padding:12px;font-weight:bold;color:#166534;">📋 Détails de la course</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
@@ -698,15 +735,12 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Distance depuis vous</td><td style="padding:8px;border-bottom:1px solid #eee;">${proposal.distance.toFixed(1)} km</td></tr>
         <tr><td style="padding:8px;color:#666;font-weight:bold;">💰 Montant</td><td style="padding:8px;font-weight:bold;color:#16a34a;font-size:18px;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
       </table>
-      
       ${reservation.notes ? `<p style="background:#fefce8;padding:8px;border-radius:4px;border-left:4px solid #eab308;"><strong>Note client :</strong> ${reservation.notes}</p>` : ''}
-      
       <div style="margin:24px 0;text-align:center;">
         <p style="margin-bottom:16px;font-weight:bold;">Que souhaitez-vous faire ?</p>
         <a href="${acceptUrl}" style="display:inline-block;padding:14px 28px;background:#16a34a;color:white;text-decoration:none;border-radius:8px;font-weight:bold;margin-right:12px;">✅ CONFIRMER la course</a>
         <a href="${declineUrl}" style="display:inline-block;padding:14px 28px;background:#ef4444;color:white;text-decoration:none;border-radius:8px;font-weight:bold;">❌ DÉCLINER</a>
       </div>
-      
       <p style="font-size:12px;color:#888;text-align:center;">
         ⏰ Ce lien expire le ${new Date(proposal.expiresAt).toLocaleString('fr-FR')}<br>
         En confirmant, vous serez immédiatement assigné à cette course.
@@ -762,13 +796,7 @@ export class NotificationsService {
     const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`;
 
     for (const email of adminEmails) {
-      await this.sendEmail(
-        email,
-        `${title} — #${reservation.code}`,
-        html,
-        NotificationType.ADMIN_NEW_RESERVATION,
-        reservation.id,
-      );
+      await this.sendEmail(email, `${title} — #${reservation.code}`, html, NotificationType.ADMIN_NEW_RESERVATION, reservation.id);
     }
   }
 
@@ -795,13 +823,7 @@ export class NotificationsService {
     const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`;
 
     for (const email of adminEmails) {
-      await this.sendEmail(
-        email,
-        `${title} — #${reservation.code}`,
-        html,
-        NotificationType.ADMIN_NEW_RESERVATION,
-        reservation.id,
-      );
+      await this.sendEmail(email, `${title} — #${reservation.code}`, html, NotificationType.ADMIN_NEW_RESERVATION, reservation.id);
     }
   }
 
@@ -815,7 +837,6 @@ export class NotificationsService {
     const body = `
       <p style="color:#dc2626;font-weight:bold;font-size:18px;">🚨 ALERTE IMPAYÉ</p>
       <p>Le chauffeur a signalé un <strong>non-paiement</strong> pour cette course.</p>
-      
       <table style="width:100%;border-collapse:collapse;margin:16px 0;border:3px solid #dc2626;border-radius:8px;">
         <tr style="background:#fef2f2;"><td colspan="2" style="padding:12px;font-weight:bold;color:#991b1b;">📋 Détails de la course</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;font-size:16px;">${reservation.code}</td></tr>
@@ -827,18 +848,12 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure course</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
         <tr><td style="padding:8px;color:#666;font-weight:bold;">💰 Montant dû</td><td style="padding:8px;font-weight:bold;color:#dc2626;font-size:18px;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
       </table>
-      
       <div style="background:#fef2f2;padding:12px;border-radius:8px;border-left:4px solid #dc2626;margin:16px 0;">
         <p style="margin:0;font-weight:bold;color:#991b1b;">⏰ Signalé comme impayé à : ${markedAt.toLocaleString('fr-FR')}</p>
         <p style="margin:8px 0 0 0;font-size:14px;">Par : ${reservation.driver?.firstName} ${reservation.driver?.lastName || 'Chauffeur'}</p>
       </div>
-      
       <p style="background:#fff7ed;padding:12px;border-radius:4px;border-left:4px solid #ea580c;">
         <strong>Action requise :</strong> Contactez immédiatement le client et/ou le chauffeur pour régulariser la situation.
-      </p>
-      
-      <p style="font-size:12px;color:#888;">
-        Cette alerte a été générée automatiquement quand le chauffeur a marqué la course comme impayée dans l'application.
       </p>`;
 
     const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`;
@@ -863,18 +878,14 @@ export class NotificationsService {
       <p style="color:#16a34a;font-weight:bold;">Bonne nouvelle !</p>
       <p>La course <strong>#${reservation.code}</strong> que vous aviez signalée comme impayée a été régularisée.</p>
       <p>Le paiement est maintenant complet et validé par l'administration.</p>
-      
       <table style="width:100%;border-collapse:collapse;margin:16px 0;border:2px solid #16a34a;border-radius:8px;">
         <tr style="background:#f0fdf4;"><td colspan="2" style="padding:12px;font-weight:bold;color:#166534;">📋 Détails de la course</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientPhone}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Téléphone</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientPhone}</td></tr>
         <tr><td style="padding:8px;color:#666;font-weight:bold;">💰 Montant</td><td style="padding:8px;font-weight:bold;color:#16a34a;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
       </table>
-      
-      <p style="font-size:12px;color:#888;">
-        Merci pour votre vigilance. Le dossier est maintenant clos.
-      </p>`;
+      <p style="font-size:12px;color:#888;">Merci pour votre vigilance. Le dossier est maintenant clos.</p>`;
 
     await this.sendEmail(
       reservation.driver.email,
@@ -885,7 +896,7 @@ export class NotificationsService {
     );
   }
 
-  // ─── Méthode privée ──────────────────────────────────────────────────────────
+  // ─── Méthode privée d'envoi ───────────────────────────────────────────────
   private async sendEmail(
     to: string,
     subject: string,
@@ -903,7 +914,6 @@ export class NotificationsService {
     });
 
     try {
-      // 1) Tentative avec Resend (principal)
       await this.resend.emails.send({
         from: this.getFromResend(),
         to,
@@ -917,12 +927,9 @@ export class NotificationsService {
       await this.emailLogRepository.save(log);
       this.logger.log(`Email sent via Resend [${type}] to ${to}`);
     } catch (error) {
-      this.logger.error(
-        `Resend failed [${type}] to ${to} (attempt ${attempt}): ${error?.message}`,
-      );
+      this.logger.error(`Resend failed [${type}] to ${to} (attempt ${attempt}): ${error?.message}`);
 
       try {
-        // 2) Fallback automatique via SMTP Gmail
         await this.sendWithGmail(to, subject, html, attachments);
         log.status = 'ENVOYE';
         log.errorMessage = `Resend failed, sent via Gmail: ${error?.message}`;
@@ -932,9 +939,7 @@ export class NotificationsService {
         log.status = 'ECHEC';
         log.errorMessage = `Resend error: ${error?.message} | Gmail error: ${gmailError?.message}`;
         await this.emailLogRepository.save(log);
-        this.logger.error(
-          `Email failed via Resend & Gmail [${type}] to ${to} (attempt ${attempt}): ${gmailError?.message}`,
-        );
+        this.logger.error(`Email failed via Resend & Gmail [${type}] to ${to} (attempt ${attempt}): ${gmailError?.message}`);
 
         if (attempt < 3) {
           const delay = attempt * 2000;

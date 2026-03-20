@@ -8,7 +8,7 @@ import { useTranslation } from '@/lib/i18n'
 import { updateReservationStatus } from '@/lib/clientStorage'
 import { calculateRoute, formatDuration, formatDistance } from '@/lib/geocoding'
 import dynamic from 'next/dynamic'
- 
+
 const Map = dynamic(() => import('@/components/Map').then(mod => ({ default: mod.Map })), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-gray-100 rounded-xl animate-pulse" />
@@ -38,6 +38,10 @@ function SuiviContent() {
   const [driverLocation, setDriverLocation] = useState<DriverLocation | null>(null)
   const [routeCoordinates, setRouteCoordinates] = useState<Array<[number, number]>>([])
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null)
+
+  // ─── Renvoi du code d'annulation ───────────────────────────────────────────
+  const [resendLoading, setResendLoading] = useState(false)
+  const [resendSent, setResendSent] = useState(false)
 
   const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
     EN_ATTENTE: { label: 'En attente', ...STATUS_COLORS.EN_ATTENTE },
@@ -104,6 +108,7 @@ function SuiviContent() {
     setLoading(true)
     setError('')
     setReservation(null)
+    setResendSent(false)
     try {
       const { data } = await reservationsApi.getByCode(c.trim())
       setReservation(data)
@@ -153,6 +158,22 @@ function SuiviContent() {
       alert(err.response?.data?.message || "Erreur lors de l'annulation")
     } finally {
       setCancelLoading(false)
+    }
+  }
+
+  const handleResendCancelToken = async () => {
+    if (resendLoading || resendSent) return
+    setResendLoading(true)
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1'
+      await fetch(`${apiBase}/reservations/code/${code}/resend-cancel-token`, {
+        method: 'POST',
+      })
+      setResendSent(true)
+    } catch {
+      alert('Impossible d\'envoyer l\'email. Réessayez dans quelques minutes.')
+    } finally {
+      setResendLoading(false)
     }
   }
 
@@ -372,8 +393,9 @@ function SuiviContent() {
               </div>
             )}
 
+            {/* ─── Annulation ──────────────────────────────────────────────── */}
             {reservation.status !== 'ANNULEE' && reservation.status !== 'TERMINEE' && (
-              <div>
+              <div className="space-y-2">
                 {!showCancelForm ? (
                   <button
                     onClick={() => setShowCancelForm(true)}
@@ -401,8 +423,31 @@ function SuiviContent() {
                       />
                       <p className="text-xs text-gray-400 text-center mt-1.5">6 caractères — lettres et chiffres</p>
                     </div>
+
+                    {/* ─── Bouton renvoyer le code ───────────────────────── */}
+                    <div className="text-center">
+                      {resendSent ? (
+                        <p className="text-xs text-emerald-600 font-medium">
+                          ✓ Code envoyé par email à l'adresse de réservation
+                        </p>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleResendCancelToken}
+                          disabled={resendLoading}
+                          className="text-xs text-[var(--muted)] underline hover:text-[var(--ink)] transition-colors disabled:opacity-50"
+                        >
+                          {resendLoading ? 'Envoi…' : 'Code non reçu ? Renvoyer par email'}
+                        </button>
+                      )}
+                    </div>
+
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => { setShowCancelForm(false); setCancelToken('') }} className="flex-1 py-2.5 rounded-xl border border-[var(--border)] text-sm font-semibold text-[var(--ink2)]">
+                      <button
+                        type="button"
+                        onClick={() => { setShowCancelForm(false); setCancelToken(''); setResendSent(false) }}
+                        className="flex-1 py-2.5 rounded-xl border border-[var(--border)] text-sm font-semibold text-[var(--ink2)]"
+                      >
                         {tr.back}
                       </button>
                       <button

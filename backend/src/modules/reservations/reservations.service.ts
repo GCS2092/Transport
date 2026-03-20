@@ -88,16 +88,13 @@ export class ReservationsService {
   }
 
   async create(dto: CreateReservationDto): Promise<Reservation> {
-    // Validation des zones
     if (!dto.pickupZoneId && !dto.pickupCustomAddress) {
       throw new BadRequestException('Pickup zone or custom address is required');
     }
-    
     if (!dto.dropoffZoneId && !dto.dropoffCustomAddress) {
       throw new BadRequestException('Dropoff zone or custom address is required');
     }
 
-    // Calcul du prix fixe selon le type de trajet
     const finalPrice = await this.settingsService.getPriceForTripType(dto.tripType);
     this.logger.log(`Using fixed price for ${dto.tripType}: ${finalPrice} FCFA`);
 
@@ -114,7 +111,6 @@ export class ReservationsService {
     const cancelToken = this.generateCancelToken();
     const cancelTokenExpiresAt = new Date(dto.pickupDateTime);
 
-    // Validation et application du code promo
     let finalAmount = finalPrice;
     let discount = 0;
     let promoCode = null;
@@ -127,7 +123,6 @@ export class ReservationsService {
         finalAmount = finalPrice - discount;
         promoCode = dto.promoCode.toUpperCase();
         originalAmount = finalPrice;
-        // Incrémenter le compteur d'utilisation
         await this.promoCodesService.incrementUsage(promoCode);
       } else {
         throw new BadRequestException(promoResult.message || 'Code promo invalide');
@@ -149,20 +144,20 @@ export class ReservationsService {
 
     const saved = await this.reservationsRepository.save(reservation);
 
+    // ✅ FIX : recharger avec les relations pour que l'email ait accès aux zones et au cancelToken
+    const savedWithRelations = await this.findById(saved.id);
+
     setImmediate(async () => {
       try {
-        await this.notificationsService.sendReservationConfirmed(saved);
-        
-        // Notifier les admins
+        await this.notificationsService.sendReservationConfirmed(savedWithRelations);
         const admins = await this.usersService.findAdmins();
         const adminEmails = admins.map(a => a.email);
-        await this.notificationsService.sendAdminNewReservation(saved, adminEmails);
+        await this.notificationsService.sendAdminNewReservation(savedWithRelations, adminEmails);
       } catch (e) {
-        this.logger.error('Failed to send confirmation email', e?.message);
+        this.logger.error('Failed to send confirmation email', JSON.stringify(e));
       }
     });
 
-    // Assignation automatique si demandée
     if (dto.autoAssign) {
       try {
         this.logger.log(`Auto-assigning driver for reservation ${saved.code}`);
@@ -170,12 +165,11 @@ export class ReservationsService {
         return assigned;
       } catch (err) {
         this.logger.warn(`Auto-assignment failed for ${saved.code}: ${err.message}`);
-        // Retourner la réservation même si l'assignation échoue
-        return saved;
+        return savedWithRelations;
       }
     }
 
-    return saved;
+    return savedWithRelations;
   }
 
   private async checkDailyLimit(email: string): Promise<void> {
@@ -250,22 +244,15 @@ export class ReservationsService {
     }
 
     const driver = await this.driversService.findById(driverId);
-    if (!driver.isActive) {
-      throw new BadRequestException('Driver is inactive');
-    }
+    if (!driver.isActive) throw new BadRequestException('Driver is inactive');
     if (driver.status !== DriverStatus.DISPONIBLE) {
-      throw new BadRequestException(
-        `Driver is not available (current status: ${driver.status})`,
-      );
+      throw new BadRequestException(`Driver is not available (current status: ${driver.status})`);
     }
-    await this.reservationsRepository.update(id, {
-      driverId,
-      status: ReservationStatus.ASSIGNEE,
-    });
+
+    await this.reservationsRepository.update(id, { driverId, status: ReservationStatus.ASSIGNEE });
     await this.driversService.updateStatus(driverId, DriverStatus.EN_COURSE);
     const updated = await this.findById(id);
 
-    // Audit log
     await this.auditService.log({
       userId: null,
       action: 'ASSIGN_DRIVER',
@@ -280,73 +267,52 @@ export class ReservationsService {
       try {
         await this.notificationsService.sendDriverAssigned(updated);
         await this.notificationsService.sendDriverNewRide(updated);
-        
-        // Notifier les admins
         const admins = await this.usersService.findAdmins();
         const adminEmails = admins.map(a => a.email);
         await this.notificationsService.sendAdminDriverAssigned(updated, adminEmails);
       } catch (e) {
-        this.logger.error('Failed to send driver assigned emails', e?.message);
+        this.logger.error('Failed to send driver assigned emails', JSON.stringify(e));
       }
     });
 
     return updated;
   }
 
-  // Assignation automatique du chauffeur le plus proche
   async autoAssignDriver(reservationId: string): Promise<Reservation> {
     const reservation = await this.findById(reservationId);
-
     if (reservation.status !== ReservationStatus.EN_ATTENTE) {
       throw new BadRequestException('Only pending reservations can be auto-assigned');
     }
 
     const availableDrivers = await this.driversService.findAvailable();
+    if (availableDrivers.length === 0) throw new BadRequestException('No available drivers');
 
-    if (availableDrivers.length === 0) {
-      throw new BadRequestException('No available drivers');
-    }
-
-    // Priorité: GPS précis du client > coordonnées du pickup custom > centre de la zone
-    const pickupLat = Number(reservation.clientLatitude)
-      || Number(reservation.pickupLatitude)
-      || Number(reservation.pickupZone?.latitude);
-    const pickupLng = Number(reservation.clientLongitude)
-      || Number(reservation.pickupLongitude)
-      || Number(reservation.pickupZone?.longitude);
+    const pickupLat = Number(reservation.clientLatitude) || Number(reservation.pickupLatitude) || Number(reservation.pickupZone?.latitude);
+    const pickupLng = Number(reservation.clientLongitude) || Number(reservation.pickupLongitude) || Number(reservation.pickupZone?.longitude);
 
     if (!pickupLat || !pickupLng) {
       this.logger.warn(`No GPS coordinates for reservation ${reservation.code}, assigning first available driver`);
       return this.assignDriver(reservationId, availableDrivers[0].id);
     }
 
-    // Pour chaque chauffeur: GPS temps réel, sinon dropoff de sa dernière course terminée
     const driversWithDistance = await Promise.all(
       availableDrivers.map(async (driver) => {
         try {
-          // 1. Position GPS temps réel (< 30 min)
           const location = await this.driverLocationRepository.findOne({
             where: { driverId: driver.id },
             order: { updatedAt: 'DESC' },
           });
-
           if (location) {
             const ageMs = Date.now() - new Date(location.updatedAt).getTime();
-            if (ageMs < 30 * 60 * 1000) { // GPS récent (< 30 min)
-              const distance = this.calculateDistance(
-                pickupLat, pickupLng,
-                Number(location.latitude), Number(location.longitude),
-              );
+            if (ageMs < 30 * 60 * 1000) {
+              const distance = this.calculateDistance(pickupLat, pickupLng, Number(location.latitude), Number(location.longitude));
               return { driver, distance, source: 'gps' };
             }
           }
-
-          // 2. Fallback: dropoff de la dernière course terminée
           const lastRide = await this.reservationsRepository.findOne({
             where: { driverId: driver.id, status: ReservationStatus.TERMINEE },
             order: { completedAt: 'DESC' },
           });
-
           if (lastRide) {
             const dropLat = Number(lastRide.dropoffLatitude) || Number(lastRide.dropoffZone?.latitude);
             const dropLng = Number(lastRide.dropoffLongitude) || Number(lastRide.dropoffZone?.longitude);
@@ -355,7 +321,6 @@ export class ReservationsService {
               return { driver, distance, source: 'last_ride' };
             }
           }
-
           return { driver, distance: Infinity, source: 'none' };
         } catch {
           return { driver, distance: Infinity, source: 'none' };
@@ -371,29 +336,18 @@ export class ReservationsService {
       return this.assignDriver(reservationId, availableDrivers[0].id);
     }
 
-    this.logger.log(
-      `Auto-assigning driver ${closest.driver.firstName} ${closest.driver.lastName} ` +
-      `(${closest.distance.toFixed(2)} km, source: ${closest.source}) to reservation ${reservation.code}`,
-    );
-
+    this.logger.log(`Auto-assigning driver ${closest.driver.firstName} ${closest.driver.lastName} (${closest.distance.toFixed(2)} km, source: ${closest.source}) to reservation ${reservation.code}`);
     return this.assignDriver(reservationId, closest.driver.id);
   }
 
-  // Formule de Haversine pour calculer la distance entre deux points GPS
   private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-    const R = 6371; // Rayon de la Terre en km
+    const R = 6371;
     const dLat = this.toRad(lat2 - lat1);
     const dLng = this.toRad(lng2 - lng1);
-
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.toRad(lat1)) *
-        Math.cos(this.toRad(lat2)) *
-        Math.sin(dLng / 2) *
-        Math.sin(dLng / 2);
-
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
   private toRad(deg: number): number {
@@ -411,17 +365,11 @@ export class ReservationsService {
     if (dto.status) updates.status = dto.status;
     if (dto.paymentStatus) updates.paymentStatus = dto.paymentStatus;
     if (dto.driverId) updates.driverId = dto.driverId;
-
-    if (dto.status === ReservationStatus.EN_COURS) {
-      updates.startedAt = new Date();
-    }
-    if (dto.status === ReservationStatus.TERMINEE) {
-      updates.completedAt = new Date();
-    }
+    if (dto.status === ReservationStatus.EN_COURS) updates.startedAt = new Date();
+    if (dto.status === ReservationStatus.TERMINEE) updates.completedAt = new Date();
 
     await this.reservationsRepository.update(id, updates);
 
-    // Audit log
     await this.auditService.log({
       userId: null,
       action: 'UPDATE_STATUS',
@@ -432,15 +380,12 @@ export class ReservationsService {
       description: `Reservation ${reservation.code} status updated`,
     });
 
-    if (
-      (dto.status === ReservationStatus.TERMINEE || dto.status === ReservationStatus.ANNULEE) &&
-      reservation.driverId
-    ) {
+    if ((dto.status === ReservationStatus.TERMINEE || dto.status === ReservationStatus.ANNULEE) && reservation.driverId) {
       await this.driversService.updateStatus(reservation.driverId, DriverStatus.DISPONIBLE);
     }
+
     const updated = await this.findById(id);
 
-    // Envoyer des emails selon le changement de statut
     setImmediate(async () => {
       try {
         if (dto.status === ReservationStatus.EN_COURS) {
@@ -450,17 +395,14 @@ export class ReservationsService {
           await this.notificationsService.sendRideCompleted(updated, pdfBuffer);
         }
       } catch (e) {
-        this.logger.error('Failed to send status change email', e?.message);
+        this.logger.error('Failed to send status change email', JSON.stringify(e));
       }
     });
 
-    // Détecter quand paymentStatus passe à IMPAYE et notifier les admins
     if (dto.paymentStatus === PaymentStatus.IMPAYE && reservation.paymentStatus !== PaymentStatus.IMPAYE) {
       setImmediate(async () => {
-        try {
-          await this.notifyAdminUnpaidRide(updated);
-        } catch (e) {
-          this.logger.error('Failed to send unpaid ride notification', e?.message);
+        try { await this.notifyAdminUnpaidRide(updated); } catch (e) {
+          this.logger.error('Failed to send unpaid ride notification', JSON.stringify(e));
         }
       });
     }
@@ -471,7 +413,7 @@ export class ReservationsService {
           await this.notificationsService.sendReservationCancelled(updated);
           await this.notificationsService.sendDriverCancelled(updated);
         } catch (e) {
-          this.logger.error('Failed to send cancellation email', e?.message);
+          this.logger.error('Failed to send cancellation email', JSON.stringify(e));
         }
       });
     }
@@ -482,18 +424,13 @@ export class ReservationsService {
   async updateByClient(code: string, token: string, updates: any): Promise<Reservation> {
     const reservation = await this.findByCode(code);
 
-    if (reservation.cancelToken !== token) {
-      throw new ForbiddenException('Invalid token');
-    }
-    if (reservation.cancelTokenExpiresAt < new Date()) {
-      throw new BadRequestException('Token has expired');
-    }
+    if (reservation.cancelToken !== token) throw new ForbiddenException('Invalid token');
+    if (reservation.cancelTokenExpiresAt < new Date()) throw new BadRequestException('Token has expired');
     if (reservation.status !== ReservationStatus.EN_ATTENTE) {
       throw new BadRequestException('Can only modify reservations that are pending');
     }
 
     const updateData: any = {};
-    
     if (updates.pickupZoneId) updateData.pickupZoneId = updates.pickupZoneId;
     if (updates.dropoffZoneId) updateData.dropoffZoneId = updates.dropoffZoneId;
     if (updates.pickupDateTime) updateData.pickupDateTime = updates.pickupDateTime;
@@ -502,7 +439,6 @@ export class ReservationsService {
     if (updates.passengers) updateData.passengers = updates.passengers;
     if (updates.notes !== undefined) updateData.notes = updates.notes;
 
-    // Recalculer le prix selon le type de trajet (prix fixe)
     if (updates.tripType || updates.pickupZoneId || updates.dropoffZoneId) {
       const tripType = updates.tripType || reservation.tripType;
       updateData.amount = await this.settingsService.getPriceForTripType(tripType);
@@ -512,29 +448,53 @@ export class ReservationsService {
     return this.findById(reservation.id);
   }
 
+  // ─── Renvoi du code d'annulation par email ────────────────────────────────
+  async resendCancelToken(code: string): Promise<{ message: string }> {
+    const reservation = await this.findByCode(code);
+
+    if (reservation.status === ReservationStatus.ANNULEE) {
+      throw new BadRequestException('Cette réservation est déjà annulée');
+    }
+    if (reservation.status === ReservationStatus.TERMINEE) {
+      throw new BadRequestException('Cette réservation est déjà terminée');
+    }
+
+    if (!reservation.cancelToken) {
+      // Ancienne réservation sans token : en générer un nouveau
+      const newToken = this.generateCancelToken();
+      const newExpiry = new Date(reservation.pickupDateTime);
+      await this.reservationsRepository.update(reservation.id, {
+        cancelToken: newToken,
+        cancelTokenExpiresAt: newExpiry,
+      });
+      const updated = await this.findById(reservation.id);
+      await this.notificationsService.sendCancelTokenReminder(updated);
+    } else {
+      // Token existe déjà, juste le renvoyer
+      await this.notificationsService.sendCancelTokenReminder(reservation);
+    }
+
+    // Le token n'est JAMAIS retourné dans la réponse HTTP
+    return { message: "Code d'annulation envoyé par email" };
+  }
+
   async cancelByToken(code: string, token: string): Promise<Reservation> {
     const reservation = await this.findByCode(code);
 
-    if (reservation.cancelToken !== token) {
-      throw new ForbiddenException('Invalid cancellation token');
-    }
-    if (reservation.cancelTokenExpiresAt < new Date()) {
-      throw new BadRequestException('Cancellation token has expired');
-    }
-    if (reservation.status === ReservationStatus.ANNULEE) {
-      throw new BadRequestException('Reservation is already cancelled');
-    }
-    if (reservation.status === ReservationStatus.TERMINEE) {
-      throw new BadRequestException('Cannot cancel a completed reservation');
-    }
+    if (reservation.cancelToken !== token) throw new ForbiddenException('Invalid cancellation token');
+    if (reservation.cancelTokenExpiresAt < new Date()) throw new BadRequestException('Cancellation token has expired');
+    if (reservation.status === ReservationStatus.ANNULEE) throw new BadRequestException('Reservation is already cancelled');
+    if (reservation.status === ReservationStatus.TERMINEE) throw new BadRequestException('Cannot cancel a completed reservation');
 
     await this.reservationsRepository.update(reservation.id, {
       status: ReservationStatus.ANNULEE,
       cancelToken: null,
     });
+
     if (reservation.driverId) {
       await this.driversService.updateStatus(reservation.driverId, DriverStatus.DISPONIBLE);
     }
+
     const updated = await this.findById(reservation.id);
 
     setImmediate(async () => {
@@ -542,7 +502,7 @@ export class ReservationsService {
         await this.notificationsService.sendReservationCancelled(updated);
         await this.notificationsService.sendDriverCancelled(updated);
       } catch (e) {
-        this.logger.error('Failed to send cancellation email', e?.message);
+        this.logger.error('Failed to send cancellation email', JSON.stringify(e));
       }
     });
 
@@ -551,12 +511,10 @@ export class ReservationsService {
 
   async cancelByAdmin(id: string): Promise<Reservation> {
     const reservation = await this.findById(id);
-    if (reservation.status === ReservationStatus.ANNULEE) {
-      throw new BadRequestException('Already cancelled');
-    }
+    if (reservation.status === ReservationStatus.ANNULEE) throw new BadRequestException('Already cancelled');
+
     await this.reservationsRepository.update(id, { status: ReservationStatus.ANNULEE });
-    
-    // Audit log
+
     await this.auditService.log({
       userId: null,
       action: 'CANCEL',
@@ -566,10 +524,11 @@ export class ReservationsService {
       newData: { status: ReservationStatus.ANNULEE },
       description: `Reservation ${reservation.code} cancelled by admin`,
     });
-    
+
     if (reservation.driverId) {
       await this.driversService.updateStatus(reservation.driverId, DriverStatus.DISPONIBLE);
     }
+
     const updated = await this.findById(id);
 
     setImmediate(async () => {
@@ -577,7 +536,7 @@ export class ReservationsService {
         await this.notificationsService.sendReservationCancelled(updated);
         await this.notificationsService.sendDriverCancelled(updated);
       } catch (e) {
-        this.logger.error('Failed to send cancellation email', e?.message);
+        this.logger.error('Failed to send cancellation email', JSON.stringify(e));
       }
     });
 
@@ -599,16 +558,14 @@ export class ReservationsService {
       .leftJoinAndSelect('r.dropoffZone', 'dropoffZone')
       .where('r.pickupDateTime >= :start', { start: dayStart })
       .andWhere('r.pickupDateTime <= :end', { end: dayEnd })
-      .andWhere('r.status IN (:...statuses)', {
-        statuses: [ReservationStatus.EN_ATTENTE, ReservationStatus.ASSIGNEE],
-      })
+      .andWhere('r.status IN (:...statuses)', { statuses: [ReservationStatus.EN_ATTENTE, ReservationStatus.ASSIGNEE] })
       .getMany();
   }
 
   async findUpcomingForH1Reminder(): Promise<Reservation[]> {
     const now = new Date();
-    const start = new Date(now.getTime() + 60 * 60 * 1000); // +1h
-    const end = new Date(start.getTime() + 60 * 1000); // fenêtre 1 minute
+    const start = new Date(now.getTime() + 60 * 60 * 1000);
+    const end = new Date(start.getTime() + 60 * 1000);
 
     return this.reservationsRepository
       .createQueryBuilder('r')
@@ -617,9 +574,7 @@ export class ReservationsService {
       .leftJoinAndSelect('r.dropoffZone', 'dropoffZone')
       .where('r.pickupDateTime >= :start', { start })
       .andWhere('r.pickupDateTime < :end', { end })
-      .andWhere('r.status IN (:...statuses)', {
-        statuses: [ReservationStatus.EN_ATTENTE, ReservationStatus.ASSIGNEE],
-      })
+      .andWhere('r.status IN (:...statuses)', { statuses: [ReservationStatus.EN_ATTENTE, ReservationStatus.ASSIGNEE] })
       .getMany();
   }
 
@@ -637,53 +592,18 @@ export class ReservationsService {
     if (filters.dateTo) qb.andWhere('r.pickupDateTime <= :dateTo', { dateTo: new Date(filters.dateTo) });
 
     const reservations = await qb.getMany();
-
-    const headers = [
-      'Code',
-      'Date création',
-      'Date pickup',
-      'Statut',
-      'Client nom',
-      'Client email',
-      'Client téléphone',
-      'Zone départ',
-      'Zone arrivée',
-      'Montant',
-      'Passagers',
-      'Chauffeur',
-      'Type véhicule',
-      'Paiement',
-      'Notes',
-    ];
-
+    const headers = ['Code', 'Date création', 'Date pickup', 'Statut', 'Client nom', 'Client email', 'Client téléphone', 'Zone départ', 'Zone arrivée', 'Montant', 'Passagers', 'Chauffeur', 'Type véhicule', 'Paiement', 'Notes'];
     const rows = reservations.map(r => [
-      r.code,
-      new Date(r.createdAt).toLocaleString('fr-FR'),
-      new Date(r.pickupDateTime).toLocaleString('fr-FR'),
-      r.status,
-      `${r.clientFirstName} ${r.clientLastName}`,
-      r.clientEmail,
-      r.clientPhone,
-      r.pickupZone?.name || '',
-      r.dropoffZone?.name || '',
-      r.amount.toString(),
-      r.passengers.toString(),
-      r.driver ? `${r.driver.firstName} ${r.driver.lastName}` : '',
-      r.driver?.vehicleType || '',
-      r.paymentStatus,
-      r.notes || '',
+      r.code, new Date(r.createdAt).toLocaleString('fr-FR'), new Date(r.pickupDateTime).toLocaleString('fr-FR'),
+      r.status, `${r.clientFirstName} ${r.clientLastName}`, r.clientEmail, r.clientPhone,
+      r.pickupZone?.name || '', r.dropoffZone?.name || '', r.amount.toString(), r.passengers.toString(),
+      r.driver ? `${r.driver.firstName} ${r.driver.lastName}` : '', r.driver?.vehicleType || '',
+      r.paymentStatus, r.notes || '',
     ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
-    ].join('\n');
-
-    return csvContent;
+    return [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
   }
 
   async archiveCompleted(olderThanDays: number): Promise<{ archived: number }> {
-    // Legacy endpoint: on archive + anonymise + export excel + purge
     const { archived } = await this.archiveToExcelAndPurge({
       olderThanDays,
       statuses: [ReservationStatus.TERMINEE, ReservationStatus.ANNULEE],
@@ -698,131 +618,87 @@ export class ReservationsService {
     return createHash('sha256').update(`${salt}:${email.trim().toLowerCase()}`).digest('hex');
   }
 
-  async archiveToExcelAndPurge(opts: {
-    olderThanDays: number;
-    statuses: ReservationStatus[];
-    reason: 'manual' | 'auto';
-  }): Promise<{ archived: number }> {
+  async archiveToExcelAndPurge(opts: { olderThanDays: number; statuses: ReservationStatus[]; reason: 'manual' | 'auto' }): Promise<{ archived: number }> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - opts.olderThanDays);
 
     const rows = await this.reservationsRepository.find({
-      where: {
-        status: In(opts.statuses),
-        createdAt: LessThan(cutoffDate),
-      } as any,
+      where: { status: In(opts.statuses), createdAt: LessThan(cutoffDate) } as any,
       relations: ['pickupZone', 'dropoffZone', 'driver'],
       order: { createdAt: 'ASC' },
     });
 
     if (!rows.length) return { archived: 0 };
 
-    // 1) Générer XLSX
     const wb = new ExcelJS.Workbook();
     wb.creator = "WEND'D Transport";
     wb.created = new Date();
     const ws = wb.addWorksheet('Archives');
     ws.columns = [
-      { header: 'Code', key: 'code', width: 14 },
-      { header: 'Statut', key: 'status', width: 12 },
-      { header: 'Type', key: 'tripType', width: 14 },
-      { header: 'Langue', key: 'language', width: 8 },
-      { header: 'Départ', key: 'pickup', width: 22 },
-      { header: 'Arrivée', key: 'dropoff', width: 22 },
-      { header: 'Pickup', key: 'pickupDateTime', width: 20 },
-      { header: 'Montant', key: 'amount', width: 12 },
-      { header: 'ChauffeurId', key: 'driverId', width: 38 },
-      { header: 'ClientHash', key: 'clientHash', width: 66 },
+      { header: 'Code', key: 'code', width: 14 }, { header: 'Statut', key: 'status', width: 12 },
+      { header: 'Type', key: 'tripType', width: 14 }, { header: 'Langue', key: 'language', width: 8 },
+      { header: 'Départ', key: 'pickup', width: 22 }, { header: 'Arrivée', key: 'dropoff', width: 22 },
+      { header: 'Pickup', key: 'pickupDateTime', width: 20 }, { header: 'Montant', key: 'amount', width: 12 },
+      { header: 'ChauffeurId', key: 'driverId', width: 38 }, { header: 'ClientHash', key: 'clientHash', width: 66 },
       { header: 'Archivé le', key: 'archivedAt', width: 20 },
     ];
 
     const archivedAt = new Date();
     for (const r of rows) {
       ws.addRow({
-        code: r.code,
-        status: r.status,
-        tripType: r.tripType,
-        language: r.language,
+        code: r.code, status: r.status, tripType: r.tripType, language: r.language,
         pickup: r.pickupCustomAddress || r.pickupZone?.name || '',
         dropoff: r.dropoffCustomAddress || r.dropoffZone?.name || '',
         pickupDateTime: new Date(r.pickupDateTime).toISOString(),
-        amount: Number(r.amount),
-        driverId: r.driverId || '',
-        clientHash: this.hashClient(r.clientEmail) || '',
-        archivedAt: archivedAt.toISOString(),
+        amount: Number(r.amount), driverId: r.driverId || '',
+        clientHash: this.hashClient(r.clientEmail) || '', archivedAt: archivedAt.toISOString(),
       });
     }
 
     ws.getRow(1).font = { bold: true };
-    ws.autoFilter = {
-      from: { row: 1, column: 1 },
-      to: { row: 1, column: ws.columns.length },
-    };
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } };
 
     const xlsxBuffer = Buffer.from(await wb.xlsx.writeBuffer());
     const filename = `archives-${opts.reason}-${new Date().toISOString().slice(0, 10)}.xlsx`;
 
-    // 2) Sauver en table archive (sans PII)
     const archiveEntities = rows.map(r =>
       this.reservationArchiveRepository.create({
-        code: r.code,
-        status: r.status,
-        tripType: r.tripType,
-        language: r.language,
-        pickupDateTime: r.pickupDateTime,
-        completedAt: r.completedAt,
-        amount: r.amount,
-        driverId: r.driverId,
-        pickupLabel: r.pickupCustomAddress || r.pickupZone?.name || null,
+        code: r.code, status: r.status, tripType: r.tripType, language: r.language,
+        pickupDateTime: r.pickupDateTime, completedAt: r.completedAt, amount: r.amount,
+        driverId: r.driverId, pickupLabel: r.pickupCustomAddress || r.pickupZone?.name || null,
         dropoffLabel: r.dropoffCustomAddress || r.dropoffZone?.name || null,
         clientHash: this.hashClient(r.clientEmail),
       }),
     );
     await this.reservationArchiveRepository.save(archiveEntities);
 
-    // 3) Envoyer à l'admin par email (et push)
     const admins = await this.usersService.findAdmins();
     const adminEmails = admins.map(a => a.email).filter(Boolean);
     await this.notificationsService.sendAdminArchiveReport(
       adminEmails,
       `Archivage ${opts.reason} — ${rows.length} réservations`,
-      `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">
-        <h2>Archivage terminé</h2>
-        <p><strong>${rows.length}</strong> réservations ont été archivées et supprimées du dashboard.</p>
-        <p>Pièce jointe : <strong>${filename}</strong></p>
-      </body></html>`,
-      filename,
-      xlsxBuffer,
+      `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;"><h2>Archivage terminé</h2><p><strong>${rows.length}</strong> réservations ont été archivées et supprimées du dashboard.</p><p>Pièce jointe : <strong>${filename}</strong></p></body></html>`,
+      filename, xlsxBuffer,
     );
 
-    // 4) Purger la table principale (vider le dashboard)
     await this.reservationsRepository.delete(rows.map(r => r.id));
-
     return { archived: rows.length };
   }
 
   async updateReservation(id: string, updates: Partial<CreateReservationDto>): Promise<Reservation> {
     const reservation = await this.findById(id);
-    
     const updateData: any = { ...updates };
-    
+
     if (updates.pickupZoneId && updates.dropoffZoneId) {
       const tariff = await this.tariffsService.findByZones(updates.pickupZoneId, updates.dropoffZoneId);
-      if (tariff) {
-        updateData.amount = tariff.price;
-      }
+      if (tariff) updateData.amount = tariff.price;
     }
 
     await this.reservationsRepository.update(id, updateData);
-    
-    // Audit log
+
     await this.auditService.log({
-      userId: null,
-      action: 'UPDATE',
-      entityType: 'Reservation',
-      entityId: id,
-      oldData: reservation,
-      newData: updateData,
+      userId: null, action: 'UPDATE', entityType: 'Reservation', entityId: id,
+      oldData: reservation, newData: updateData,
       description: `Reservation ${reservation.code} updated by admin`,
     });
 
@@ -830,12 +706,9 @@ export class ReservationsService {
 
     setImmediate(async () => {
       try {
-        // Notifier le chauffeur si la course est déjà assignée
-        if (updated.driverId) {
-          await this.notificationsService.sendDriverRideModified(updated);
-        }
+        if (updated.driverId) await this.notificationsService.sendDriverRideModified(updated);
       } catch (e) {
-        this.logger.error('Failed to send ride modified notification', e?.message);
+        this.logger.error('Failed to send ride modified notification', JSON.stringify(e));
       }
     });
 
@@ -846,67 +719,36 @@ export class ReservationsService {
   // PAYMENT SUPERVISION SYSTEM
   // ═══════════════════════════════════════════════════════════════════════════════
 
-  /**
-   * Chauffeur : changer le statut de paiement de sa course terminée
-   * Statuts autorisés : IMPAYE, PAIEMENT_COMPLET, ACOMPTE_VERSE
-   */
-  async updatePaymentStatusByDriver(
-    reservationId: string,
-    paymentStatus: PaymentStatus,
-    userId: string,
-  ): Promise<Reservation> {
-    // Vérifier que le statut demandé est autorisé
+  async updatePaymentStatusByDriver(reservationId: string, paymentStatus: PaymentStatus, userId: string): Promise<Reservation> {
     const allowedStatuses = [PaymentStatus.IMPAYE, PaymentStatus.PAIEMENT_COMPLET, PaymentStatus.ACOMPTE_VERSE];
     if (!allowedStatuses.includes(paymentStatus)) {
       throw new BadRequestException(`Statut de paiement non autorisé. Valeurs possibles: ${allowedStatuses.join(', ')}`);
     }
 
-    // Récupérer la réservation avec le chauffeur
-    const reservation = await this.reservationsRepository.findOne({
-      where: { id: reservationId },
-      relations: ['driver', 'pickupZone', 'dropoffZone'],
-    });
-
-    if (!reservation) {
-      throw new NotFoundException('Réservation non trouvée');
-    }
-
-    // Vérifier que la course est terminée
+    const reservation = await this.reservationsRepository.findOne({ where: { id: reservationId }, relations: ['driver', 'pickupZone', 'dropoffZone'] });
+    if (!reservation) throw new NotFoundException('Réservation non trouvée');
     if (reservation.status !== ReservationStatus.TERMINEE) {
       throw new BadRequestException('Le statut de paiement ne peut être modifié que pour les courses terminées');
     }
 
-    // Vérifier que le chauffeur qui fait la demande est bien celui assigné
     const driver = await this.driversService.findByUserId(userId);
-    if (!driver || reservation.driverId !== driver.id) {
-      throw new ForbiddenException('Vous n\'êtes pas assigné à cette course');
-    }
+    if (!driver || reservation.driverId !== driver.id) throw new ForbiddenException("Vous n'êtes pas assigné à cette course");
 
     const oldPaymentStatus = reservation.paymentStatus;
-
-    // Mettre à jour le statut
     await this.reservationsRepository.update(reservationId, { paymentStatus });
 
-    // Audit log
     await this.auditService.log({
-      userId: driver.userId,
-      action: 'UPDATE_PAYMENT_STATUS',
-      entityType: 'Reservation',
-      entityId: reservationId,
-      oldData: { paymentStatus: oldPaymentStatus },
-      newData: { paymentStatus },
+      userId: driver.userId, action: 'UPDATE_PAYMENT_STATUS', entityType: 'Reservation', entityId: reservationId,
+      oldData: { paymentStatus: oldPaymentStatus }, newData: { paymentStatus },
       description: `Chauffeur ${driver.firstName} ${driver.lastName} a changé le statut de paiement de ${oldPaymentStatus} à ${paymentStatus} pour la course ${reservation.code}`,
     });
 
     const updated = await this.findById(reservationId);
 
-    // Si IMPAYE, notifier les admins (déjà géré dans updateStatus via le hook, mais on double ici pour être sûr)
     if (paymentStatus === PaymentStatus.IMPAYE && oldPaymentStatus !== PaymentStatus.IMPAYE) {
       setImmediate(async () => {
-        try {
-          await this.notifyAdminUnpaidRide(updated);
-        } catch (e) {
-          this.logger.error('Failed to send unpaid ride notification', e?.message);
+        try { await this.notifyAdminUnpaidRide(updated); } catch (e) {
+          this.logger.error('Failed to send unpaid ride notification', JSON.stringify(e));
         }
       });
     }
@@ -914,9 +756,6 @@ export class ReservationsService {
     return updated;
   }
 
-  /**
-   * Admin : supervision des paiements - liste avec filtres
-   */
   async getPaymentSupervision(filters: PaymentSupervisionFilters): Promise<{ reservations: Reservation[]; total: number; page: number; limit: number }> {
     const page = filters.page || 1;
     const limit = filters.limit || 50;
@@ -929,85 +768,41 @@ export class ReservationsService {
       .leftJoinAndSelect('r.dropoffZone', 'dropoffZone')
       .orderBy('r.pickupDateTime', 'DESC');
 
-    // Filtre par statut de paiement
-    if (filters.paymentStatus) {
-      qb.andWhere('r.paymentStatus = :paymentStatus', { paymentStatus: filters.paymentStatus });
-    }
-
-    // Filtre par date
-    if (filters.dateFrom) {
-      qb.andWhere('r.pickupDateTime >= :dateFrom', { dateFrom: new Date(filters.dateFrom) });
-    }
-    if (filters.dateTo) {
-      qb.andWhere('r.pickupDateTime <= :dateTo', { dateTo: new Date(filters.dateTo) });
-    }
+    if (filters.paymentStatus) qb.andWhere('r.paymentStatus = :paymentStatus', { paymentStatus: filters.paymentStatus });
+    if (filters.dateFrom) qb.andWhere('r.pickupDateTime >= :dateFrom', { dateFrom: new Date(filters.dateFrom) });
+    if (filters.dateTo) qb.andWhere('r.pickupDateTime <= :dateTo', { dateTo: new Date(filters.dateTo) });
 
     const [reservations, total] = await qb.skip(skip).take(limit).getManyAndCount();
-
-    return {
-      reservations,
-      total,
-      page,
-      limit,
-    };
+    return { reservations, total, page, limit };
   }
 
-  /**
-   * Admin : changer le statut de paiement d'une course
-   * Avec audit log et notification au chauffeur si passage IMPAYE -> PAIEMENT_COMPLET
-   */
-  async updatePaymentStatusByAdmin(
-    reservationId: string,
-    paymentStatus: PaymentStatus,
-    admin: { id: string; email: string },
-  ): Promise<Reservation> {
-    const reservation = await this.reservationsRepository.findOne({
-      where: { id: reservationId },
-      relations: ['driver', 'pickupZone', 'dropoffZone'],
-    });
-
-    if (!reservation) {
-      throw new NotFoundException('Réservation non trouvée');
-    }
+  async updatePaymentStatusByAdmin(reservationId: string, paymentStatus: PaymentStatus, admin: { id: string; email: string }): Promise<Reservation> {
+    const reservation = await this.reservationsRepository.findOne({ where: { id: reservationId }, relations: ['driver', 'pickupZone', 'dropoffZone'] });
+    if (!reservation) throw new NotFoundException('Réservation non trouvée');
 
     const oldPaymentStatus = reservation.paymentStatus;
-
-    // Mettre à jour le statut
     await this.reservationsRepository.update(reservationId, { paymentStatus });
 
-    // Audit log détaillé
     await this.auditService.log({
-      userId: admin.id,
-      action: 'ADMIN_UPDATE_PAYMENT_STATUS',
-      entityType: 'Reservation',
-      entityId: reservationId,
-      oldData: { paymentStatus: oldPaymentStatus },
-      newData: { paymentStatus },
+      userId: admin.id, action: 'ADMIN_UPDATE_PAYMENT_STATUS', entityType: 'Reservation', entityId: reservationId,
+      oldData: { paymentStatus: oldPaymentStatus }, newData: { paymentStatus },
       description: `Admin ${admin.email} a changé le statut de paiement de ${oldPaymentStatus} à ${paymentStatus} pour la course ${reservation.code}`,
     });
 
     const updated = await this.findById(reservationId);
 
-    // Si admin marque comme PAIEMENT_COMPLET alors qu'elle était IMPAYE, notifier le chauffeur
-    if (paymentStatus === PaymentStatus.PAIEMENT_COMPLET && oldPaymentStatus === PaymentStatus.IMPAYE) {
-      if (updated.driver?.email) {
-        setImmediate(async () => {
-          try {
-            await this.notificationsService.sendDriverPaymentRegularized(updated);
-          } catch (e) {
-            this.logger.error('Failed to send payment regularized notification', e?.message);
-          }
-        });
-      }
+    if (paymentStatus === PaymentStatus.PAIEMENT_COMPLET && oldPaymentStatus === PaymentStatus.IMPAYE && updated.driver?.email) {
+      setImmediate(async () => {
+        try { await this.notificationsService.sendDriverPaymentRegularized(updated); } catch (e) {
+          this.logger.error('Failed to send payment regularized notification', JSON.stringify(e));
+        }
+      });
     }
 
-    // Si admin marque comme IMPAYE, notifier les admins
     if (paymentStatus === PaymentStatus.IMPAYE && oldPaymentStatus !== PaymentStatus.IMPAYE) {
       setImmediate(async () => {
-        try {
-          await this.notifyAdminUnpaidRide(updated);
-        } catch (e) {
-          this.logger.error('Failed to send unpaid ride notification', e?.message);
+        try { await this.notifyAdminUnpaidRide(updated); } catch (e) {
+          this.logger.error('Failed to send unpaid ride notification', JSON.stringify(e));
         }
       });
     }
@@ -1019,10 +814,6 @@ export class ReservationsService {
   // CASCADE AUTO-ASSIGNMENT SYSTEM
   // ═══════════════════════════════════════════════════════════════════════════════
 
-  /**
-   * Crée des propositions pour tous les chauffeurs disponibles, ordonnés par distance
-   * Envoie immédiatement au premier, les autres attendent en file
-   */
   async createDriverProposals(reservationId: string): Promise<DriverProposal[]> {
     const reservation = await this.findById(reservationId);
 
@@ -1030,59 +821,33 @@ export class ReservationsService {
       throw new BadRequestException('Only pending reservations can have proposals created');
     }
 
-    // Vérifier si des propositions existent déjà pour cette réservation
-    const existingProposals = await this.driverProposalRepository.find({
-      where: { reservationId },
-    });
-
+    const existingProposals = await this.driverProposalRepository.find({ where: { reservationId } });
     if (existingProposals.length > 0) {
       this.logger.warn(`Proposals already exist for reservation ${reservation.code}`);
       return existingProposals;
     }
 
     const availableDrivers = await this.driversService.findAvailable();
-
     if (availableDrivers.length === 0) {
-      // Aucun chauffeur disponible - alerter l'admin
       await this.notifyAdminNoDriversAvailable(reservation);
       throw new BadRequestException('No available drivers');
     }
 
-    // Calculer la position de pickup
-    const pickupLat = Number(reservation.clientLatitude)
-      || Number(reservation.pickupLatitude)
-      || Number(reservation.pickupZone?.latitude);
-    const pickupLng = Number(reservation.clientLongitude)
-      || Number(reservation.pickupLongitude)
-      || Number(reservation.pickupZone?.longitude);
+    const pickupLat = Number(reservation.clientLatitude) || Number(reservation.pickupLatitude) || Number(reservation.pickupZone?.latitude);
+    const pickupLng = Number(reservation.clientLongitude) || Number(reservation.pickupLongitude) || Number(reservation.pickupZone?.longitude);
 
-    // Calculer les distances pour chaque chauffeur
     const driversWithDistance = await Promise.all(
       availableDrivers.map(async (driver) => {
         try {
-          // Position GPS temps réel (< 30 min)
-          const location = await this.driverLocationRepository.findOne({
-            where: { driverId: driver.id },
-            order: { updatedAt: 'DESC' },
-          });
-
+          const location = await this.driverLocationRepository.findOne({ where: { driverId: driver.id }, order: { updatedAt: 'DESC' } });
           if (location) {
             const ageMs = Date.now() - new Date(location.updatedAt).getTime();
             if (ageMs < 30 * 60 * 1000) {
-              const distance = this.calculateDistance(
-                pickupLat || 0, pickupLng || 0,
-                Number(location.latitude), Number(location.longitude),
-              );
+              const distance = this.calculateDistance(pickupLat || 0, pickupLng || 0, Number(location.latitude), Number(location.longitude));
               return { driver, distance };
             }
           }
-
-          // Fallback: dernière course terminée
-          const lastRide = await this.reservationsRepository.findOne({
-            where: { driverId: driver.id, status: ReservationStatus.TERMINEE },
-            order: { completedAt: 'DESC' },
-          });
-
+          const lastRide = await this.reservationsRepository.findOne({ where: { driverId: driver.id, status: ReservationStatus.TERMINEE }, order: { completedAt: 'DESC' } });
           if (lastRide) {
             const dropLat = Number(lastRide.dropoffLatitude) || Number(lastRide.dropoffZone?.latitude);
             const dropLng = Number(lastRide.dropoffLongitude) || Number(lastRide.dropoffZone?.longitude);
@@ -1091,57 +856,37 @@ export class ReservationsService {
               return { driver, distance };
             }
           }
-
           return { driver, distance: Infinity };
-        } catch {
-          return { driver, distance: Infinity };
-        }
+        } catch { return { driver, distance: Infinity }; }
       }),
     );
 
-    // Trier par distance
     driversWithDistance.sort((a, b) => a.distance - b.distance);
 
-    // Créer les propositions
     const proposals: DriverProposal[] = [];
     for (let i = 0; i < driversWithDistance.length; i++) {
       const { driver, distance } = driversWithDistance[i];
       const expiresAt = new Date();
-      expiresAt.setMinutes(expiresAt.getMinutes() + 10); // 10 minutes pour répondre
+      expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
       const proposal = this.driverProposalRepository.create({
-        reservationId,
-        driverId: driver.id,
-        status: ProposalStatus.PENDING,
-        token: this.generateProposalToken(),
-        position: i + 1,
-        distance: distance === Infinity ? 999999 : distance,
-        expiresAt,
+        reservationId, driverId: driver.id, status: ProposalStatus.PENDING,
+        token: this.generateProposalToken(), position: i + 1,
+        distance: distance === Infinity ? 999999 : distance, expiresAt,
       });
-
       proposals.push(await this.driverProposalRepository.save(proposal));
     }
 
-    this.logger.log(
-      `Created ${proposals.length} proposals for reservation ${reservation.code}, ` +
-      `closest: ${proposals[0]?.distance?.toFixed(2)}km`,
-    );
+    this.logger.log(`Created ${proposals.length} proposals for reservation ${reservation.code}, closest: ${proposals[0]?.distance?.toFixed(2)}km`);
 
-    // Envoyer immédiatement au premier chauffeur
-    if (proposals.length > 0) {
-      await this.sendNextProposal(reservationId);
-    }
+    if (proposals.length > 0) await this.sendNextProposal(reservationId);
 
     return proposals;
   }
 
-  /**
-   * Envoie la proposition au prochain chauffeur dans la file
-   */
   async sendNextProposal(reservationId: string): Promise<void> {
     const reservation = await this.findById(reservationId);
 
-    // Trouver la proposition PENDING avec la plus petite position
     const nextProposal = await this.driverProposalRepository.findOne({
       where: { reservationId, status: ProposalStatus.PENDING },
       order: { position: 'ASC' },
@@ -1150,225 +895,107 @@ export class ReservationsService {
 
     if (!nextProposal) {
       this.logger.warn(`No pending proposals for reservation ${reservation.code}`);
-      // Tous les chauffeurs ont décliné ou expiré - alerter l'admin
       await this.notifyAdminAllDriversDeclined(reservation);
       return;
     }
 
-    // Vérifier si la réservation est toujours en attente
     if (reservation.status !== ReservationStatus.EN_ATTENTE) {
       this.logger.log(`Reservation ${reservation.code} no longer pending, skipping proposal`);
       return;
     }
 
-    // Vérifier si le chauffeur est toujours disponible
     const driver = await this.driversService.findById(nextProposal.driverId);
     if (driver.status !== DriverStatus.DISPONIBLE) {
       this.logger.log(`Driver ${driver.firstName} no longer available, skipping`);
-      // Marquer comme SKIPPED et passer au suivant
-      await this.driverProposalRepository.update(nextProposal.id, {
-        status: ProposalStatus.SKIPPED,
-      });
-      // Récursion pour passer au suivant
+      await this.driverProposalRepository.update(nextProposal.id, { status: ProposalStatus.SKIPPED });
       return this.sendNextProposal(reservationId);
     }
 
-    // Envoyer l'email avec les boutons
     await this.notificationsService.sendDriverProposal(nextProposal, reservation);
-
-    this.logger.log(
-      `Sent proposal to driver ${driver.firstName} ${driver.lastName} ` +
-      `for reservation ${reservation.code} (position ${nextProposal.position})`,
-    );
+    this.logger.log(`Sent proposal to driver ${driver.firstName} ${driver.lastName} for reservation ${reservation.code} (position ${nextProposal.position})`);
   }
 
-  /**
-   * Chauffeur accepte une proposition
-   */
   async acceptProposal(token: string): Promise<Reservation> {
-    const proposal = await this.driverProposalRepository.findOne({
-      where: { token },
-      relations: ['reservation', 'driver'],
-    });
+    const proposal = await this.driverProposalRepository.findOne({ where: { token }, relations: ['reservation', 'driver'] });
 
-    if (!proposal) {
-      throw new NotFoundException('Proposal not found');
-    }
-
-    if (proposal.status !== ProposalStatus.PENDING) {
-      throw new BadRequestException(`Proposal already ${proposal.status.toLowerCase()}`);
-    }
-
+    if (!proposal) throw new NotFoundException('Proposal not found');
+    if (proposal.status !== ProposalStatus.PENDING) throw new BadRequestException(`Proposal already ${proposal.status.toLowerCase()}`);
     if (proposal.expiresAt < new Date()) {
-      await this.driverProposalRepository.update(proposal.id, {
-        status: ProposalStatus.EXPIRED,
-      });
+      await this.driverProposalRepository.update(proposal.id, { status: ProposalStatus.EXPIRED });
       throw new BadRequestException('Proposal has expired');
     }
 
-    const reservation = proposal.reservation;
+    const freshReservation = await this.findById(proposal.reservation.id);
+    if (freshReservation.status !== ReservationStatus.EN_ATTENTE) throw new BadRequestException('Reservation no longer pending');
 
-    // Vérifier que la réservation est toujours en attente (race condition)
-    const freshReservation = await this.findById(reservation.id);
-    if (freshReservation.status !== ReservationStatus.EN_ATTENTE) {
-      throw new BadRequestException('Reservation no longer pending');
-    }
+    await this.assignDriver(proposal.reservation.id, proposal.driverId);
+    await this.driverProposalRepository.update(proposal.id, { status: ProposalStatus.ACCEPTED, respondedAt: new Date() });
 
-    // Transaction: assigner le chauffeur
-    await this.assignDriver(reservation.id, proposal.driverId);
-
-    // Marquer cette proposition comme ACCEPTED
-    await this.driverProposalRepository.update(proposal.id, {
-      status: ProposalStatus.ACCEPTED,
-      respondedAt: new Date(),
-    });
-
-    // Marquer les autres propositions comme SKIPPED et notifier les chauffeurs
-    const otherProposals = await this.driverProposalRepository.find({
-      where: { reservationId: reservation.id, status: ProposalStatus.PENDING },
-      relations: ['driver'],
-    });
-
+    const otherProposals = await this.driverProposalRepository.find({ where: { reservationId: proposal.reservation.id, status: ProposalStatus.PENDING }, relations: ['driver'] });
     for (const other of otherProposals) {
       if (other.id !== proposal.id) {
-        await this.driverProposalRepository.update(other.id, {
-          status: ProposalStatus.SKIPPED,
-        });
-        // Notifier le chauffeur que la course a été prise par quelqu'un d'autre
-        if (other.driver?.email) {
-          await this.notificationsService.sendDriverProposalTaken(other.driver, reservation);
-        }
+        await this.driverProposalRepository.update(other.id, { status: ProposalStatus.SKIPPED });
+        if (other.driver?.email) await this.notificationsService.sendDriverProposalTaken(other.driver, proposal.reservation);
       }
     }
 
-    this.logger.log(
-      `Driver ${proposal.driver.firstName} ${proposal.driver.lastName} ` +
-      `accepted proposal for reservation ${reservation.code}`,
-    );
-
-    return this.findById(reservation.id);
+    this.logger.log(`Driver ${proposal.driver.firstName} ${proposal.driver.lastName} accepted proposal for reservation ${proposal.reservation.code}`);
+    return this.findById(proposal.reservation.id);
   }
 
-  /**
-   * Chauffeur décline une proposition
-   */
   async declineProposal(token: string): Promise<void> {
-    const proposal = await this.driverProposalRepository.findOne({
-      where: { token },
-      relations: ['reservation', 'driver'],
-    });
+    const proposal = await this.driverProposalRepository.findOne({ where: { token }, relations: ['reservation', 'driver'] });
 
-    if (!proposal) {
-      throw new NotFoundException('Proposal not found');
-    }
-
-    if (proposal.status !== ProposalStatus.PENDING) {
-      throw new BadRequestException(`Proposal already ${proposal.status.toLowerCase()}`);
-    }
-
+    if (!proposal) throw new NotFoundException('Proposal not found');
+    if (proposal.status !== ProposalStatus.PENDING) throw new BadRequestException(`Proposal already ${proposal.status.toLowerCase()}`);
     if (proposal.expiresAt < new Date()) {
-      await this.driverProposalRepository.update(proposal.id, {
-        status: ProposalStatus.EXPIRED,
-      });
+      await this.driverProposalRepository.update(proposal.id, { status: ProposalStatus.EXPIRED });
       throw new BadRequestException('Proposal has expired');
     }
 
-    // Marquer comme DECLINED
-    await this.driverProposalRepository.update(proposal.id, {
-      status: ProposalStatus.DECLINED,
-      respondedAt: new Date(),
-    });
-
-    this.logger.log(
-      `Driver ${proposal.driver.firstName} ${proposal.driver.lastName} ` +
-      `declined proposal for reservation ${proposal.reservation.code}`,
-    );
-
-    // Passer immédiatement au chauffeur suivant
+    await this.driverProposalRepository.update(proposal.id, { status: ProposalStatus.DECLINED, respondedAt: new Date() });
+    this.logger.log(`Driver ${proposal.driver.firstName} ${proposal.driver.lastName} declined proposal for reservation ${proposal.reservation.code}`);
     await this.sendNextProposal(proposal.reservationId);
   }
 
-  /**
-   * Traite les propositions expirées (appelé par le cron job)
-   */
   async processExpiredProposals(): Promise<void> {
     const now = new Date();
-
-    // Trouver les propositions PENDING qui ont expiré
-    const expiredProposals = await this.driverProposalRepository.find({
-      where: {
-        status: ProposalStatus.PENDING,
-        expiresAt: LessThan(now),
-      },
-      relations: ['reservation'],
-    });
+    const expiredProposals = await this.driverProposalRepository.find({ where: { status: ProposalStatus.PENDING, expiresAt: LessThan(now) }, relations: ['reservation'] });
 
     this.logger.log(`Found ${expiredProposals.length} expired proposals to process`);
 
     for (const proposal of expiredProposals) {
-      // Marquer comme EXPIRED
-      await this.driverProposalRepository.update(proposal.id, {
-        status: ProposalStatus.EXPIRED,
-      });
-
-      this.logger.log(
-        `Proposal ${proposal.id} for reservation ${proposal.reservation.code} expired`,
-      );
-
-      // Passer au suivant
+      await this.driverProposalRepository.update(proposal.id, { status: ProposalStatus.EXPIRED });
+      this.logger.log(`Proposal ${proposal.id} for reservation ${proposal.reservation.code} expired`);
       await this.sendNextProposal(proposal.reservationId);
     }
   }
 
-  /**
-   * Génère un token unique pour une proposition
-   */
   private generateProposalToken(): string {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let token = '';
-    for (let i = 0; i < 32; i++) {
-      token += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+    for (let i = 0; i < 32; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
     return token;
   }
 
-  /**
-   * Notifie l'admin qu'aucun chauffeur n'est disponible
-   */
   private async notifyAdminNoDriversAvailable(reservation: Reservation): Promise<void> {
     try {
       const admins = await this.usersService.findAdmins();
-      const adminEmails = admins.map(a => a.email);
-      await this.notificationsService.sendAdminNoDriversAvailable(reservation, adminEmails);
-    } catch (e) {
-      this.logger.error('Failed to send admin notification', e?.message);
-    }
+      await this.notificationsService.sendAdminNoDriversAvailable(reservation, admins.map(a => a.email));
+    } catch (e) { this.logger.error('Failed to send admin notification', JSON.stringify(e)); }
   }
 
-  /**
-   * Notifie l'admin que tous les chauffeurs ont décliné
-   */
   private async notifyAdminAllDriversDeclined(reservation: Reservation): Promise<void> {
     try {
       const admins = await this.usersService.findAdmins();
-      const adminEmails = admins.map(a => a.email);
-      await this.notificationsService.sendAdminAllDriversDeclined(reservation, adminEmails);
-    } catch (e) {
-      this.logger.error('Failed to send admin notification', e?.message);
-    }
+      await this.notificationsService.sendAdminAllDriversDeclined(reservation, admins.map(a => a.email));
+    } catch (e) { this.logger.error('Failed to send admin notification', JSON.stringify(e)); }
   }
 
-  /**
-   * Notifie les admins qu'un chauffeur a marqué une course comme impayée
-   */
   private async notifyAdminUnpaidRide(reservation: Reservation): Promise<void> {
     try {
       const admins = await this.usersService.findAdmins();
-      const adminEmails = admins.map(a => a.email);
-      const markedAt = new Date();
-      await this.notificationsService.sendAdminUnpaidRide(reservation, adminEmails, markedAt);
-    } catch (e) {
-      this.logger.error('Failed to send unpaid ride admin notification', e?.message);
-    }
+      await this.notificationsService.sendAdminUnpaidRide(reservation, admins.map(a => a.email), new Date());
+    } catch (e) { this.logger.error('Failed to send unpaid ride admin notification', JSON.stringify(e)); }
   }
 }
