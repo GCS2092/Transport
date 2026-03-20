@@ -2,9 +2,21 @@ import 'reflect-metadata';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { getDataSourceToken } from '@nestjs/typeorm';
+import { NotificationType } from './common/enums/notification-type.enum';
 import helmet from 'helmet';
 import * as Sentry from '@sentry/node';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+
+async function syncNotificationEnum(app) {
+  const dataSource = app.get(getDataSourceToken());
+  for (const value of Object.values(NotificationType)) {
+    await dataSource.query(
+      `ALTER TYPE "email_logs_notificationtype_enum" ADD VALUE IF NOT EXISTS '${value}'`
+    );
+  }
+  console.log('✅ Enum email_logs_notificationtype_enum synchronized');
+}
 
 async function bootstrap() {
   if (process.env.SENTRY_DSN) {
@@ -21,9 +33,9 @@ async function bootstrap() {
   const isDev = process.env.NODE_ENV === 'development';
 
   const allowedOrigins = [
-    'https://wenddtransport.com',        // ← remplace ici
-    'https://www.wenddtransport.com',    // ← remplace ici
-    'https://transport-six-xi.vercel.app',            // ← remplace ici
+    'https://wenddtransport.com',
+    'https://www.wenddtransport.com',
+    'https://transport-six-xi.vercel.app',
     ...(process.env.ALLOWED_ORIGINS || '').split(','),
     ...(isDev ? [
       'http://localhost:3000',
@@ -68,6 +80,9 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
+
+  await syncNotificationEnum(app);
+
   console.log(`🚀 WEND'D Transport API running on http://localhost:${port}/api/v1`);
 }
 
