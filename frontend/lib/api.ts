@@ -526,6 +526,8 @@ export const authApi = {
     api.post<{ accessToken: string; user: { id: string; email: string; role: string } }>('/auth/login', { email, password }),
   refresh: () =>
     api.post<{ accessToken: string }>('/auth/refresh'),
+  verifyPassword: (password: string) =>
+    api.post<{ supervisionToken: string; expiresAt: string }>('/auth/verify-password', { password }),
 }
 
 export const promoCodesApi = {
