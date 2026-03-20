@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { AppModule } from './app.module';
-import * as helmet from 'helmet';
+import helmet from 'helmet';
 import * as Sentry from '@sentry/node';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
@@ -13,18 +13,23 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
-  app.use(helmet.default());
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: false,
+  }));
 
-  // CORS : support multi-origines (dev local + Vercel + domaine custom)
-  // Sources d'origines autorisées :
-  //   1. localhost / 127.0.0.1 (tout port) — dev
-  //   2. 192.168.x.x (tout port) — dev mobile réseau local
-  //   3. *.vercel.app — tous les déploiements Vercel
-  //   4. FRONTEND_URL — l'URL principale du frontend (ex: https://transport-six-xi.vercel.app)
-  //   5. ALLOWED_ORIGINS — liste CSV d'URLs supplémentaires
+  const isDev = process.env.NODE_ENV === 'development';
+
   const allowedOrigins = [
-    process.env.FRONTEND_URL,
+    'https://wenddtransport.com',        // ← remplace ici
+    'https://www.wenddtransport.com',    // ← remplace ici
+    'https://transport-six-xi.vercel.app',            // ← remplace ici
     ...(process.env.ALLOWED_ORIGINS || '').split(','),
+    ...(isDev ? [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:4200',
+    ] : []),
   ]
     .map(o => o?.trim())
     .filter(Boolean) as string[];
@@ -33,25 +38,16 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Pas d'origin = requête serveur-à-serveur (autorisé)
       if (!origin) return callback(null, true);
-
-      // Localhost / 127.0.0.1 (dev)
-      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return callback(null, true);
-
-      // Réseau local 192.168.x.x (dev mobile)
-      if (/^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin)) return callback(null, true);
-
-      // *.vercel.app (tous les déploiements preview + production Vercel)
-      if (/^https:\/\/[a-zA-Z0-9-]+(\.vercel\.app)$/.test(origin)) return callback(null, true);
-
-      // Origines explicitement autorisées via .env
       if (allowedOrigins.includes(origin)) return callback(null, true);
-
+      if (isDev && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
       console.warn(`CORS blocked: ${origin}`);
       callback(new Error(`CORS: origin ${origin} not allowed`));
     },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   });
 
