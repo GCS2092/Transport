@@ -42,4 +42,14 @@ export class ZonesController {
   remove(@Param('id') id: string) {
     return this.zonesService.remove(id);
   }
+
+  // Géocode automatiquement toutes les zones sans coordonnées GPS
+  // L'admin n'a pas besoin de connaître les coordonnées — juste le nom de la zone suffit
+  // Nominatim (OpenStreetMap) trouve les coordonnées à partir du nom
+  @Post('geocode-all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  geocodeAll() {
+    return this.zonesService.geocodeAllMissingCoords();
+  }
 }

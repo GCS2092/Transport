@@ -36,6 +36,20 @@ function dropoffLabel(ride: Reservation): string {
   return ride.dropoffCustomAddress || ride.dropoffZone?.name || 'Destination'
 }
 
+// Ouvrir la navigation externe (Google Maps ou OpenStreetMap)
+function openNavigation(
+  provider: 'google' | 'osm',
+  userLat: number,
+  userLng: number,
+  destLat: number,
+  destLng: number
+) {
+  const url = provider === 'google'
+    ? `https://www.google.com/maps/dir/${userLat},${userLng}/${destLat},${destLng}`
+    : `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${userLat},${userLng};${destLat},${destLng}`
+  window.open(url, '_blank')
+}
+
 export default function RideDetail() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -71,7 +85,7 @@ export default function RideDetail() {
       accuracy: geo.accuracy ?? undefined,
     }).catch(() => {})
 
-    send() // envoi immédiat
+    send()
     const timer = setInterval(send, 15_000)
     return () => clearInterval(timer)
   }, [geo.latitude, geo.longitude, ride?.status])
@@ -85,14 +99,11 @@ export default function RideDetail() {
       .finally(() => setLoading(false))
   }, [authLoading, user, id, router])
 
-  // Calcul de l'itinéraire avec debounce (15s ou >50m de déplacement)
+  // Calcul de l'itinéraire avec debounce (recalcul si déplacé > 50m)
   useEffect(() => {
     if (!ride || !geo.latitude || !geo.longitude) return
     if (['TERMINEE', 'ANNULEE'].includes(ride.status)) return
 
-    // Choisir la destination selon le statut :
-    // ASSIGNEE → aller chercher le client (pickup)
-    // EN_COURS → emmener le client (dropoff)
     const isEnCours = ride.status === 'EN_COURS'
     const destLat = isEnCours
       ? (ride.dropoffLatitude ?? ride.dropoffZone?.latitude)
@@ -103,13 +114,12 @@ export default function RideDetail() {
 
     if (!destLat || !destLng) return
 
-    // Vérifier si on a bougé de plus de 50 m depuis le dernier calcul
     const prev = lastRoutePos.current
     if (prev) {
       const dlat = Math.abs(prev.lat - geo.latitude) * 111000
       const dlng = Math.abs(prev.lng - geo.longitude) * 111000 * Math.cos(geo.latitude * Math.PI / 180)
       const moved = Math.sqrt(dlat * dlat + dlng * dlng)
-      if (moved < 50) return  // moins de 50 m → pas besoin de recalculer
+      if (moved < 50) return
     }
 
     if (routeTimerRef.current) clearTimeout(routeTimerRef.current)
@@ -126,29 +136,41 @@ export default function RideDetail() {
     return () => { if (routeTimerRef.current) clearTimeout(routeTimerRef.current) }
   }, [ride, geo.latitude, geo.longitude])
 
+  // Calculer les coordonnées de destination selon le statut (pour les boutons navigation)
+  const getDestCoords = () => {
+    if (!ride) return null
+    const isEnCours = ride.status === 'EN_COURS'
+    const destLat = isEnCours
+      ? (ride.dropoffLatitude ?? ride.dropoffZone?.latitude)
+      : (ride.clientLatitude ?? ride.pickupLatitude ?? ride.pickupZone?.latitude)
+    const destLng = isEnCours
+      ? (ride.dropoffLongitude ?? ride.dropoffZone?.longitude)
+      : (ride.clientLongitude ?? ride.pickupLongitude ?? ride.pickupZone?.longitude)
+    if (!destLat || !destLng) return null
+    return { lat: destLat, lng: destLng }
+  }
+
   const updateStatus = async (status: string) => {
     if (!ride || acting) return
-    
-    // Vérification : ne peut démarrer que si <= 30 min avant l'heure de départ
+
     if (status === 'EN_COURS') {
       const now = new Date()
       const pickupTime = new Date(ride.pickupDateTime)
       const diffMs = pickupTime.getTime() - now.getTime()
       const diffMinutes = Math.floor(diffMs / 60000)
-      
+
       if (diffMinutes > 30) {
         setError(`Vous ne pouvez démarrer la course que 30 minutes avant l'heure de départ. Il reste encore ${diffMinutes} minutes.`)
         return
       }
     }
-    
-    // Si on termine la course, demander confirmation du paiement
+
     if (status === 'TERMINEE' && ride.paymentStatus !== 'PAIEMENT_COMPLET') {
       setPendingStatus(status)
       setShowPaymentConfirm(true)
       return
     }
-    
+
     setActing(true); setError('')
     try {
       const { data } = await reservationsApi.updateStatus(ride.id, status)
@@ -160,15 +182,12 @@ export default function RideDetail() {
 
   const confirmCompleteRide = async (markAsPaid: boolean) => {
     if (!ride || !pendingStatus) return
-    
+
     setActing(true); setError('')
     try {
-      // Si marqué comme payé, mettre à jour le statut de paiement d'abord
       if (markAsPaid) {
         await reservationsApi.updatePaymentStatus(ride.id, 'PAIEMENT_COMPLET')
       }
-      
-      // Puis terminer la course
       const { data } = await reservationsApi.updateStatus(ride.id, pendingStatus)
       setRide(data)
       setShowPaymentConfirm(false)
@@ -195,7 +214,7 @@ export default function RideDetail() {
     const diffMinutes = Math.floor(diffMs / 60000)
     const diffHours = Math.floor(diffMinutes / 60)
     const remainingMinutes = diffMinutes % 60
-    
+
     if (diffMinutes > 0) {
       return `${diffHours > 0 ? diffHours + 'h ' : ''}${remainingMinutes}min`
     }
@@ -235,6 +254,7 @@ export default function RideDetail() {
   if (!ride) return null
 
   const st = STATUS_CFG[ride.status] || STATUS_CFG.EN_ATTENTE
+  const destCoords = getDestCoords()
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-4 pb-8 space-y-4">
@@ -328,6 +348,32 @@ export default function RideDetail() {
             </div>
           )}
 
+          {/* ── Boutons navigation externe ── */}
+          {geo.latitude && geo.longitude && destCoords && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => openNavigation('google', geo.latitude!, geo.longitude!, destCoords.lat, destCoords.lng)}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50 active:scale-95 transition-all"
+              >
+                {/* Icône Google Maps (dégradé multicolore simplifié) */}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+                </svg>
+                Google Maps
+              </button>
+              <button
+                onClick={() => openNavigation('osm', geo.latitude!, geo.longitude!, destCoords.lat, destCoords.lng)}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50 active:scale-95 transition-all"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="10" r="3"/>
+                  <path d="M12 2a8 8 0 0 0-8 8c0 5.4 7.4 11.5 7.7 11.8a.5.5 0 0 0 .6 0C12.6 21.5 20 15.4 20 10a8 8 0 0 0-8-8z"/>
+                </svg>
+                OpenStreetMap
+              </button>
+            </div>
+          )}
+
           {/* Avertissement HTTPS requis (iOS bloque la géolocalisation sur HTTP) */}
           {!isHttps && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-3 flex items-start gap-2">
@@ -353,7 +399,7 @@ export default function RideDetail() {
           {geo.latitude && geo.longitude ? (
             <Map
               center={[geo.latitude, geo.longitude]}
-              zoom={ride.status === 'EN_COURS' ? 15 : 14}
+              zoom={ride.status === 'EN_COURS' ? 16 : 13}
               autoFollow={ride.status === 'EN_COURS'}
               markers={[
                 { position: [geo.latitude, geo.longitude], popup: 'Ma position', icon: 'driver' },
@@ -369,7 +415,7 @@ export default function RideDetail() {
                   : []),
               ]}
               route={routeCoords.length > 0 ? routeCoords : undefined}
-              className={`rounded-xl overflow-hidden ${ride.status === 'EN_COURS' ? 'h-72' : 'h-56'}`}
+              className="rounded-xl overflow-hidden"
             />
           ) : geo.permission === 'denied' ? (
             <div className="h-40 rounded-xl bg-gray-50 border border-gray-200 flex flex-col items-center justify-center gap-2">
@@ -482,7 +528,7 @@ export default function RideDetail() {
         </button>
       )}
 
-      {/* Dialog de confirmation paiement */}
+      {/* ── Dialog confirmation paiement ──────────────────── */}
       {showPaymentConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full space-y-4">
@@ -543,6 +589,7 @@ export default function RideDetail() {
           {ride.status === 'TERMINEE' ? 'Course terminée' : 'Course annulée'}
         </div>
       )}
+
     </div>
   )
 }
