@@ -1,6 +1,3 @@
-/* ── OneSignal DOIT être importé en premier ── */
-importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
-
 const CACHE_NAME = 'vtc-dakar-v3';
 
 /* ── Installation : skip waiting immédiatement ── */
