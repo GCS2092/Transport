@@ -72,12 +72,10 @@ export default function RootLayout({
     <html lang="fr">
       <head>
         {onesignalAppId && (
-          <>
-            <script
-              src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
-              defer
-            />
-          </>
+          <script
+            src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
+            defer
+          />
         )}
       </head>
       <body className="min-h-screen flex flex-col">
@@ -105,32 +103,42 @@ export default function RootLayout({
                     notifyButton: { enable: true },
                   });
 
-                  // 🔹 LOGIN USER AUTOMATIQUE
+                  // 🔹 LOGIN USER — toujours avec l'email (jamais l'id)
                   try {
-                    const user = JSON.parse(localStorage.getItem("user"));
+                    const raw = localStorage.getItem("vtc_user");
+                    const user = raw ? JSON.parse(raw) : null;
                     if (user?.email) {
-                      await OneSignal.login(user.email.toLowerCase());
-                      console.log("OneSignal user linked:", user.email);
+                      const email = user.email.trim().toLowerCase();
+                      await OneSignal.login(email);
+                      console.log("[OneSignal] user linked:", email);
+
+                      // ✅ Tag role dynamique (client / driver / admin)
+                      const role = (user.role || "client").toLowerCase();
+                      OneSignal.User.addTags({ role });
+                      console.log("[OneSignal] tag role:", role);
+                    } else {
+                      console.log("[OneSignal] no user in localStorage, skipping login");
                     }
-                  } catch (e) { console.log("OneSignal login error", e); }
+                  } catch (e) {
+                    console.warn("[OneSignal] login error", e);
+                  }
 
-                  // 🔹 TAG ROLE
-                  try { OneSignal.User.addTags({ role: "client" }); } catch (e) {}
-
-                  // 🔹 DEMANDE PERMISSION PUSH
+                  // 🔹 DEMANDE PERMISSION PUSH au premier geste utilisateur
                   try {
-                    const handler = async () => {
+                    const requestPermission = async () => {
                       try {
                         if (OneSignal.Slidedown?.promptPush) {
                           await OneSignal.Slidedown.promptPush();
                         } else if (OneSignal.Notifications?.requestPermission) {
                           await OneSignal.Notifications.requestPermission();
                         }
-                      } catch (e) {}
+                      } catch (e) {
+                        console.warn("[OneSignal] permission request error", e);
+                      }
                     };
-                    document.addEventListener("click", handler, { once: true, passive: true });
-                    document.addEventListener("touchstart", handler, { once: true, passive: true });
-                    setTimeout(handler, 3000); // fallback automatique
+                    document.addEventListener("click", requestPermission, { once: true, passive: true });
+                    document.addEventListener("touchstart", requestPermission, { once: true, passive: true });
+                    setTimeout(requestPermission, 3000);
                   } catch (e) {}
                 });
               `,
@@ -138,15 +146,15 @@ export default function RootLayout({
           />
         )}
 
-        {/* Enregistrement Service Worker pour PWA */}
+        {/* Service Worker PWA */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', () => {
                   navigator.serviceWorker.register('/sw.js').then(
-                    registration => console.log('SW registered:', registration),
-                    err => console.log('SW registration failed:', err)
+                    r => console.log('[SW] registered:', r.scope),
+                    e => console.warn('[SW] registration failed:', e)
                   );
                 });
               }

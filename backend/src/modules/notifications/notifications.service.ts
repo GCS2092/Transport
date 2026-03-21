@@ -74,6 +74,12 @@ export class NotificationsService {
     return process.env.ONESIGNAL_REST_API_KEY;
   }
 
+  // ✅ CORRECTION : utilise toujours l'email comme external ID (jamais userId)
+  private normalizeExternalId(email?: string | null): string | null {
+    if (!email) return null;
+    return email.trim().toLowerCase();
+  }
+
   private async sendPushNotification(
     externalUserIds: string[],
     title: string,
@@ -82,9 +88,15 @@ export class NotificationsService {
   ): Promise<void> {
     const appId = this.getOneSignalAppId();
     const restApiKey = this.getOneSignalRestApiKey();
-    if (!appId || !restApiKey) return;
+    if (!appId || !restApiKey) {
+      this.logger.warn('OneSignal: missing appId or restApiKey, skipping push');
+      return;
+    }
     const ids = externalUserIds.filter(Boolean);
-    if (!ids.length) return;
+    if (!ids.length) {
+      this.logger.warn('OneSignal: no valid externalUserIds, skipping push');
+      return;
+    }
 
     try {
       const res = await fetch('https://onesignal.com/api/v1/notifications', {
@@ -102,9 +114,11 @@ export class NotificationsService {
           data,
         }),
       });
+      const responseData = await res.json();
       if (!res.ok) {
-        const err = await res.text();
-        this.logger.warn(`OneSignal push failed (${res.status}): ${err}`);
+        this.logger.warn(`OneSignal push failed (${res.status}): ${JSON.stringify(responseData)}`);
+      } else {
+        this.logger.log(`OneSignal push sent to [${ids.join(', ')}] — id: ${responseData?.id}`);
       }
     } catch (e) {
       this.logger.warn(`OneSignal push error: ${e?.message}`);
@@ -143,9 +157,9 @@ export class NotificationsService {
     }
 
     await this.sendPushNotification(
-      adminEmails.map(e => (e || '').trim().toLowerCase()).filter(Boolean),
+      adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
       'Archivage terminé',
-      'Un fichier Excel d\'archivage a été généré et envoyé par email.',
+      "Un fichier Excel d'archivage a été généré et envoyé par email.",
       {},
     );
   }
@@ -155,7 +169,7 @@ export class NotificationsService {
   }
 
   private getDropoffAddress(reservation: Reservation): string {
-    return reservation.dropoffCustomAddress || reservation.dropoffZone?.name || 'Adresse d\'arrivée';
+    return reservation.dropoffCustomAddress || reservation.dropoffZone?.name || "Adresse d'arrivée";
   }
 
   private buildWhatsAppLink(reservation: Reservation): string {
@@ -255,8 +269,9 @@ export class NotificationsService {
       reservation.id,
     );
 
+    // ✅ Push client — confirmation réservation
     await this.sendPushNotification(
-      [reservation.clientEmail?.trim().toLowerCase()].filter(Boolean),
+      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
       this.t(lang, 'Réservation confirmée', 'Booking confirmed'),
       this.t(
         lang,
@@ -267,7 +282,6 @@ export class NotificationsService {
     );
   }
 
-  // ─── Renvoi du code d'annulation (pour réservations existantes) ───────────
   async sendCancelTokenReminder(reservation: Reservation): Promise<void> {
     const lang = reservation.language;
 
@@ -333,8 +347,9 @@ export class NotificationsService {
       reservation.id,
     );
 
+    // ✅ Push client — chauffeur assigné
     await this.sendPushNotification(
-      [reservation.clientEmail?.trim().toLowerCase()].filter(Boolean),
+      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
       this.t(lang, 'Chauffeur assigné', 'Driver assigned'),
       this.t(
         lang,
@@ -366,6 +381,18 @@ export class NotificationsService {
       NotificationType.REMINDER_J1,
       reservation.id,
     );
+
+    // ✅ Push client — rappel J-1
+    await this.sendPushNotification(
+      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
+      title,
+      this.t(
+        lang,
+        `Rappel : votre course ${reservation.code} est demain.`,
+        `Reminder: your ride ${reservation.code} is tomorrow.`,
+      ),
+      { reservationCode: reservation.code },
+    );
   }
 
   async sendReminderH1(reservation: Reservation): Promise<void> {
@@ -392,8 +419,9 @@ export class NotificationsService {
       reservation.id,
     );
 
+    // ✅ Push client — rappel H-1
     await this.sendPushNotification(
-      [reservation.clientEmail?.trim().toLowerCase()].filter(Boolean),
+      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
       title,
       this.t(
         lang,
@@ -421,8 +449,9 @@ export class NotificationsService {
       reservation.id,
     );
 
+    // ✅ Push client — annulation
     await this.sendPushNotification(
-      [reservation.clientEmail?.trim().toLowerCase()].filter(Boolean),
+      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
       title,
       this.t(
         lang,
@@ -463,9 +492,9 @@ export class NotificationsService {
       reservation.id,
     );
 
-    const driverExternalId = reservation.driver.userId || reservation.driver.email;
+    // ✅ CORRECTION : utilise driver.email (jamais driver.userId)
     await this.sendPushNotification(
-      [driverExternalId].filter(Boolean),
+      [this.normalizeExternalId(reservation.driver.email)].filter(Boolean),
       'Nouvelle course assignée',
       `Course ${reservation.code} — ${pickup} → ${dropoff}`,
       { reservationCode: reservation.code },
@@ -497,9 +526,9 @@ export class NotificationsService {
       reservation.id,
     );
 
-    const driverExternalId = reservation.driver.userId || reservation.driver.email;
+    // ✅ CORRECTION : utilise driver.email (jamais driver.userId)
     await this.sendPushNotification(
-      [driverExternalId].filter(Boolean),
+      [this.normalizeExternalId(reservation.driver.email)].filter(Boolean),
       title,
       `Course #${reservation.code} annulée.`,
       { reservationCode: reservation.code },
@@ -528,9 +557,9 @@ export class NotificationsService {
       reservation.id,
     );
 
-    const driverExternalId = reservation.driver.userId || reservation.driver.email;
+    // ✅ CORRECTION : utilise driver.email (jamais driver.userId)
     await this.sendPushNotification(
-      [driverExternalId].filter(Boolean),
+      [this.normalizeExternalId(reservation.driver.email)].filter(Boolean),
       title,
       `La course ${reservation.code} a été modifiée. Ouvrez l'app pour voir les détails.`,
       { reservationCode: reservation.code },
@@ -559,6 +588,18 @@ export class NotificationsService {
       this.buildEmailHtml(reservation, title, body),
       NotificationType.RIDE_STARTED,
       reservation.id,
+    );
+
+    // ✅ Push client — course démarrée
+    await this.sendPushNotification(
+      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
+      title,
+      this.t(
+        lang,
+        `Votre chauffeur a démarré la course ${reservation.code}.`,
+        `Your driver started ride ${reservation.code}.`,
+      ),
+      { reservationCode: reservation.code },
     );
   }
 
@@ -591,8 +632,9 @@ export class NotificationsService {
       attachments,
     );
 
+    // ✅ Push client — course terminée + reçu
     await this.sendPushNotification(
-      [reservation.clientEmail?.trim().toLowerCase()].filter(Boolean),
+      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
       this.t(lang, 'Reçu disponible', 'Receipt available'),
       this.t(
         lang,
@@ -630,9 +672,18 @@ export class NotificationsService {
       NotificationType.DRIVER_REMINDER_J1,
       reservation.id,
     );
+
+    // ✅ Push chauffeur — rappel J-1
+    await this.sendPushNotification(
+      [this.normalizeExternalId(reservation.driver.email)].filter(Boolean),
+      title,
+      `Rappel : vous avez la course ${reservation.code} demain — ${pickup} → ${dropoff}`,
+      { reservationCode: reservation.code },
+    );
   }
 
   // ─── Notifications Admin ─────────────────────────────────────────────────
+
   async sendAdminNewReservation(reservation: Reservation, adminEmails: string[]): Promise<void> {
     if (!adminEmails.length) return;
 
@@ -666,8 +717,9 @@ export class NotificationsService {
       );
     }
 
+    // ✅ Push admin — nouvelle réservation
     await this.sendPushNotification(
-      adminEmails.map(e => (e || '').trim().toLowerCase()).filter(Boolean),
+      adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
       title,
       `Nouvelle réservation ${reservation.code} — ${reservation.clientFirstName} ${reservation.clientLastName}`,
       { reservationCode: reservation.code },
@@ -704,6 +756,14 @@ export class NotificationsService {
         reservation.id,
       );
     }
+
+    // ✅ AJOUT : Push admin — chauffeur assigné (manquait)
+    await this.sendPushNotification(
+      adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
+      title,
+      `${reservation.driver.firstName} ${reservation.driver.lastName} assigné à la course ${reservation.code}`,
+      { reservationCode: reservation.code },
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -753,6 +813,14 @@ export class NotificationsService {
       NotificationType.DRIVER_NEW_RIDE,
       reservation.id,
     );
+
+    // ✅ Push chauffeur — nouvelle proposition
+    await this.sendPushNotification(
+      [this.normalizeExternalId(proposal.driver.email)].filter(Boolean),
+      '🚗 Nouvelle course disponible',
+      `Course ${reservation.code} — ${pickup} → ${dropoff} (${proposal.distance.toFixed(1)} km) — Répondez dans 10 min`,
+      { reservationCode: reservation.code, proposalToken: proposal.token },
+    );
   }
 
   async sendDriverProposalTaken(driver: any, reservation: Reservation): Promise<void> {
@@ -770,6 +838,14 @@ export class NotificationsService {
       `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`,
       NotificationType.DRIVER_NEW_RIDE,
       reservation.id,
+    );
+
+    // ✅ Push chauffeur — course déjà prise
+    await this.sendPushNotification(
+      [this.normalizeExternalId(driver.email)].filter(Boolean),
+      title,
+      `La course ${reservation.code} a été assignée à un autre chauffeur.`,
+      { reservationCode: reservation.code },
     );
   }
 
@@ -798,6 +874,14 @@ export class NotificationsService {
     for (const email of adminEmails) {
       await this.sendEmail(email, `${title} — #${reservation.code}`, html, NotificationType.ADMIN_NEW_RESERVATION, reservation.id);
     }
+
+    // ✅ AJOUT : Push admin — aucun chauffeur dispo (manquait)
+    await this.sendPushNotification(
+      adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
+      title,
+      `Course ${reservation.code} sans chauffeur — action requise`,
+      { reservationCode: reservation.code },
+    );
   }
 
   async sendAdminAllDriversDeclined(reservation: Reservation, adminEmails: string[]): Promise<void> {
@@ -825,6 +909,14 @@ export class NotificationsService {
     for (const email of adminEmails) {
       await this.sendEmail(email, `${title} — #${reservation.code}`, html, NotificationType.ADMIN_NEW_RESERVATION, reservation.id);
     }
+
+    // ✅ AJOUT : Push admin — tous chauffeurs ont décliné (manquait)
+    await this.sendPushNotification(
+      adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
+      title,
+      `Course ${reservation.code} — assignez un chauffeur manuellement`,
+      { reservationCode: reservation.code },
+    );
   }
 
   async sendAdminUnpaidRide(reservation: Reservation, adminEmails: string[], markedAt: Date): Promise<void> {
@@ -867,6 +959,14 @@ export class NotificationsService {
         reservation.id,
       );
     }
+
+    // ✅ AJOUT : Push admin — course impayée (manquait)
+    await this.sendPushNotification(
+      adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
+      '🚨 Course impayée',
+      `Course ${reservation.code} signalée impayée — ${Number(reservation.amount).toLocaleString()} FCFA`,
+      { reservationCode: reservation.code },
+    );
   }
 
   async sendDriverPaymentRegularized(reservation: Reservation): Promise<void> {
@@ -893,6 +993,14 @@ export class NotificationsService {
       `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`,
       NotificationType.DRIVER_NEW_RIDE,
       reservation.id,
+    );
+
+    // ✅ Push chauffeur — paiement régularisé
+    await this.sendPushNotification(
+      [this.normalizeExternalId(reservation.driver.email)].filter(Boolean),
+      title,
+      `Le paiement de la course ${reservation.code} a été régularisé.`,
+      { reservationCode: reservation.code },
     );
   }
 
