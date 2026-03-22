@@ -95,8 +95,6 @@ export default function RootLayout({
                   await OneSignal.init({
                     appId: ${JSON.stringify(onesignalAppId)},
                     safari_web_id: "web.onesignal.auto.0818a4e7-118f-4fc1-b0e2-07892e811a2a",
-                    serviceWorkerPath: "/sw.js",
-                    serviceWorkerParam: { scope: "/" },
                     notifyButton: { enable: true },
                   });
 
