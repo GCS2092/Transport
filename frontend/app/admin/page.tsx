@@ -80,7 +80,15 @@ export default function AdminDashboard() {
       setShowReportModal(false)
       setReportPassword('')
     } catch (err: any) {
-      setReportError(err.response?.data?.message || "Erreur lors de l'envoi")
+      // NestJS peut renvoyer message comme string ou tableau (class-validator)
+      const raw = err.response?.data?.message
+      const msg =
+        typeof raw === 'string'
+          ? raw
+          : Array.isArray(raw)
+          ? raw.join(', ')
+          : "Erreur lors de l'envoi"
+      setReportError(msg)
     } finally {
       setSendingReport(false)
     }

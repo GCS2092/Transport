@@ -27,7 +27,6 @@ export class DriversService {
     });
   }
 
-  /** Retourne tous les chauffeurs y compris inactifs — utilisé par le rapport mensuel. */
   async findAllIncludingInactive(): Promise<Driver[]> {
     return this.driversRepository.find({ order: { lastName: 'ASC' } });
   }
@@ -54,7 +53,6 @@ export class DriversService {
   }
 
   async create(dto: CreateDriverDto): Promise<Driver> {
-    // Vérifier qu'aucun chauffeur (actif ou inactif) n'a déjà cet email
     if (dto.email) {
       const existing = await this.driversRepository.findOne({ where: { email: dto.email } });
       if (existing) {
@@ -67,7 +65,6 @@ export class DriversService {
 
   async update(id: string, dto: Partial<CreateDriverDto>): Promise<Driver> {
     await this.findById(id);
-    // Vérifier unicité email si on le modifie
     if (dto.email) {
       const existing = await this.driversRepository.findOne({ where: { email: dto.email } });
       if (existing && existing.id !== id) {
@@ -170,15 +167,16 @@ export class DriversService {
 
     return this.getLocation(reservation.driverId);
   }
+
   async deleteByDriverId(id: string): Promise<void> {
-  // Détacher les réservations liées avant de supprimer
-  await this.reservationsRepository.update(
-    { driverId: id },
-    { driverId: null }
-  );
-  // Supprimer la location si elle existe
-  await this.locationRepository.delete({ driverId: id });
-  // Supprimer le driver
-  await this.driversRepository.delete(id);
-}
+    // Détacher les réservations liées avant de supprimer
+    await this.reservationsRepository.update(
+      { driverId: id },
+      { driverId: null },
+    );
+    // Supprimer la location si elle existe
+    await this.locationRepository.delete({ driverId: id });
+    // Supprimer le driver
+    await this.driversRepository.delete(id);
+  }
 }
