@@ -110,6 +110,7 @@ export function Navbar() {
     try { localStorage.removeItem(key) } catch {}
   }
 
+  /* Horloge */
   useEffect(() => {
     const tick = () => {
       const now = new Date()
@@ -120,6 +121,7 @@ export function Navbar() {
     return () => clearInterval(id)
   }, [lang])
 
+  /* Dernier code */
   useEffect(() => {
     setLastCode(safeGet('vtc_last_code'))
     const handler      = () => setLastCode(safeGet('vtc_last_code'))
@@ -166,6 +168,31 @@ export function Navbar() {
 
             <div className="flex-1" />
 
+            {/* Toggle langue */}
+            <button
+              onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}
+              className="flex items-center gap-0.5 bg-white/10 hover:bg-white/20 px-2 py-1 rounded-full text-[11px] font-bold text-white transition-colors flex-shrink-0"
+              aria-label="Changer de langue"
+            >
+              <span className={lang === 'fr' ? 'text-[var(--accent)]' : 'text-white/50'}>FR</span>
+              <span className="text-white/30 mx-0.5">|</span>
+              <span className={lang === 'en' ? 'text-[var(--accent)]' : 'text-white/50'}>EN</span>
+            </button>
+
+            {/* Notifications */}
+            <button
+              onClick={promptNotifications}
+              className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-full text-white text-[11px] font-semibold transition-colors flex-shrink-0"
+              aria-label="Activer les notifications"
+              title="Activer les notifications"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
+              <span className="hidden sm:inline">Notif</span>
+            </button>
+
             {/* Auth */}
             {user ? (
               <div className="relative flex-shrink-0">
@@ -188,6 +215,11 @@ export function Navbar() {
                       onClick={() => { logout(); setShowUserMenu(false) }}
                       className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
                     >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                      </svg>
                       {t.nav.signOut}
                     </button>
                   </div>
@@ -195,8 +227,78 @@ export function Navbar() {
               </div>
             ) : null}
           </div>
+
+          {/* 2e ligne : code + horloge */}
+          <div className="flex items-center justify-end gap-2 mt-2 min-h-[28px]">
+            {lastCode && (
+              <Link
+                href={`/suivi?code=${lastCode}`}
+                className="flex items-center gap-1 bg-white/10 hover:bg-white/15 px-2.5 py-1 rounded-full transition-colors max-w-[65vw]"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span className="text-white font-mono text-[11px] font-bold tracking-wide truncate">{lastCode}</span>
+              </Link>
+            )}
+            {time && (
+              <span className="text-white/60 text-xs font-mono tabular-nums">{time}</span>
+            )}
+          </div>
         </div>
       </header>
+
+      {/* ── Barre navigation CLIENT (bas d'écran) ───────────────────── */}
+      {!isDriverRoute && !isAdminRoute && (
+        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--primary)] border-t border-white/10">
+          <div className="flex max-w-2xl mx-auto">
+            {NAV_LINKS.map((link, i) => {
+              const active = pathname === link.href
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={cn(
+                    'flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold tracking-wide transition-colors',
+                    active ? 'text-[var(--accent)]' : 'text-white/50 hover:text-white/80'
+                  )}
+                >
+                  <span className={cn('transition-transform', active && 'scale-110')}>
+                    {NAV_ICONS[i]}
+                  </span>
+                  {link.label}
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
+      )}
+
+      {/* ── Barre navigation CHAUFFEUR (bas d'écran) ────────────────── */}
+      {isDriverRoute && (
+        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--primary)] border-t border-white/10">
+          <div className="flex max-w-2xl mx-auto">
+            {DRIVER_NAV.map(link => {
+              const active = pathname === link.href
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={cn(
+                    'flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold tracking-wide transition-colors',
+                    active ? 'text-[var(--accent)]' : 'text-white/50 hover:text-white/80'
+                  )}
+                >
+                  <span className={cn('transition-transform', active && 'scale-110')}>
+                    {link.icon}
+                  </span>
+                  {link.label}
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
+      )}
     </>
   )
 }
