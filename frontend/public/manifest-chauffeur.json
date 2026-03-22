@@ -1,0 +1,32 @@
+{
+  "name": "WEND'D Transport — Pro",
+  "short_name": "WEND'D Pro",
+  "description": "Espace chauffeurs et administrateurs WEND'D Transport.",
+  "start_url": "/login",
+  "display": "standalone",
+  "background_color": "#0D3B2E",
+  "theme_color": "#0D3B2E",
+  "orientation": "portrait",
+  "id": "/login",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/images/FOND.jpeg",
+      "sizes": "any",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
