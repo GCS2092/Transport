@@ -13,10 +13,7 @@ export const metadata: Metadata = {
   description:
     "Réservez votre transfert aéroport à Dakar en 2 minutes. Tarifs fixes, chauffeurs professionnels disponibles 24h/24. Service VTC premium pour AIBD et toutes zones de Dakar.",
   manifest: "/manifest.json",
-  robots: {
-    index: true,
-    follow: true,
-  },
+  robots: { index: true, follow: true },
   openGraph: {
     type: "website",
     locale: "fr_FR",
@@ -46,9 +43,7 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "WEND'D Transport",
   },
-  formatDetection: {
-    telephone: false,
-  },
+  formatDetection: { telephone: false },
   icons: {
     icon: "/favicon.ico",
     apple: "/images/FOND.jpeg",
@@ -100,19 +95,24 @@ export default function RootLayout({
                   await OneSignal.init({
                     appId: ${JSON.stringify(onesignalAppId)},
                     safari_web_id: "web.onesignal.auto.0818a4e7-118f-4fc1-b0e2-07892e811a2a",
+                    serviceWorkerPath: "/sw.js",
+                    serviceWorkerParam: { scope: "/" },
                     notifyButton: { enable: true },
                   });
 
-                  // 🔹 LOGIN USER — toujours avec l'email (jamais l'id)
                   try {
                     const raw = localStorage.getItem("vtc_user");
                     const user = raw ? JSON.parse(raw) : null;
                     if (user?.email) {
                       const email = user.email.trim().toLowerCase();
-                      await OneSignal.login(email);
+                      try {
+                        await OneSignal.login(email);
+                      } catch(e) {
+                        if (!String(e).includes('409')) {
+                          console.warn("[OneSignal] login error", e);
+                        }
+                      }
                       console.log("[OneSignal] user linked:", email);
-
-                      // ✅ Tag role dynamique (client / driver / admin)
                       const role = (user.role || "client").toLowerCase();
                       OneSignal.User.addTags({ role });
                       console.log("[OneSignal] tag role:", role);
@@ -123,7 +123,6 @@ export default function RootLayout({
                     console.warn("[OneSignal] login error", e);
                   }
 
-                  // 🔹 DEMANDE PERMISSION PUSH au premier geste utilisateur
                   try {
                     const requestPermission = async () => {
                       try {
