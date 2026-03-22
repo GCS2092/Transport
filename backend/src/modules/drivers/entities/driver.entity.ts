@@ -6,7 +6,6 @@ import {
   UpdateDateColumn,
   OneToOne,
   JoinColumn,
-  OneToMany,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { DriverStatus } from '../../../common/enums/driver-status.enum';
@@ -31,7 +30,7 @@ export class Driver {
   @Column({ nullable: true })
   vehiclePlate: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, unique: true })
   email: string;
 
   @Column({
@@ -44,7 +43,8 @@ export class Driver {
   @Column({ nullable: true })
   userId: string;
 
-  @OneToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  // ← CASCADE au lieu de SET NULL
+  @OneToOne(() => User, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user: User;
 
