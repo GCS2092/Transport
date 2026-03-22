@@ -26,49 +26,55 @@ interface AuthCtx {
 
 const AuthContext = createContext<AuthCtx | null>(null)
 
+// ✅ Helper centralisé — utilisé partout
+function linkOneSignal(user: AuthUser) {
+  if (typeof window === 'undefined' || !window.OneSignalDeferred) return
+  const email = user.email.trim().toLowerCase()
+  const roleMap: Record<string, string> = { 'driver': 'chauffeur', 'admin': 'admin' }
+  const role = roleMap[user.role?.toLowerCase()] || 'client'
+
+  window.OneSignalDeferred.push(async function (OneSignal) {
+    try {
+      await OneSignal.login(email) // ✅ toujours l'email, jamais l'UUID
+      OneSignal.User.addTags({ role })
+      console.log('[OneSignal] linked:', email, 'role:', role)
+    } catch (e) {
+      if (!String(e).includes('409')) {
+        console.warn('[OneSignal] link error', e)
+      }
+    }
+  })
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // ✅ Au démarrage — restaure la session ET re-lie OneSignal
   useEffect(() => {
     try {
       const token = localStorage.getItem('vtc_token')
       const raw   = localStorage.getItem('vtc_user')
       if (token && raw) {
-        setUser(JSON.parse(raw))
+        const u = JSON.parse(raw) as AuthUser
+        setUser(u)
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+        linkOneSignal(u) // ✅ re-lien automatique au démarrage
       }
     } catch {}
     setLoading(false)
   }, [])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (!window.OneSignalDeferred) return
-
-    const roleTag = user?.role === 'DRIVER' ? 'chauffeur' : 'client'
-    const userId = user?.id
-
-    window.OneSignalDeferred.push(async function (OneSignal) {
-      try {
-        if (userId) {
-          // Associe la souscription à un user "external id"
-          await OneSignal.login(userId)
-        }
-        OneSignal.User.addTags({ role: roleTag })
-      } catch {}
-    })
-  }, [user?.id, user?.role])
 
   const login = async (email: string, password: string): Promise<AuthUser> => {
     const { data } = await api.post('/auth/login', { email, password })
     const { accessToken, refreshToken, user: u } = data
     setUser(u)
     localStorage.setItem('vtc_token', accessToken)
-    localStorage.setItem('vtc_user',  JSON.stringify(u))
+    localStorage.setItem('vtc_user', JSON.stringify(u))
     if (refreshToken) localStorage.setItem('vtc_refresh_token', refreshToken)
-    if (u?.id)        localStorage.setItem('vtc_user_id', u.id)
+    if (u?.id) localStorage.setItem('vtc_user_id', u.id)
     api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
+    linkOneSignal(u) // ✅ re-lien immédiat après login
     return u
   }
 
@@ -83,7 +89,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window !== 'undefined' && window.OneSignalDeferred) {
       window.OneSignalDeferred.push(async function (OneSignal) {
         try {
-          // Retour au profil "client" quand on se déconnecte
           if (typeof OneSignal.logout === 'function') await OneSignal.logout()
           OneSignal.User.addTags({ role: 'client' })
         } catch {}
