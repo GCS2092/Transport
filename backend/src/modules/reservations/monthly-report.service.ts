@@ -82,8 +82,17 @@ export class MonthlyReportService {
     const drivers = await this.driversService.findAll();
     let driversNotified = 0;
 
+    // Dédoublonnage par email : un seul rapport par adresse email
+    const seenEmails = new Set<string>();
+
     for (const driver of drivers) {
       if (!driver.isActive || !driver.email) continue;
+      if (seenEmails.has(driver.email)) {
+        this.logger.warn(`Skipping duplicate email for driver ${driver.firstName} ${driver.lastName} (${driver.email})`);
+        continue;
+      }
+      seenEmails.add(driver.email);
+
       const rides = byDriver.get(driver.id) || [];
 
       const pdfBuffer = await this.pdfService.generateDriverMonthlyReportPdf({
