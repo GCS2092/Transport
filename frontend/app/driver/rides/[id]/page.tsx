@@ -36,7 +36,6 @@ function dropoffLabel(ride: Reservation): string {
   return ride.dropoffCustomAddress || ride.dropoffZone?.name || 'Destination'
 }
 
-// Ouvrir la navigation externe (Google Maps ou OpenStreetMap)
 function openNavigation(
   provider: 'google' | 'osm',
   userLat: number,
@@ -75,8 +74,6 @@ export default function RideDetail() {
     setIsHttps(window.location.protocol === 'https:' || window.location.hostname === 'localhost')
   }, [])
 
-
-  // Détecter quand le chauffeur est à moins de 100m du pickup client
   useEffect(() => {
     if (!ride || ride.status !== 'ASSIGNEE') { setNearPickup(false); return }
     if (!geo.latitude || !geo.longitude) return
@@ -85,15 +82,12 @@ export default function RideDetail() {
     const destLng = ride.clientLongitude ?? ride.pickupLongitude ?? ride.pickupZone?.longitude
     if (!destLat || !destLng) return
 
-    // Haversine simplifié — précision suffisante pour 100m
     const dlat = (geo.latitude - destLat) * 111000
     const dlng = (geo.longitude - destLng) * 111000 * Math.cos(geo.latitude * Math.PI / 180)
     const distanceMeters = Math.sqrt(dlat * dlat + dlng * dlng)
-
     setNearPickup(distanceMeters < 100)
   }, [geo.latitude, geo.longitude, ride])
 
-  // Envoyer la position GPS au backend toutes les 15s (visible admin map)
   useEffect(() => {
     if (!geo.latitude || !geo.longitude) return
     if (!ride || ['TERMINEE', 'ANNULEE'].includes(ride.status)) return
@@ -118,7 +112,6 @@ export default function RideDetail() {
       .finally(() => setLoading(false))
   }, [authLoading, user, id, router])
 
-  // Calcul de l'itinéraire avec debounce (recalcul si déplacé > 50m)
   useEffect(() => {
     if (!ride || !geo.latitude || !geo.longitude) return
     if (['TERMINEE', 'ANNULEE'].includes(ride.status)) return
@@ -155,7 +148,6 @@ export default function RideDetail() {
     return () => { if (routeTimerRef.current) clearTimeout(routeTimerRef.current) }
   }, [ride, geo.latitude, geo.longitude])
 
-  // Calculer les coordonnées de destination selon le statut (pour les boutons navigation)
   const getDestCoords = () => {
     if (!ride) return null
     const isEnCours = ride.status === 'EN_COURS'
@@ -206,6 +198,9 @@ export default function RideDetail() {
     try {
       if (markAsPaid) {
         await reservationsApi.updatePaymentStatus(ride.id, 'PAIEMENT_COMPLET')
+      } else {
+        // ✅ Marque explicitement IMPAYE → déclenche email + notif push admin
+        await reservationsApi.updatePaymentStatus(ride.id, 'IMPAYE')
       }
       const { data } = await reservationsApi.updateStatus(ride.id, pendingStatus)
       setRide(data)
@@ -335,8 +330,6 @@ export default function RideDetail() {
       {/* ── Carte interactive ─────────────────────────────── */}
       {ride.status !== 'TERMINEE' && ride.status !== 'ANNULEE' && (
         <div className={`bg-white rounded-2xl border p-4 space-y-3 ${ride.status === 'EN_COURS' ? 'border-indigo-200' : 'border-gray-100'}`}>
-
-          {/* Bannière mode navigation */}
           {ride.status === 'EN_COURS' ? (
             <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2">
               <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse flex-shrink-0" />
@@ -353,7 +346,6 @@ export default function RideDetail() {
             </div>
           )}
 
-          {/* ETA + Distance */}
           {routeInfo && (
             <div className="grid grid-cols-2 gap-2">
               <div className={`rounded-xl p-3 text-center text-white ${ride.status === 'EN_COURS' ? 'bg-indigo-600' : 'bg-[var(--primary)]'}`}>
@@ -367,14 +359,12 @@ export default function RideDetail() {
             </div>
           )}
 
-          {/* ── Boutons navigation externe ── */}
           {geo.latitude && geo.longitude && destCoords && (
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => openNavigation('google', geo.latitude!, geo.longitude!, destCoords.lat, destCoords.lng)}
                 className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50 active:scale-95 transition-all"
               >
-                {/* Icône Google Maps (dégradé multicolore simplifié) */}
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polygon points="3 11 22 2 13 21 11 13 3 11"/>
                 </svg>
@@ -393,18 +383,16 @@ export default function RideDetail() {
             </div>
           )}
 
-          {/* Avertissement HTTPS requis (iOS bloque la géolocalisation sur HTTP) */}
           {!isHttps && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-3 flex items-start gap-2">
               <span className="text-amber-500 text-base flex-shrink-0">⚠️</span>
               <div>
                 <p className="text-xs font-bold text-amber-800 mb-0.5">Localisation non disponible</p>
-                <p className="text-[11px] text-amber-700 leading-snug">iOS bloque la géolocalisation sur les connexions HTTP. Demandez à votre administrateur de lancer le serveur en HTTPS.</p>
+                <p className="text-[11px] text-amber-700 leading-snug">iOS bloque la géolocalisation sur les connexions HTTP.</p>
               </div>
             </div>
           )}
 
-          {/* Bouton pour demander la localisation */}
           {isHttps && !geo.latitude && !geo.loading && geo.permission !== 'denied' && (
             <button
               onClick={geo.requestPermission}
@@ -414,7 +402,6 @@ export default function RideDetail() {
             </button>
           )}
 
-          {/* Carte Leaflet */}
           {geo.latitude && geo.longitude ? (
             <Map
               center={[geo.latitude, geo.longitude]}
@@ -464,7 +451,7 @@ export default function RideDetail() {
         </div>
       </div>
 
-      {/* ── Infos complémentaires ─────────────────────────── */}
+      {/* ── Détails ───────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4">
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-3">Détails</p>
         <div className="grid grid-cols-2 gap-3">
@@ -485,7 +472,14 @@ export default function RideDetail() {
           )}
           <div>
             <p className="text-[10px] text-gray-400 uppercase font-semibold">Paiement</p>
-            <p className="text-sm font-bold text-gray-900 mt-0.5">{ride.paymentStatus}</p>
+            <p className={`text-sm font-bold mt-0.5 ${
+              ride.paymentStatus === 'PAIEMENT_COMPLET' ? 'text-emerald-600' :
+              ride.paymentStatus === 'IMPAYE' ? 'text-red-600' : 'text-gray-900'
+            }`}>
+              {ride.paymentStatus === 'PAIEMENT_COMPLET' ? '✅ Payé' :
+               ride.paymentStatus === 'IMPAYE' ? '⚠️ Impayé' :
+               ride.paymentStatus === 'ACOMPTE_VERSE' ? '🔶 Acompte versé' : ride.paymentStatus}
+            </p>
           </div>
         </div>
         {ride.notes && (
@@ -507,8 +501,6 @@ export default function RideDetail() {
       {/* ── Actions ───────────────────────────────────────── */}
       {ride.status === 'ASSIGNEE' && (
         <div className="space-y-3">
-
-          {/* Bannière arrivée chez le client */}
           {nearPickup && (
             <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
@@ -519,15 +511,10 @@ export default function RideDetail() {
             </div>
           )}
 
-          {/* Avertissement départ trop tôt — seulement si pas encore proche */}
           {!nearPickup && !canStartRide() && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-              <p className="text-sm text-amber-800 font-semibold">
-                ⏰ Départ dans {getTimeUntilPickup()}
-              </p>
-              <p className="text-xs text-amber-700 mt-1">
-                Vous ne pourrez démarrer cette course que 30 minutes avant l'heure de prise en charge.
-              </p>
+              <p className="text-sm text-amber-800 font-semibold">⏰ Départ dans {getTimeUntilPickup()}</p>
+              <p className="text-xs text-amber-700 mt-1">Vous ne pourrez démarrer cette course que 30 minutes avant l'heure de prise en charge.</p>
             </div>
           )}
 
@@ -535,9 +522,7 @@ export default function RideDetail() {
             onClick={() => updateStatus('EN_COURS')}
             disabled={acting || !canStartRide()}
             className={`w-full py-4 rounded-2xl text-white font-bold text-base active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2 ${
-              nearPickup
-                ? 'bg-emerald-600 hover:bg-emerald-700'
-                : 'bg-[var(--primary)] hover:bg-[var(--primary-hover)]'
+              nearPickup ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[var(--primary)] hover:bg-[var(--primary-hover)]'
             }`}
           >
             {acting ? (
@@ -582,48 +567,64 @@ export default function RideDetail() {
               <button
                 onClick={() => confirmCompleteRide(false)}
                 disabled={acting}
-                className="py-3 rounded-xl border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
+                className="py-3 rounded-xl border border-red-200 bg-red-50 text-red-700 font-semibold hover:bg-red-100 transition-colors disabled:opacity-60"
               >
-                Non payé
+                {acting ? '...' : '⚠️ Non payé'}
               </button>
               <button
                 onClick={() => confirmCompleteRide(true)}
                 disabled={acting}
                 className="py-3 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-60"
               >
-                Payé
+                {acting ? '...' : '✅ Payé'}
               </button>
             </div>
             <p className="text-xs text-gray-400 text-center">
-              Vous pourrez modifier le statut de paiement plus tard si nécessaire.
+              Si non payé, l'administrateur sera automatiquement notifié.
             </p>
           </div>
         </div>
       )}
 
-      {/* Bouton pour marquer le paiement comme effectué */}
-      {ride.status === 'TERMINEE' && ride.paymentStatus !== 'PAIEMENT_COMPLET' && (
-        <button
-          onClick={() => updatePaymentStatus('PAIEMENT_COMPLET')}
-          disabled={acting}
-          className="w-full py-4 rounded-2xl bg-blue-600 text-white font-bold text-base hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
-        >
-          {acting ? (
-            <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 12a8 8 0 018-8"/></svg>
-          ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      {/* ── Statut final ──────────────────────────────────── */}
+      {ride.status === 'TERMINEE' && (
+        <div className="space-y-3">
+          {/* ✅ Bannière impayé visible si signalé */}
+          {ride.paymentStatus === 'IMPAYE' && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" className="flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <div>
+                <p className="text-sm font-bold text-red-800">Course signalée comme impayée</p>
+                <p className="text-xs text-red-600 mt-0.5">L'administrateur a été notifié et prendra en charge cette situation.</p>
+              </div>
+            </div>
           )}
-          Confirmer le paiement reçu
-        </button>
+
+          {/* Bouton confirmer paiement si pas encore payé */}
+          {ride.paymentStatus !== 'PAIEMENT_COMPLET' && (
+            <button
+              onClick={() => updatePaymentStatus('PAIEMENT_COMPLET')}
+              disabled={acting}
+              className="w-full py-4 rounded-2xl bg-blue-600 text-white font-bold text-base hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {acting ? (
+                <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 12a8 8 0 018-8"/></svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              )}
+              Confirmer le paiement reçu
+            </button>
+          )}
+
+          <div className="w-full py-3.5 rounded-2xl text-center text-sm font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            Course terminée
+          </div>
+        </div>
       )}
 
-      {(ride.status === 'TERMINEE' || ride.status === 'ANNULEE') && (
-        <div className={`w-full py-3.5 rounded-2xl text-center text-sm font-bold ${
-          ride.status === 'TERMINEE'
-            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-            : 'bg-gray-100 text-gray-400 border border-gray-200'
-        }`}>
-          {ride.status === 'TERMINEE' ? 'Course terminée' : 'Course annulée'}
+      {ride.status === 'ANNULEE' && (
+        <div className="w-full py-3.5 rounded-2xl text-center text-sm font-bold bg-gray-100 text-gray-400 border border-gray-200">
+          Course annulée
         </div>
       )}
 
