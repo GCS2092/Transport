@@ -111,7 +111,14 @@ export default function RootLayout({
                         }
                       }
                       console.log("[OneSignal] user linked:", email);
-                      const role = (user.role || "client").toLowerCase();
+
+                      // ✅ Mapping rôle BDD → tag OneSignal
+                      const roleMap = {
+                        'driver': 'chauffeur',
+                        'admin': 'admin',
+                      };
+                      const rawRole = (user.role || "").toLowerCase();
+                      const role = roleMap[rawRole] || 'client';
                       OneSignal.User.addTags({ role });
                       console.log("[OneSignal] tag role:", role);
                     } else {
