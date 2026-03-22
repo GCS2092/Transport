@@ -12,7 +12,7 @@ import { DriversService } from '../drivers/drivers.service';
 /** Période calendaire (mois précédent si lancé le 1er du mois). */
 export function getPreviousMonthBounds(reference: Date = new Date()): { start: Date; end: Date; labelFr: string } {
   const y = reference.getFullYear();
-  const m = reference.getMonth(); // 0-11, si on est le 1er, m = mois courant → mois précédent = m-1
+  const m = reference.getMonth();
   const firstOfThisMonth = new Date(y, m, 1);
   const end = new Date(firstOfThisMonth.getTime() - 1);
   end.setHours(23, 59, 59, 999);
@@ -39,9 +39,6 @@ export class MonthlyReportService {
     private readonly driversService: DriversService,
   ) {}
 
-  /**
-   * Courses terminées dans la période (date de fin de course ou repli sur date de prise en charge).
-   */
   private async loadCompletedReservationsForPeriod(start: Date, end: Date): Promise<Reservation[]> {
     return this.reservationsRepository
       .createQueryBuilder('r')
@@ -71,22 +68,45 @@ export class MonthlyReportService {
     const admins = await this.usersService.findAdmins();
     const adminEmails = admins.map(a => a.email).filter(Boolean);
 
+    // Chauffeurs actifs uniquement (pour l'envoi des emails)
+    const activeDrivers = await this.driversService.findAll();
+
+    // Tous les chauffeurs y compris inactifs (pour rattacher les anciennes courses)
+    const allDrivers = await this.driversService.findAllIncludingInactive();
+
+    // Index email → driverId actif
+    const emailToActiveDriverId = new Map<string, string>();
+    for (const driver of activeDrivers) {
+      if (driver.email) emailToActiveDriverId.set(driver.email, driver.id);
+    }
+
+    // Index driverId → email (tous chauffeurs y compris inactifs)
+    const driverIdToEmail = new Map<string, string>();
+    for (const driver of allDrivers) {
+      if (driver.email) driverIdToEmail.set(driver.id, driver.email);
+    }
+
+    // Rattacher chaque course au chauffeur ACTIF qui partage le même email
     const byDriver = new Map<string, Reservation[]>();
     for (const r of reservations) {
       if (!r.driverId) continue;
-      const list = byDriver.get(r.driverId) || [];
+
+      const courseDriverEmail = driverIdToEmail.get(r.driverId);
+      if (!courseDriverEmail) continue;
+
+      // Si la course appartient à un doublon inactif, on la rattache au chauffeur actif
+      const targetDriverId = emailToActiveDriverId.get(courseDriverEmail) ?? r.driverId;
+
+      const list = byDriver.get(targetDriverId) || [];
       list.push(r);
-      byDriver.set(r.driverId, list);
+      byDriver.set(targetDriverId, list);
     }
 
-    const drivers = await this.driversService.findAll();
     let driversNotified = 0;
-
-    // Dédoublonnage par email : un seul rapport par adresse email
     const seenEmails = new Set<string>();
 
-    for (const driver of drivers) {
-      if (!driver.isActive || !driver.email) continue;
+    for (const driver of activeDrivers) {
+      if (!driver.email) continue;
       if (seenEmails.has(driver.email)) {
         this.logger.warn(`Skipping duplicate email for driver ${driver.firstName} ${driver.lastName} (${driver.email})`);
         continue;
@@ -118,7 +138,7 @@ export class MonthlyReportService {
       start,
       end,
       reservations,
-      allDrivers: drivers,
+      allDrivers: activeDrivers,
     });
 
     await this.notificationsService.sendMonthlyAdminReportEmail(adminEmails, labelFr, adminPdf);

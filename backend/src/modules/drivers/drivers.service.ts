@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Driver } from './entities/driver.entity';
@@ -21,6 +21,14 @@ export class DriversService {
   ) {}
 
   async findAll(): Promise<Driver[]> {
+    return this.driversRepository.find({
+      where: { isActive: true },
+      order: { lastName: 'ASC' },
+    });
+  }
+
+  /** Retourne tous les chauffeurs y compris inactifs — utilisé par le rapport mensuel. */
+  async findAllIncludingInactive(): Promise<Driver[]> {
     return this.driversRepository.find({ order: { lastName: 'ASC' } });
   }
 
@@ -46,12 +54,26 @@ export class DriversService {
   }
 
   async create(dto: CreateDriverDto): Promise<Driver> {
+    // Vérifier qu'aucun chauffeur (actif ou inactif) n'a déjà cet email
+    if (dto.email) {
+      const existing = await this.driversRepository.findOne({ where: { email: dto.email } });
+      if (existing) {
+        throw new ConflictException(`Un chauffeur avec l'email ${dto.email} existe déjà`);
+      }
+    }
     const driver = this.driversRepository.create(dto);
     return this.driversRepository.save(driver);
   }
 
   async update(id: string, dto: Partial<CreateDriverDto>): Promise<Driver> {
     await this.findById(id);
+    // Vérifier unicité email si on le modifie
+    if (dto.email) {
+      const existing = await this.driversRepository.findOne({ where: { email: dto.email } });
+      if (existing && existing.id !== id) {
+        throw new ConflictException(`Un chauffeur avec l'email ${dto.email} existe déjà`);
+      }
+    }
     await this.driversRepository.update(id, dto);
     return this.findById(id);
   }
@@ -69,7 +91,7 @@ export class DriversService {
 
   async getDriverStats(id: string) {
     const driver = await this.findById(id);
-    
+
     const reservations = await this.reservationsRepository.find({
       where: { driverId: id },
       relations: ['pickupZone', 'dropoffZone'],
@@ -116,23 +138,17 @@ export class DriversService {
 
   async updateLocation(driverId: string, dto: UpdateLocationDto): Promise<DriverLocation> {
     await this.findById(driverId);
-    
-    // Chercher la dernière localisation
+
     let location = await this.locationRepository.findOne({
       where: { driverId },
       order: { updatedAt: 'DESC' },
     });
 
     if (location) {
-      // Mettre à jour la localisation existante
       await this.locationRepository.update(location.id, dto);
       return this.locationRepository.findOne({ where: { id: location.id } });
     } else {
-      // Créer une nouvelle localisation
-      location = this.locationRepository.create({
-        driverId,
-        ...dto,
-      });
+      location = this.locationRepository.create({ driverId, ...dto });
       return this.locationRepository.save(location);
     }
   }
@@ -150,9 +166,7 @@ export class DriversService {
       relations: ['driver'],
     });
 
-    if (!reservation || !reservation.driverId) {
-      return null;
-    }
+    if (!reservation || !reservation.driverId) return null;
 
     return this.getLocation(reservation.driverId);
   }
