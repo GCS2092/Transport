@@ -26,7 +26,44 @@ interface AuthCtx {
 
 const AuthContext = createContext<AuthCtx | null>(null)
 
-// ✅ Helper centralisé — utilisé partout
+// ✅ Cookie helpers — fallback Safari/Edge qui bloquent localStorage
+function setAuthCookies(token: string, user: AuthUser) {
+  if (typeof document === 'undefined') return
+  const maxAge = 'max-age=2592000' // 30 jours
+  document.cookie = `vtc_token=${encodeURIComponent(token)}; path=/; ${maxAge}; SameSite=Lax`
+  document.cookie = `vtc_user=${encodeURIComponent(JSON.stringify(user))}; path=/; ${maxAge}; SameSite=Lax`
+}
+
+function clearAuthCookies() {
+  if (typeof document === 'undefined') return
+  document.cookie = 'vtc_token=; path=/; max-age=0'
+  document.cookie = 'vtc_user=; path=/; max-age=0'
+}
+
+function getCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'))
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+function getStoredToken(): string | null {
+  try { return localStorage.getItem('vtc_token') } catch {}
+  return getCookie('vtc_token')
+}
+
+function getStoredUser(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem('vtc_user')
+    if (raw) return JSON.parse(raw) as AuthUser
+  } catch {}
+  try {
+    const raw = getCookie('vtc_user')
+    if (raw) return JSON.parse(raw) as AuthUser
+  } catch {}
+  return null
+}
+
+// ✅ Helper centralisé OneSignal — toujours email, jamais UUID
 function linkOneSignal(user: AuthUser) {
   if (typeof window === 'undefined' || !window.OneSignalDeferred) return
   const email = user.email.trim().toLowerCase()
@@ -35,7 +72,7 @@ function linkOneSignal(user: AuthUser) {
 
   window.OneSignalDeferred.push(async function (OneSignal) {
     try {
-      await OneSignal.login(email) // ✅ toujours l'email, jamais l'UUID
+      await OneSignal.login(email)
       OneSignal.User.addTags({ role })
       console.log('[OneSignal] linked:', email, 'role:', role)
     } catch (e) {
@@ -50,16 +87,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // ✅ Au démarrage — restaure la session ET re-lie OneSignal
+  // ✅ Au démarrage — restaure session depuis localStorage OU cookie (Safari)
   useEffect(() => {
     try {
-      const token = localStorage.getItem('vtc_token')
-      const raw   = localStorage.getItem('vtc_user')
-      if (token && raw) {
-        const u = JSON.parse(raw) as AuthUser
+      const token = getStoredToken()
+      const u = getStoredUser()
+      if (token && u) {
         setUser(u)
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`
-        linkOneSignal(u) // ✅ re-lien automatique au démarrage
+        linkOneSignal(u)
       }
     } catch {}
     setLoading(false)
@@ -69,21 +105,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data } = await api.post('/auth/login', { email, password })
     const { accessToken, refreshToken, user: u } = data
     setUser(u)
-    localStorage.setItem('vtc_token', accessToken)
-    localStorage.setItem('vtc_user', JSON.stringify(u))
-    if (refreshToken) localStorage.setItem('vtc_refresh_token', refreshToken)
-    if (u?.id) localStorage.setItem('vtc_user_id', u.id)
+
+    // ✅ Sauvegarde localStorage + cookie (fallback Safari)
+    try {
+      localStorage.setItem('vtc_token', accessToken)
+      localStorage.setItem('vtc_user', JSON.stringify(u))
+      if (refreshToken) localStorage.setItem('vtc_refresh_token', refreshToken)
+      if (u?.id) localStorage.setItem('vtc_user_id', u.id)
+    } catch {}
+
+    setAuthCookies(accessToken, u)
     api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
-    linkOneSignal(u) // ✅ re-lien immédiat après login
+    linkOneSignal(u)
     return u
   }
 
   const logout = () => {
     setUser(null)
-    localStorage.removeItem('vtc_token')
-    localStorage.removeItem('vtc_user')
-    localStorage.removeItem('vtc_refresh_token')
-    localStorage.removeItem('vtc_user_id')
+
+    // ✅ Nettoie localStorage + cookies
+    try {
+      localStorage.removeItem('vtc_token')
+      localStorage.removeItem('vtc_user')
+      localStorage.removeItem('vtc_refresh_token')
+      localStorage.removeItem('vtc_user_id')
+    } catch {}
+
+    clearAuthCookies()
     delete api.defaults.headers.common['Authorization']
 
     if (typeof window !== 'undefined' && window.OneSignalDeferred) {
