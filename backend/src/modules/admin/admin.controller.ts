@@ -14,7 +14,8 @@ import { Reservation } from '../reservations/entities/reservation.entity';
 import { ReservationStatus } from '../../common/enums/reservation-status.enum';
 import { DriverStatus } from '../../common/enums/driver-status.enum';
 import { IsEmail, IsString, IsNotEmpty, MinLength, Matches, IsOptional } from 'class-validator';
- 
+ import * as argon2 from 'argon2';
+import { MonthlyReportService } from '../reservations/monthly-report.service';
 class CreateDriverUserDto {
   @IsEmail()
   email: string;
@@ -48,13 +49,14 @@ class CreateDriverUserDto {
 @Roles(Role.ADMIN)
 export class AdminController {
   constructor(
-    private usersService: UsersService,
-    private driversService: DriversService,
-    @InjectRepository(EmailLog)
-    private emailLogRepository: Repository<EmailLog>,
-    @InjectRepository(Reservation)
-    private reservationRepository: Repository<Reservation>,
-  ) {}
+  private usersService: UsersService,
+  private driversService: DriversService,
+  private monthlyReportService: MonthlyReportService, // ← ajouté
+  @InjectRepository(EmailLog)
+  private emailLogRepository: Repository<EmailLog>,
+  @InjectRepository(Reservation)
+  private reservationRepository: Repository<Reservation>,
+) {}
 
   @Get('stats')
   async getStats() {
@@ -505,4 +507,24 @@ async deleteUser(
       statusDistribution,
     };
   }
+  @Post('reports/send-now')
+async sendReportsNow(
+  @Body('password') password: string,
+  @CurrentUser() currentUser: { id: string },
+) {
+  if (!password) throw new BadRequestException('Mot de passe requis');
+
+  const user = await this.usersService.findById(currentUser.id);
+  if (!user) throw new BadRequestException('Utilisateur introuvable');
+
+  const valid = await argon2.verify(user.password, password);
+  if (!valid) throw new BadRequestException('Mot de passe incorrect');
+
+  // referenceDate = 1er du mois suivant → getPreviousMonthBounds retourne le mois courant
+  const now = new Date();
+  const referenceDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  const result = await this.monthlyReportService.generateAndSendMonthlyReports(referenceDate);
+  return result;
+}
 }

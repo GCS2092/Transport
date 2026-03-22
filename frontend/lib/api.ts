@@ -444,6 +444,11 @@ export const adminApi = {
      api.put(`/admin/users/${id}/activate`),
   deleteUser: (id: string) =>         
     api.delete(`/admin/users/${id}`),
+  sendReportsNow: (password: string) =>
+  api.post<{ driversNotified: number; adminsNotified: number; period: string }>(
+    '/admin/reports/send-now',
+    { password }
+  ),
   getEmailLogs: (params?: { page?: number; limit?: number; status?: string }) =>
     api.get<{ data: EmailLog[]; total: number }>('/admin/email-logs', { params }),
   getClients: (params?: { page?: number; limit?: number }) =>

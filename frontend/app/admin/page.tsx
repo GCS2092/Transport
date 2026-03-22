@@ -46,6 +46,11 @@ const IconAlertCircle = () => (
 export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportPassword, setReportPassword] = useState('')
+  const [reportError, setReportError] = useState('')
+  const [sendingReport, setSendingReport] = useState(false)
+  const [reportSuccess, setReportSuccess] = useState<string | null>(null)
 
   useEffect(() => {
     loadStats()
@@ -59,6 +64,25 @@ export default function AdminDashboard() {
       console.error('Failed to load stats', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSendReport = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (sendingReport) return
+    setSendingReport(true)
+    setReportError('')
+    try {
+      const { data } = await adminApi.sendReportsNow(reportPassword)
+      setReportSuccess(
+        `Rapports envoyés : ${data.driversNotified} chauffeur(s), ${data.adminsNotified} admin(s) — période : ${data.period}`
+      )
+      setShowReportModal(false)
+      setReportPassword('')
+    } catch (err: any) {
+      setReportError(err.response?.data?.message || "Erreur lors de l'envoi")
+    } finally {
+      setSendingReport(false)
     }
   }
 
@@ -104,26 +128,45 @@ export default function AdminDashboard() {
   return (
     <div className="bg-gray-50 pb-6">
       <div className="max-w-6xl mx-auto px-4 pt-6">
-        
+
         {/* Header */}
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Tableau de bord</h1>
             <p className="text-sm text-gray-500 mt-1">Vue d'ensemble de l'activité</p>
           </div>
-          <a
-            href="/admin/map"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-              <circle cx="12" cy="10" r="3"/>
-            </svg>
-            Carte des chauffeurs
-          </a>
+          <div className="flex items-center gap-2 flex-wrap">
+            <a
+              href="/admin/map"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-semibold"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                <circle cx="12" cy="10" r="3"/>
+              </svg>
+              Carte des chauffeurs
+            </a>
+            <button
+              onClick={() => { setShowReportModal(true); setReportError(''); setReportSuccess(null) }}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 text-sm font-semibold"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 14a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 3.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 10a16 16 0 0 0 6 6z"/>
+              </svg>
+              Envoyer résumé maintenant
+            </button>
+          </div>
         </div>
 
-        {/* Alertes */}
+        {/* Bandeau succès envoi rapport */}
+        {reportSuccess && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+            <span className="text-emerald-600 font-bold text-lg">✓</span>
+            <p className="text-sm text-emerald-800 font-medium">{reportSuccess}</p>
+          </div>
+        )}
+
+        {/* Alertes emails en échec */}
         {stats.alerts.failedEmails > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
             <IconAlertCircle />
@@ -201,21 +244,20 @@ export default function AdminDashboard() {
 
         {/* Graphiques */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
-          
+
           {/* Répartition des courses */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h2 className="text-base font-bold text-gray-900 mb-4">Répartition des courses</h2>
             <div className="flex items-center justify-center mb-6">
               <div className="relative w-48 h-48">
                 <svg viewBox="0 0 100 100" className="transform -rotate-90">
-                  {Object.entries(stats.byStatus).map(([ status, count], idx, arr) => {
+                  {Object.entries(stats.byStatus).map(([status, count], idx, arr) => {
                     const total = arr.reduce((sum, [, c]) => sum + c, 0)
                     const percentage = (count / total) * 100
                     const prevPercentages = arr.slice(0, idx).reduce((sum, [, c]) => sum + (c / total) * 100, 0)
                     const circumference = 2 * Math.PI * 40
                     const offset = circumference - (percentage / 100) * circumference
                     const rotation = (prevPercentages / 100) * 360
-
                     return (
                       <circle
                         key={status}
@@ -274,7 +316,6 @@ export default function AdminDashboard() {
                     const circumference = 2 * Math.PI * 40
                     const offset = circumference - (percentage / 100) * circumference
                     const rotation = (prevPercentages / 100) * 360
-
                     return (
                       <circle
                         key={item.label}
@@ -328,8 +369,8 @@ export default function AdminDashboard() {
             <h2 className="text-base font-bold text-gray-900 mb-4">Chauffeurs actifs</h2>
             <div className="space-y-2">
               {stats.driversDetails.map(driver => (
-                <div 
-                  key={driver.id} 
+                <div
+                  key={driver.id}
                   className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                 >
                   <div className="flex-1">
@@ -338,8 +379,8 @@ export default function AdminDashboard() {
                         {driver.firstName} {driver.lastName}
                       </p>
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                        driver.status === 'DISPONIBLE' 
-                          ? 'bg-emerald-100 text-emerald-700' 
+                        driver.status === 'DISPONIBLE'
+                          ? 'bg-emerald-100 text-emerald-700'
                           : driver.status === 'EN_COURSE'
                           ? 'bg-blue-100 text-blue-700'
                           : 'bg-gray-100 text-gray-700'
@@ -359,8 +400,8 @@ export default function AdminDashboard() {
                           {driver.activeCourse.pickupZone} → {driver.activeCourse.dropoffZone}
                         </p>
                         <span className={`inline-block mt-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
-                          driver.activeCourse.status === 'ASSIGNEE' 
-                            ? 'bg-blue-100 text-blue-700' 
+                          driver.activeCourse.status === 'ASSIGNEE'
+                            ? 'bg-blue-100 text-blue-700'
                             : 'bg-purple-100 text-purple-700'
                         }`}>
                           {driver.activeCourse.status === 'ASSIGNEE' ? 'Assignée' : 'En cours'}
@@ -370,6 +411,72 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Modale envoi manuel des rapports */}
+        {showReportModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl max-w-sm w-full p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Envoi manuel des rapports</h3>
+                <button
+                  onClick={() => setShowReportModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
+                <p className="text-sm font-semibold text-amber-900">⚠ Action sensible</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  Tous les chauffeurs et administrateurs recevront immédiatement leur rapport PDF par email.
+                  Cette action ne peut pas être annulée.
+                </p>
+                <p className="text-xs text-amber-600 mt-2 font-medium">
+                  Période : {new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                </p>
+              </div>
+
+              <form onSubmit={handleSendReport} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                    Mot de passe admin pour confirmer
+                  </label>
+                  <input
+                    type="password"
+                    value={reportPassword}
+                    onChange={e => { setReportPassword(e.target.value); setReportError('') }}
+                    placeholder="••••••••"
+                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                    required
+                    autoFocus
+                  />
+                  {reportError && (
+                    <p className="text-xs text-red-600 mt-1.5 font-medium">{reportError}</p>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowReportModal(false)}
+                    className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={sendingReport || !reportPassword}
+                    className="flex-1 py-2.5 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  >
+                    {sendingReport ? 'Envoi en cours...' : 'Envoyer maintenant'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
