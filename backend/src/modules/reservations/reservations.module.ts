@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';          // ← ajoute cet import
 import { ReservationsController } from './reservations.controller';
 import { ReservationsService } from './reservations.service';
+import { MonthlyReportService } from './monthly-report.service';
 import { Reservation } from './entities/reservation.entity';
 import { ReservationArchive } from './entities/reservation-archive.entity';
 import { DriverProposal } from './entities/driver-proposal.entity';
@@ -30,7 +31,7 @@ import { UsersModule } from '../users/users.module';
     UsersModule,
   ],
   controllers: [ReservationsController],
-  providers: [ReservationsService],
-  exports: [ReservationsService],
+  providers: [ReservationsService, MonthlyReportService],
+  exports: [ReservationsService, MonthlyReportService],
 })
 export class ReservationsModule {}

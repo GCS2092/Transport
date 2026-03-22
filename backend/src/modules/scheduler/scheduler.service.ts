@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import { ReservationsService } from '../reservations/reservations.service';
+import { MonthlyReportService } from '../reservations/monthly-report.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
 import { ReservationStatus } from '../../common/enums/reservation-status.enum';
@@ -15,11 +16,26 @@ export class SchedulerService {
 
   constructor(
     private reservationsService: ReservationsService,
+    private monthlyReportService: MonthlyReportService,
     private notificationsService: NotificationsService,
     private pdfService: PdfService,
     @InjectRepository(RefreshToken)
     private refreshTokenRepository: Repository<RefreshToken>,
   ) {}
+
+  /** Le 1er de chaque mois à 8h : rapports PDF du mois précédent (chauffeurs + admins). */
+  @Cron('0 8 1 * *')
+  async sendMonthlyPdfReports() {
+    this.logger.log('Running monthly PDF reports job...');
+    try {
+      const result = await this.monthlyReportService.generateAndSendMonthlyReports();
+      this.logger.log(
+        `Monthly reports done: period=${result.period}, drivers=${result.driversNotified}, admins=${result.adminsNotified}`,
+      );
+    } catch (error) {
+      this.logger.error('Monthly PDF reports failed', error?.message);
+    }
+  }
 
   @Cron('0 8 * * *')
   async sendDailyReminders() {

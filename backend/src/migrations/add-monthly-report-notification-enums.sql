@@ -1,0 +1,3 @@
+-- À exécuter sur PostgreSQL si notification_type est un ENUM :
+-- ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'MONTHLY_DRIVER_REPORT';
+-- ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'MONTHLY_ADMIN_REPORT';

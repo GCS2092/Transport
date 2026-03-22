@@ -969,6 +969,63 @@ export class NotificationsService {
     );
   }
 
+  async sendMonthlyDriverReportEmail(
+    to: string,
+    firstName: string,
+    periodLabel: string,
+    pdfBuffer: Buffer,
+    driverId: string,
+  ): Promise<void> {
+    const filename = `rapport-mensuel-${periodLabel.replace(/\s+/g, '-')}.pdf`.replace(/[^a-zA-Z0-9._-]/g, '');
+    const safeName = filename || 'rapport-mensuel.pdf';
+    const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">
+      <p>Bonjour <strong>${firstName}</strong>,</p>
+      <p>Vous trouverez en pièce jointe votre <strong>rapport d'activité</strong> pour la période : <strong>${periodLabel}</strong>.</p>
+      <p>Ce document récapitule vos courses, paiements, zones les plus fréquentes et vos créneaux d'activité.</p>
+      <p style="color:#666;font-size:12px;">WEND'D Transport — Dakar</p>
+    </body></html>`;
+    await this.sendEmail(
+      to,
+      `Votre rapport mensuel WEND'D — ${periodLabel}`,
+      html,
+      NotificationType.MONTHLY_DRIVER_REPORT,
+      driverId,
+      [{ filename: safeName, content: pdfBuffer.toString('base64') }],
+    );
+  }
+
+  async sendMonthlyAdminReportEmail(
+    adminEmails: string[],
+    periodLabel: string,
+    pdfBuffer: Buffer,
+  ): Promise<void> {
+    if (!adminEmails.length) return;
+    const filename = `recap-mensuel-global-${periodLabel.replace(/\s+/g, '-')}.pdf`.replace(/[^a-zA-Z0-9._-]/g, '') || 'recap-mensuel.pdf';
+    const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">
+      <h2 style="color:#0d3b2e;">C'est l'heure du récapitulatif mensuel</h2>
+      <p>Période : <strong>${periodLabel}</strong></p>
+      <p>Le document PDF joint contient la synthèse globale et la <strong>liste détaillée des courses impayées</strong> avec les coordonnées clients pour suivi depuis le tableau de bord.</p>
+      <p style="color:#666;font-size:12px;">WEND'D Transport</p>
+    </body></html>`;
+    for (const email of adminEmails) {
+      await this.sendEmail(
+        email,
+        `Récapitulatif mensuel WEND'D — ${periodLabel}`,
+        html,
+        NotificationType.MONTHLY_ADMIN_REPORT,
+        'monthly-admin-report',
+        [{ filename, content: pdfBuffer.toString('base64') }],
+      );
+    }
+
+    await this.sendPushNotification(
+      adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
+      'Récapitulatif mensuel',
+      `Le rapport PDF pour ${periodLabel} est disponible par email.`,
+      {},
+    );
+  }
+
   async sendDriverPaymentRegularized(reservation: Reservation): Promise<void> {
     if (!reservation.driver?.email) return;
 

@@ -1,20 +1,17 @@
-Oui exactement ! Le processus est :
+VEst-ce que tu penses que tu peux mettre en place un système d’envoi de mails, à chaque fin de mois, avec un résumé au format PDF ?
 
-1. **Acheter un domaine** (ex: `wendd.sn` ou `wendd-transport.com`)
-2. **Resend → Domains → Add Domain** → il te donne des enregistrements DNS
-3. **Ajouter ces DNS** chez ton registrar (Namecheap, Vercel, etc.)
-4. **Changer une variable** sur Render :
-```
-MAIL_FROM=noreply@wendd.sn
-```
+L’idée serait de générer un fichier PDF adressé à chaque chauffeur, contenant un récapitulatif complet de son activité. Par exemple :
 
-Et c'est tout — tes clients reçoivent leurs emails normalement. 🎉
+* son nom, prénom et immatriculation
+* le nombre total de courses effectuées
+* les courses payées et celles qui ne le sont pas
+* le total encaissé
+* le total des courses impayées
+* la période ou les heures pendant lesquelles il travaille le plus
+* les zones où il est le plus actif (par exemple : 36 courses à Nord Foire, etc.)
+
+Pour les courses non payées, il faudrait aussi inclure toutes les informations nécessaires afin que l’administrateur puisse les consulter rapidement depuis son dashboard.
+
+De plus, l’administrateur devrait également recevoir un mail récapitulatif avec un document PDF contenant toutes les informations globales, accompagné d’un message du type : « C’est l’heure du récapitulatif mensuel ».
 
 ---
-
-**En attendant d'acheter ton domaine**, tu peux tester en mettant `slovengama@gmail.com` comme email client dans tes réservations de test, c'est le seul qui reçoit en mode sans domaine.
-
-
-est ce que tu peux fire que quand le client prend une course aller simple que la section d arrivee ne soit qe sur AIBD genre retir les autres choix  et pour le retour simple que le depart soit pris depuis AIBD jusqua la destion soit dans les zones soir predeifine soit les adreeses personnalisee et donne beacoiup plus d adresse predeifnis  mias par contre poru aller retour tu laisses el qu elle et usi lors de la validation du numero que la personne entre le numero correctement genre tu peux l aider en mettant l indicatif convenable par rapport au pays qu il a choisit a fin d eviter les erreurs de saisies ou les chiffes manquants et aussi est ce que ut peux me dire si c es t normal que malgre le fait que la course soit termine que le apientement reste en attente ou c est au chauffer de valider que le apyement a ete effecute depuis sppn dashboard pourque sur le resume de course que ca change ET AUSSI JE VEUX SAVOIR POURQUOI DANS KES LAUKS L ADRESSE DE DEPART ET LA DESTINATION NE S AFFICHE PAS CA A MIS UNDEFINED ALORS QUE J AI BIEN CHOISI 
-ET AUSSI JE VOUDRAI QUE UT FSEES QUE LORSQU UN EOCURSE EST ANNULE APRES AVOIRR ECU LE MAIL D ANNULAIOTN QUE LE CODE DE LA COURSE SE SUPPRIME EN HAUT SUR LA BARRE OU SE TROUVE L HEURE 
-ET PRENDE LE TEMPS DE VOIR DABORD LA STRUCUTRE DU PROJET
