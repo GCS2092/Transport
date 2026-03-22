@@ -1,15 +1,18 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as argon2 from 'argon2';
 import { User } from './entities/user.entity';
 import { Role } from '../../common/enums/role.enum';
+import { DriversService } from '../drivers/drivers.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @Inject(forwardRef(() => DriversService))
+    private driversService: DriversService,
   ) {}
 
   async findByEmail(email: string): Promise<User | null> {
@@ -68,9 +71,19 @@ export class UsersService {
     if (!user) throw new NotFoundException('User not found');
     await this.usersRepository.update(id, { isActive: true });
   }
+
   async delete(id: string): Promise<void> {
-  const user = await this.findById(id);
-  if (!user) throw new NotFoundException('User not found');
-  await this.usersRepository.delete(id);
-}
+    const user = await this.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+
+    // Supprimer le driver lié avant de supprimer le user
+    if (user.role === Role.DRIVER) {
+      const driver = await this.driversService.findByUserId(id);
+      if (driver) {
+        await this.driversService.deleteByDriverId(driver.id);
+      }
+    }
+
+    await this.usersRepository.delete(id);
+  }
 }

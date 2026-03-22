@@ -170,4 +170,15 @@ export class DriversService {
 
     return this.getLocation(reservation.driverId);
   }
+  async deleteByDriverId(id: string): Promise<void> {
+  // Détacher les réservations liées avant de supprimer
+  await this.reservationsRepository.update(
+    { driverId: id },
+    { driverId: null }
+  );
+  // Supprimer la location si elle existe
+  await this.locationRepository.delete({ driverId: id });
+  // Supprimer le driver
+  await this.driversRepository.delete(id);
+}
 }
