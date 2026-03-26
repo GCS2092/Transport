@@ -96,6 +96,8 @@ export default function RootLayout({
                     appId: ${JSON.stringify(onesignalAppId)},
                     safari_web_id: "web.onesignal.auto.0818a4e7-118f-4fc1-b0e2-07892e811a2a",
                     notifyButton: { enable: true },
+                    serviceWorkerPath: "/sw.js",
+                    serviceWorkerUpdaterPath: "/sw.js",
                   });
 
                   try {
@@ -106,22 +108,16 @@ export default function RootLayout({
                       try {
                         await OneSignal.login(email);
                       } catch(e) {
-                        if (!String(e).includes('409')) {
+                        if (!String(e).includes("409")) {
                           console.warn("[OneSignal] login error", e);
                         }
                       }
                       console.log("[OneSignal] user linked:", email);
-
-                      const roleMap = {
-                        'driver': 'chauffeur',
-                        'admin': 'admin',
-                      };
+                      const roleMap = { driver: "chauffeur", admin: "admin" };
                       const rawRole = (user.role || "").toLowerCase();
-                      const role = roleMap[rawRole] || 'client';
+                      const role = roleMap[rawRole] || "client";
                       OneSignal.User.addTags({ role });
                       console.log("[OneSignal] tag role:", role);
-                    } else {
-                      console.log("[OneSignal] no user in localStorage, skipping login");
                     }
                   } catch (e) {
                     console.warn("[OneSignal] login error", e);
@@ -149,30 +145,28 @@ export default function RootLayout({
           />
         )}
 
-        {/* Service Worker PWA — désinstalle l'ancien SW corrompu puis réenregistre */}
+        {/* Nettoyage unique des anciens SW corrompus (hors OneSignal) */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', async () => {
-                  try {
-                    // 1. Désinscrire tous les SW existants (vieux SW corrompu)
-                    const registrations = await navigator.serviceWorker.getRegistrations();
-                    await Promise.all(registrations.map(r => r.unregister()));
-
-                    // 2. Vider tous les caches
-                    if ('caches' in window) {
-                      const keys = await caches.keys();
-                      await Promise.all(keys.map(k => caches.delete(k)));
+              if ('serviceWorker' in navigator && !sessionStorage.getItem('sw_cleaned')) {
+                navigator.serviceWorker.getRegistrations().then(regs => {
+                  regs.forEach(r => {
+                    if (r.active && !r.active.scriptURL.includes('OneSignal')) {
+                      r.unregister();
+                      console.log('[SW] unregistered old SW:', r.active.scriptURL);
                     }
-
-                    // 3. Réenregistrer le nouveau SW propre
-                    const reg = await navigator.serviceWorker.register('/sw.js');
-                    console.log('[SW] registered:', reg.scope);
-                  } catch (e) {
-                    console.warn('[SW] setup error:', e);
-                  }
+                  });
                 });
+                if ('caches' in window) {
+                  caches.keys().then(keys => keys.forEach(k => {
+                    if (!k.toLowerCase().includes('onesignal')) {
+                      caches.delete(k);
+                      console.log('[SW] deleted cache:', k);
+                    }
+                  }));
+                }
+                sessionStorage.setItem('sw_cleaned', '1');
               }
             `,
           }}
