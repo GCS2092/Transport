@@ -352,11 +352,18 @@ export default function PaymentSupervisionPage() {
                   </p>
                 </div>
 
-                {/* Ligne 5 : montant + action */}
+                {/* Ligne 5 : montant + qui a mis à jour + action */}
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-base font-bold text-gray-900">
-                    {formatCurrency(reservation.amount)}
-                  </span>
+                  <div>
+                    <span className="text-base font-bold text-gray-900">
+                      {formatCurrency(reservation.amount)}
+                    </span>
+                    {reservation.paymentUpdatedBy && (
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        {reservation.paymentUpdatedBy === 'DRIVER' ? '👤 Chauffeur' : '🛡️ Admin'}: {reservation.paymentUpdatedByName}
+                      </p>
+                    )}
+                  </div>
                   {reservation.paymentStatus === 'IMPAYE' ? (
                     <button
                       onClick={() => handleUpdatePaymentStatus(reservation.id, 'PAIEMENT_COMPLET')}
@@ -450,6 +457,11 @@ export default function PaymentSupervisionPage() {
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getPaymentStatusBadge(reservation.paymentStatus)}`}>
                           {getPaymentStatusLabel(reservation.paymentStatus)}
                         </span>
+                        {reservation.paymentUpdatedBy && (
+                          <p className="text-[10px] text-gray-500 mt-1">
+                            {reservation.paymentUpdatedBy === 'DRIVER' ? '👤' : '🛡️'} {reservation.paymentUpdatedByName}
+                          </p>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {reservation.paymentStatus === 'IMPAYE' ? (

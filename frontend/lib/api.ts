@@ -167,6 +167,9 @@ export interface Reservation {
   landingTime?: string
   flightDetails?: string
   currency?: string
+  paymentUpdatedBy?: 'DRIVER' | 'ADMIN' | null
+  paymentUpdatedByName?: string | null
+  paymentUpdatedAt?: string | null
   startedAt?: string
   completedAt?: string
   createdAt: string

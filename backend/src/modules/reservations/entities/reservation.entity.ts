@@ -119,6 +119,18 @@ export class Reservation {
   })
   paymentStatus: PaymentStatus;
 
+  // Qui a mis à jour le statut de paiement (DRIVER, ADMIN, ou null)
+  @Column({ nullable: true, type: 'varchar', length: 20 })
+  paymentUpdatedBy: 'DRIVER' | 'ADMIN' | null;
+
+  // Nom du chauffeur ou email de l'admin qui a fait la mise à jour
+  @Column({ nullable: true, type: 'varchar', length: 255 })
+  paymentUpdatedByName: string | null;
+
+  // Date/heure de la mise à jour du paiement
+  @Column({ nullable: true, type: 'timestamp' })
+  paymentUpdatedAt: Date | null;
+
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   amount: number;
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { reservationsApi, driverApi, Reservation, Driver } from '@/lib/api'
+import { reservationsApi, driverApi, Reservation, Driver, paymentSupervisionApi } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -150,6 +150,12 @@ export default function AdminReservations() {
       pickupDateTime: res.pickupDateTime,
       passengers: res.passengers,
       notes: res.notes || '',
+      // Champs vol - AJOUTÉS
+      airlineCompany: res.airlineCompany || '',
+      flightNumber: res.flightNumber || '',
+      departureTime: res.departureTime || '',
+      landingTime: res.landingTime || '',
+      flightDetails: res.flightDetails || '',
     })
     setShowEditModal(true)
   }
@@ -168,6 +174,16 @@ export default function AdminReservations() {
     }
   }
 
+  const handleUpdatePaymentStatus = async (reservationId: string, status: string) => {
+    try {
+      await paymentSupervisionApi.updatePaymentStatus(reservationId, status)
+      loadData()
+    } catch (err: any) {
+      console.error('Failed to update payment status', err)
+      alert(err.response?.data?.message || 'Erreur lors de la mise à jour du paiement')
+    }
+  }
+
   const statusColors: Record<string, string> = {
     EN_ATTENTE: 'bg-amber-100 text-amber-800',
     ASSIGNEE: 'bg-blue-100 text-blue-800',
@@ -182,6 +198,22 @@ export default function AdminReservations() {
     EN_COURS: 'En cours',
     TERMINEE: 'Terminée',
     ANNULEE: 'Annulée',
+  }
+
+  const paymentStatusLabels: Record<string, string> = {
+    EN_ATTENTE: 'En attente',
+    ACOMPTE_VERSE: 'Acompte versé',
+    PAIEMENT_COMPLET: 'Payé',
+    IMPAYE: 'Impayé',
+    REMBOURSE: 'Remboursé',
+  }
+
+  const paymentStatusColors: Record<string, string> = {
+    EN_ATTENTE: 'bg-gray-100 text-gray-600',
+    ACOMPTE_VERSE: 'bg-blue-100 text-blue-700',
+    PAIEMENT_COMPLET: 'bg-emerald-100 text-emerald-700',
+    IMPAYE: 'bg-red-100 text-red-700',
+    REMBOURSE: 'bg-purple-100 text-purple-700',
   }
 
   const filteredReservations = reservations.filter(r => {
@@ -414,7 +446,27 @@ export default function AdminReservations() {
                   </div>
                 )}
 
-                <div className="flex gap-2">
+                {/* Statut de paiement avec badge */}
+                {res.status === 'TERMINEE' && (
+                  <div className="bg-gray-50 rounded-lg p-2 mb-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs text-gray-500">Paiement</p>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${paymentStatusColors[res.paymentStatus] || 'bg-gray-100 text-gray-600'}`}>
+                        {paymentStatusLabels[res.paymentStatus] || res.paymentStatus}
+                      </span>
+                    </div>
+                    {res.paymentUpdatedBy && (
+                      <p className="text-[10px] text-gray-500">
+                        {res.paymentUpdatedBy === 'DRIVER' ? '👤 Chauffeur' : '🛡️ Admin'}: {res.paymentUpdatedByName}
+                        {res.paymentUpdatedAt && (
+                          <span className="text-gray-400"> • {format(new Date(res.paymentUpdatedAt), 'dd/MM HH:mm', { locale: fr })}</span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-2 flex-wrap">
                   {['EN_ATTENTE', 'ASSIGNEE'].includes(res.status) && (
                     <button
                       onClick={() => {
@@ -427,6 +479,46 @@ export default function AdminReservations() {
                       {res.driver ? 'Réassigner chauffeur' : 'Assigner un chauffeur'}
                     </button>
                   )}
+                  
+                  {/* Boutons de paiement pour courses terminées */}
+                  {res.status === 'TERMINEE' && (
+                    <>
+                      <button
+                        onClick={() => handleUpdatePaymentStatus(res.id, 'PAIEMENT_COMPLET')}
+                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                          res.paymentStatus === 'PAIEMENT_COMPLET'
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                        }`}
+                        title="Marquer comme payé"
+                      >
+                        ✓ Payé
+                      </button>
+                      <button
+                        onClick={() => handleUpdatePaymentStatus(res.id, 'IMPAYE')}
+                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                          res.paymentStatus === 'IMPAYE'
+                            ? 'bg-red-600 text-white'
+                            : 'bg-red-50 text-red-600 hover:bg-red-100'
+                        }`}
+                        title="Marquer comme impayé"
+                      >
+                        ✗ Impayé
+                      </button>
+                      <button
+                        onClick={() => handleUpdatePaymentStatus(res.id, 'ACOMPTE_VERSE')}
+                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                          res.paymentStatus === 'ACOMPTE_VERSE'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                        }`}
+                        title="Marquer avec acompte"
+                      >
+                        💰 Acompte
+                      </button>
+                    </>
+                  )}
+                  
                   <button
                     onClick={() => handleEditReservation(res)}
                     className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100 transition-colors"

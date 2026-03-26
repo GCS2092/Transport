@@ -84,6 +84,18 @@ const NAV_ITEMS = [
     ),
   },
   {
+    href: '/admin/finances/supervision',
+    label: 'Paiements',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="5" width="20" height="14" rx="2"/>
+        <line x1="2" y1="10" x2="22" y2="10"/>
+        <line x1="7" y1="15" x2="7.01" y2="15"/>
+        <line x1="11" y1="15" x2="13" y2="15"/>
+      </svg>
+    ),
+  },
+  {
     href: '/admin/config',
     label: 'Config',
     icon: (

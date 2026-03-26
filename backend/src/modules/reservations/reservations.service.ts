@@ -748,7 +748,12 @@ export class ReservationsService {
     if (!driver || reservation.driverId !== driver.id) throw new ForbiddenException("Vous n'êtes pas assigné à cette course");
 
     const oldPaymentStatus = reservation.paymentStatus;
-    await this.reservationsRepository.update(reservationId, { paymentStatus });
+    await this.reservationsRepository.update(reservationId, { 
+      paymentStatus,
+      paymentUpdatedBy: 'DRIVER',
+      paymentUpdatedByName: `${driver.firstName} ${driver.lastName}`,
+      paymentUpdatedAt: new Date(),
+    });
 
     await this.auditService.log({
       userId: driver.userId, action: 'UPDATE_PAYMENT_STATUS', entityType: 'Reservation', entityId: reservationId,
@@ -794,7 +799,12 @@ export class ReservationsService {
     if (!reservation) throw new NotFoundException('Réservation non trouvée');
 
     const oldPaymentStatus = reservation.paymentStatus;
-    await this.reservationsRepository.update(reservationId, { paymentStatus });
+    await this.reservationsRepository.update(reservationId, { 
+      paymentStatus,
+      paymentUpdatedBy: 'ADMIN',
+      paymentUpdatedByName: admin.email,
+      paymentUpdatedAt: new Date(),
+    });
 
     await this.auditService.log({
       userId: admin.id, action: 'ADMIN_UPDATE_PAYMENT_STATUS', entityType: 'Reservation', entityId: reservationId,
