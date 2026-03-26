@@ -216,6 +216,10 @@ export function ReservationForm() {
     returnDateTime: '',
     passengers: 1,
     flightNumber: '',
+    airlineCompany: '',
+    departureTime: '',
+    landingTime: '',
+    flightDetails: '',
     notes: '',
   })
 
@@ -278,17 +282,21 @@ export function ReservationForm() {
   }, [])
 
   useEffect(() => {
-    // Prix fixes selon le type de trajet
+    // Prix fixes selon le type de trajet (nouveaux tarifs 30000/40000 FCFA)
     const fixedPrices = {
-      'ALLER_SIMPLE': 25000,
-      'RETOUR_SIMPLE': 25000,
-      'ALLER_RETOUR': 30000,
+      'ALLER_SIMPLE': 30000,
+      'RETOUR_SIMPLE': 30000,
+      'ALLER_RETOUR': 40000,
     }
+    
+    // Calcul du nombre de véhicules nécessaires (4 passagers max par véhicule)
+    const vehicleCount = Math.ceil(formData.passengers / 4)
     
     // Afficher le prix dès qu'on a au moins une destination valide
     if ((formData.pickupZoneId || (pickupType === 'custom' && customPickupAddress)) &&
         (formData.dropoffZoneId || (dropoffType === 'custom' && customDropoffAddress))) {
-      setEstimatedPrice(fixedPrices[tripType])
+      const basePrice = fixedPrices[tripType]
+      setEstimatedPrice(basePrice * vehicleCount)
     } else {
       setEstimatedPrice(null)
     }
@@ -416,6 +424,7 @@ export function ReservationForm() {
         clientPhone: countryCode + formData.clientPhone.replace(/\s/g, ''),
         tripType,
         passengers: Number(formData.passengers),
+        vehicleCount: Math.ceil(formData.passengers / 4),
         language: lang,
       }
       
@@ -448,6 +457,10 @@ export function ReservationForm() {
       
       if (tripType !== 'ALLER_RETOUR') delete payload.returnDateTime
       if (!payload.flightNumber) delete payload.flightNumber
+      if (!payload.airlineCompany) delete payload.airlineCompany
+      if (!payload.departureTime) delete payload.departureTime
+      if (!payload.landingTime) delete payload.landingTime
+      if (!payload.flightDetails) delete payload.flightDetails
       if (!payload.notes) delete payload.notes
       if (promoCode.trim()) {
         payload.promoCode = promoCode.trim()
@@ -527,7 +540,7 @@ export function ReservationForm() {
     setStep(1)
     setError('')
     setEstimatedPrice(null)
-    setFormData({ clientFirstName: '', clientLastName: '', clientEmail: '', clientPhone: '', pickupZoneId: '', dropoffZoneId: '', pickupDateTime: '', returnDateTime: '', passengers: 1, flightNumber: '', notes: '' })
+    setFormData({ clientFirstName: '', clientLastName: '', clientEmail: '', clientPhone: '', pickupZoneId: '', dropoffZoneId: '', pickupDateTime: '', returnDateTime: '', passengers: 1, flightNumber: '', airlineCompany: '', departureTime: '', landingTime: '', flightDetails: '', notes: '' })
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -830,6 +843,12 @@ export function ReservationForm() {
                     ))}
                   </select>
                 </div>
+                {formData.passengers > 4 && (
+                  <p className="text-xs text-amber-600 mt-1.5 flex items-start gap-1">
+                    <span>⚠️</span>
+                    <span>Un 2ème véhicule sera nécessaire. Le prix sera doublé.</span>
+                  </p>
+                )}
               </Field>
             </div>
 
@@ -837,6 +856,11 @@ export function ReservationForm() {
               <div className="mx-5 mb-5 rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 flex items-center justify-between">
                 <div>
                   <p className="text-xs text-gray-500 font-medium">{f.fixedRate}</p>
+                  {formData.passengers > 4 && (
+                    <p className="text-xs text-amber-600 mt-0.5">
+                      ⚠️ {Math.ceil(formData.passengers / 4)} véhicules nécessaires
+                    </p>
+                  )}
                   {pickupName && dropoffName && (
                     <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
                       {pickupName}
@@ -845,7 +869,12 @@ export function ReservationForm() {
                     </p>
                   )}
                 </div>
-                <p className="text-xl font-bold text-gray-900">{formatCurrency(estimatedPrice)}</p>
+                <div className="text-right">
+                  <p className="text-xl font-bold text-gray-900">{formatCurrency(estimatedPrice)}</p>
+                  {formData.passengers > 4 && (
+                    <p className="text-xs text-amber-600">Prix doublé (2 véhicules)</p>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1029,6 +1058,23 @@ export function ReservationForm() {
 
               <Field label={f.flightNumber}>
                 <input type="text" value={formData.flightNumber} onChange={e => set('flightNumber', e.target.value)} className={inputCls} placeholder="AF718" />
+              </Field>
+
+              <Field label="Compagnie aérienne">
+                <input type="text" value={formData.airlineCompany} onChange={e => set('airlineCompany', e.target.value)} className={inputCls} placeholder="Air France, Royal Air Maroc..." />
+              </Field>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Heure de décollage">
+                  <input type="time" value={formData.departureTime} onChange={e => set('departureTime', e.target.value)} className={inputCls} />
+                </Field>
+                <Field label="Heure d'atterrissage">
+                  <input type="time" value={formData.landingTime} onChange={e => set('landingTime', e.target.value)} className={inputCls} />
+                </Field>
+              </div>
+
+              <Field label="Détails du vol (terminal, porte, etc.)">
+                <textarea value={formData.flightDetails} onChange={e => set('flightDetails', e.target.value)} className={inputCls + ' resize-none'} placeholder="Terminal 2E, Porte L52, bagages en salle 4..." rows={2} />
               </Field>
 
               <Field label="Code promo (optionnel)">

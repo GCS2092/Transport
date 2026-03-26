@@ -84,6 +84,21 @@ export class Reservation {
   @Column({ nullable: true })
   flightNumber: string;
 
+  @Column({ nullable: true })
+  airlineCompany: string;
+
+  @Column({ nullable: true })
+  departureTime: string;
+
+  @Column({ nullable: true })
+  landingTime: string;
+
+  @Column({ nullable: true, type: 'text' })
+  flightDetails: string;
+
+  @Column({ type: 'int', default: 1 })
+  vehicleCount: number;
+
   @Column({ type: 'int', default: 1 })
   passengers: number;
 

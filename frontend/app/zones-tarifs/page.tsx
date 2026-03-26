@@ -2,16 +2,23 @@
 
 import { useState, useEffect } from 'react'
 import { zonesApi, Zone } from '@/lib/api'
-import { formatCurrency } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n'
 import Link from 'next/link'
+
+// Taux de conversion fixes
+const RATES = {
+  EUR: 0.001525,  // 1 FCFA = 0.001525€ (1€ = 655.957 FCFA)
+  USD: 0.001667,  // 1 FCFA = 0.001667$ (1$ = 600 FCFA)
+}
+
+type Currency = 'EUR' | 'USD'
 
 const FIXED_PRICES = [
   { 
     type: 'ALLER_SIMPLE',
     label: 'Aller simple',
     labelEn: 'One way',
-    price: 25000,
+    priceFCFA: 30000,
     icon: '🚗',
     description: 'Trajet unique vers votre destination',
     descriptionEn: 'Single trip to your destination',
@@ -20,7 +27,7 @@ const FIXED_PRICES = [
     type: 'RETOUR_SIMPLE',
     label: 'Retour simple',
     labelEn: 'Return only',
-    price: 25000,
+    priceFCFA: 30000,
     icon: '🔙',
     description: 'Trajet retour depuis votre destination',
     descriptionEn: 'Return trip from your destination',
@@ -29,17 +36,40 @@ const FIXED_PRICES = [
     type: 'ALLER_RETOUR',
     label: 'Aller-retour',
     labelEn: 'Round trip',
-    price: 30000,
+    priceFCFA: 40000,
     icon: '🔄',
     description: 'Trajet aller + retour inclus',
     descriptionEn: 'Both ways included',
   },
 ]
 
+function formatPrice(fcfa: number, currency: Currency): string {
+  const rate = RATES[currency]
+  const converted = fcfa * rate
+  if (currency === 'EUR') {
+    return `€${Math.round(converted)}`
+  }
+  return `$${Math.round(converted)}`
+}
+
+function formatPriceDetail(fcfa: number, currency: Currency): string {
+  const rate = RATES[currency]
+  const converted = fcfa * rate
+  const otherCurrency = currency === 'EUR' ? 'USD' : 'EUR'
+  const otherRate = RATES[otherCurrency]
+  const otherConverted = fcfa * otherRate
+  
+  if (currency === 'EUR') {
+    return `€${Math.round(converted)} / $${Math.round(otherConverted)}`
+  }
+  return `$${Math.round(converted)} / €${Math.round(otherConverted)}`
+}
+
 export default function ZonesTarifsPage() {
   const { t, lang } = useTranslation()
   const z = t.zones
   const [zones, setZones] = useState<Zone[]>([])
+  const [currency, setCurrency] = useState<Currency>('EUR')
 
   useEffect(() => {
     zonesApi.getActive()
@@ -56,12 +86,40 @@ export default function ZonesTarifsPage() {
           <p className="text-sm text-[var(--muted)] mt-1">{z.subtitle}</p>
         </div>
 
+        {/* Toggle devise */}
+        <div className="bg-white rounded-2xl border border-[var(--border)] p-2 mb-4">
+          <div className="flex gap-1">
+            <button
+              onClick={() => setCurrency('EUR')}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                currency === 'EUR' 
+                  ? 'bg-[var(--accent)] text-white' 
+                  : 'text-[var(--muted)] hover:bg-[var(--bg)]'
+              }`}
+            >
+              EUR €
+            </button>
+            <button
+              onClick={() => setCurrency('USD')}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                currency === 'USD' 
+                  ? 'bg-[var(--accent)] text-white' 
+                  : 'text-[var(--muted)] hover:bg-[var(--bg)]'
+              }`}
+            >
+              USD $
+            </button>
+          </div>
+        </div>
+
         {/* Tarifs fixes */}
         <div className="bg-white rounded-2xl border border-[var(--border)] overflow-hidden mb-4">
           <div className="px-5 py-4 border-b border-[var(--border)] bg-[var(--primary)]">
             <h2 className="text-base font-bold text-white">💰 {lang === 'fr' ? 'Nos tarifs' : 'Our prices'}</h2>
             <p className="text-xs text-white/70 mt-0.5">
-              {lang === 'fr' ? 'Prix fixes garantis — même tarif pour toute destination' : 'Fixed guaranteed prices — same rate for every destination'}
+              {lang === 'fr' 
+                ? `Prix en ${currency === 'EUR' ? 'euros' : 'dollars'} — équivalents affichés` 
+                : `Prices in ${currency === 'EUR' ? 'euros' : 'dollars'} — equivalents shown`}
             </p>
           </div>
           <div className="divide-y divide-[var(--border)]">
@@ -77,9 +135,12 @@ export default function ZonesTarifsPage() {
                   <p className="text-xs text-[var(--muted)] mt-0.5">
                     {lang === 'fr' ? item.description : item.descriptionEn}
                   </p>
+                  <p className="text-xs text-emerald-600 mt-1">
+                    {formatPriceDetail(item.priceFCFA, currency)}
+                  </p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-lg font-bold text-[var(--accent)]">{formatCurrency(item.price)}</p>
+                  <p className="text-lg font-bold text-[var(--accent)]">{formatPrice(item.priceFCFA, currency)}</p>
                   <p className="text-xs text-[var(--muted)]">{lang === 'fr' ? 'Tarif fixe' : 'Fixed rate'}</p>
                 </div>
               </div>

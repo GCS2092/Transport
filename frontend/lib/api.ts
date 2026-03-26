@@ -160,6 +160,12 @@ export interface Reservation {
     vehiclePlate: string
     status: string
   }
+  // Champs vol & multi-véhicules
+  vehicleCount?: number
+  airlineCompany?: string
+  departureTime?: string
+  landingTime?: string
+  flightDetails?: string
   startedAt?: string
   completedAt?: string
   createdAt: string

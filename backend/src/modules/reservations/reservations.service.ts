@@ -95,8 +95,16 @@ export class ReservationsService {
       throw new BadRequestException('Dropoff zone or custom address is required');
     }
 
-    const finalPrice = await this.settingsService.getPriceForTripType(dto.tripType);
-    this.logger.log(`Using fixed price for ${dto.tripType}: ${finalPrice} FCFA`);
+    const basePrice = await this.settingsService.getPriceForTripType(dto.tripType);
+    
+    // Calcul du nombre de véhicules nécessaires (4 passagers max par véhicule)
+    const passengers = dto.passengers || 1;
+    const calculatedVehicleCount = Math.ceil(passengers / 4);
+    const vehicleCount = dto.vehicleCount || calculatedVehicleCount;
+    
+    // Prix final = prix de base × nombre de véhicules
+    const finalPrice = basePrice * vehicleCount;
+    this.logger.log(`Using fixed price for ${dto.tripType}: ${basePrice} FCFA × ${vehicleCount} vehicle(s) = ${finalPrice} FCFA`);
 
     await this.checkDailyLimit(dto.clientEmail);
 
@@ -139,7 +147,12 @@ export class ReservationsService {
       language: dto.language || Language.FR,
       cancelToken,
       cancelTokenExpiresAt,
-      passengers: dto.passengers || 1,
+      passengers: passengers,
+      vehicleCount: vehicleCount,
+      airlineCompany: dto.airlineCompany || null,
+      departureTime: dto.departureTime || null,
+      landingTime: dto.landingTime || null,
+      flightDetails: dto.flightDetails || null,
     });
 
     const saved = await this.reservationsRepository.save(reservation);

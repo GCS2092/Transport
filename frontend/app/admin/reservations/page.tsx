@@ -363,6 +363,17 @@ export default function AdminReservations() {
                   </div>
                 </div>
 
+                <div className="flex items-center gap-2 text-xs text-gray-600 mb-2">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                  <span>{res.passengers} passager{res.passengers > 1 ? 's' : ''}</span>
+                  {res.vehicleCount && res.vehicleCount > 1 && (
+                    <span className="text-amber-600 font-semibold">({res.vehicleCount} véhicules)</span>
+                  )}
+                </div>
+
                 <div className="flex items-center gap-2 text-xs text-gray-600 mb-3">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
@@ -372,6 +383,23 @@ export default function AdminReservations() {
                     {res.pickupZone?.name || res.pickupCustomAddress || 'Adresse personnalisée'} → {res.dropoffZone?.name || res.dropoffCustomAddress || 'Adresse personnalisée'}
                   </span>
                 </div>
+
+                {(res.flightNumber || res.airlineCompany) && (
+                  <div className="bg-blue-50 rounded-lg p-2 mb-3">
+                    <p className="text-[10px] text-blue-600 font-semibold uppercase mb-1">✈️ Infos vol</p>
+                    <p className="text-xs text-gray-700">
+                      {res.airlineCompany && <span className="font-semibold">{res.airlineCompany}</span>}
+                      {res.flightNumber && <span className="font-mono"> • {res.flightNumber}</span>}
+                    </p>
+                    {(res.departureTime || res.landingTime) && (
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        {res.departureTime && <span>Décollage: {res.departureTime}</span>}
+                        {res.departureTime && res.landingTime && ' • '}
+                        {res.landingTime && <span>Atterrissage: {res.landingTime}</span>}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {res.driver && (
                   <div className="bg-gray-50 rounded-lg p-2 mb-3">
@@ -615,7 +643,7 @@ export default function AdminReservations() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Passagers</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Passagers / Véhicules</label>
                   <input
                     type="number"
                     min="1"
@@ -623,6 +651,63 @@ export default function AdminReservations() {
                     value={editForm.passengers || 1}
                     onChange={(e) => setEditForm({ ...editForm, passengers: parseInt(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {editForm.passengers && editForm.passengers > 4 && (
+                    <p className="text-xs text-amber-600 mt-1">⚠️ {Math.ceil((editForm.passengers || 1) / 4)} véhicules nécessaires</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Compagnie aérienne</label>
+                  <input
+                    type="text"
+                    value={editForm.airlineCompany || ''}
+                    onChange={(e) => setEditForm({ ...editForm, airlineCompany: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Air France, Royal Air Maroc..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">N° de vol</label>
+                    <input
+                      type="text"
+                      value={editForm.flightNumber || ''}
+                      onChange={(e) => setEditForm({ ...editForm, flightNumber: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="AF718"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Horaires</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="time"
+                        value={editForm.departureTime || ''}
+                        onChange={(e) => setEditForm({ ...editForm, departureTime: e.target.value })}
+                        className="flex-1 px-2 py-2 border border-gray-300 rounded-lg text-sm"
+                        placeholder="Décollage"
+                      />
+                      <input
+                        type="time"
+                        value={editForm.landingTime || ''}
+                        onChange={(e) => setEditForm({ ...editForm, landingTime: e.target.value })}
+                        className="flex-1 px-2 py-2 border border-gray-300 rounded-lg text-sm"
+                        placeholder="Atterrissage"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Détails du vol</label>
+                  <textarea
+                    value={editForm.flightDetails || ''}
+                    onChange={(e) => setEditForm({ ...editForm, flightDetails: e.target.value })}
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Terminal, porte, salle de bagages..."
                   />
                 </div>
 

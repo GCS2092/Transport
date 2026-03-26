@@ -83,6 +83,28 @@ export class CreateReservationDto {
   flightNumber?: string;
 
   @IsOptional()
+  @IsString()
+  airlineCompany?: string;
+
+  @IsOptional()
+  @IsString()
+  departureTime?: string;
+
+  @IsOptional()
+  @IsString()
+  landingTime?: string;
+
+  @IsOptional()
+  @IsString()
+  flightDetails?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2)
+  vehicleCount?: number;
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   @Max(8)

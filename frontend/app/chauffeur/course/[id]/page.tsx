@@ -456,6 +456,9 @@ export default function RideDetail() {
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
               </svg>
               {ride.passengers}
+              {ride.vehicleCount && ride.vehicleCount > 1 && (
+                <span className="text-xs text-amber-600 font-normal">({ride.vehicleCount} véhicules)</span>
+              )}
             </p>
           </div>
           {ride.flightNumber && (
@@ -464,11 +467,33 @@ export default function RideDetail() {
               <p className="text-sm font-bold text-gray-900 mt-0.5">{ride.flightNumber}</p>
             </div>
           )}
+          {ride.airlineCompany && (
+            <div>
+              <p className="text-[10px] text-gray-400 uppercase font-semibold">Compagnie</p>
+              <p className="text-sm font-bold text-gray-900 mt-0.5">{ride.airlineCompany}</p>
+            </div>
+          )}
+          {(ride.departureTime || ride.landingTime) && (
+            <div>
+              <p className="text-[10px] text-gray-400 uppercase font-semibold">Horaires</p>
+              <p className="text-sm font-bold text-gray-900 mt-0.5">
+                {ride.departureTime && <span>Décollage: {ride.departureTime}</span>}
+                {ride.departureTime && ride.landingTime && <br />}
+                {ride.landingTime && <span>Atterrissage: {ride.landingTime}</span>}
+              </p>
+            </div>
+          )}
           <div>
             <p className="text-[10px] text-gray-400 uppercase font-semibold">Paiement</p>
             <p className="text-sm font-bold text-gray-900 mt-0.5">{ride.paymentStatus}</p>
           </div>
         </div>
+        {ride.flightDetails && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Détails du vol</p>
+            <p className="text-sm text-gray-700">{ride.flightDetails}</p>
+          </div>
+        )}
         {ride.notes && (
           <div className="mt-3 pt-3 border-t border-gray-100">
             <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Notes</p>
