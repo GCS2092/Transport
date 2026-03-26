@@ -112,7 +112,6 @@ export default function RootLayout({
                       }
                       console.log("[OneSignal] user linked:", email);
 
-                      // ✅ Mapping rôle BDD → tag OneSignal
                       const roleMap = {
                         'driver': 'chauffeur',
                         'admin': 'admin',
@@ -150,16 +149,29 @@ export default function RootLayout({
           />
         )}
 
-        {/* Service Worker PWA */}
+        {/* Service Worker PWA — désinstalle l'ancien SW corrompu puis réenregistre */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                  navigator.serviceWorker.register('/sw.js').then(
-                    r => console.log('[SW] registered:', r.scope),
-                    e => console.warn('[SW] registration failed:', e)
-                  );
+                window.addEventListener('load', async () => {
+                  try {
+                    // 1. Désinscrire tous les SW existants (vieux SW corrompu)
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(registrations.map(r => r.unregister()));
+
+                    // 2. Vider tous les caches
+                    if ('caches' in window) {
+                      const keys = await caches.keys();
+                      await Promise.all(keys.map(k => caches.delete(k)));
+                    }
+
+                    // 3. Réenregistrer le nouveau SW propre
+                    const reg = await navigator.serviceWorker.register('/sw.js');
+                    console.log('[SW] registered:', reg.scope);
+                  } catch (e) {
+                    console.warn('[SW] setup error:', e);
+                  }
                 });
               }
             `,
