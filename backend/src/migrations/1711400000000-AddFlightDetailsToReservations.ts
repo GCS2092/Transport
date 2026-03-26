@@ -9,7 +9,8 @@ export class AddFlightDetailsToReservations1711400000000 implements MigrationInt
       ADD COLUMN IF NOT EXISTS "departureTime" character varying,
       ADD COLUMN IF NOT EXISTS "landingTime" character varying,
       ADD COLUMN IF NOT EXISTS "flightDetails" text,
-      ADD COLUMN IF NOT EXISTS "vehicleCount" integer DEFAULT 1;
+      ADD COLUMN IF NOT EXISTS "vehicleCount" integer DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS "currency" character varying;
     `);
 
     // Index pour optimiser les recherches par compagnie aérienne
@@ -26,7 +27,8 @@ export class AddFlightDetailsToReservations1711400000000 implements MigrationInt
       DROP COLUMN IF EXISTS "departureTime",
       DROP COLUMN IF EXISTS "landingTime",
       DROP COLUMN IF EXISTS "flightDetails",
-      DROP COLUMN IF EXISTS "vehicleCount";
+      DROP COLUMN IF EXISTS "vehicleCount",
+      DROP COLUMN IF EXISTS "currency";
     `);
 
     await queryRunner.query(`

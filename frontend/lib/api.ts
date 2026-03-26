@@ -166,6 +166,7 @@ export interface Reservation {
   departureTime?: string
   landingTime?: string
   flightDetails?: string
+  currency?: string
   startedAt?: string
   completedAt?: string
   createdAt: string

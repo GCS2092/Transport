@@ -135,6 +135,9 @@ export class Reservation {
   language: Language;
 
   @Column({ nullable: true })
+  currency: string;
+
+  @Column({ nullable: true })
   driverId: string;
 
   @ManyToOne(() => Driver, { nullable: true, eager: true })

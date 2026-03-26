@@ -123,6 +123,10 @@ export class CreateReservationDto {
   promoCode?: string;
 
   @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @IsOptional()
   @IsBoolean()
   autoAssign?: boolean;
 }

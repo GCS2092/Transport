@@ -7,6 +7,36 @@ import { useTranslation } from '@/lib/i18n'
 import { saveClientInfo, getClientInfo, addToHistory } from '@/lib/clientStorage'
 import { geocodeAddress } from '@/lib/geocoding'
 
+// Taux de conversion fixes
+const RATES = {
+  EUR: 0.001525,  // 1 FCFA = 0.001525€ (1€ = 655.957 FCFA)
+  USD: 0.001667,  // 1 FCFA = 0.001667$ (1$ = 600 FCFA)
+}
+
+type Currency = 'EUR' | 'USD'
+
+function formatPriceCurrency(fcfa: number, currency: Currency): string {
+  const rate = RATES[currency]
+  const converted = fcfa * rate
+  if (currency === 'EUR') {
+    return `€${Math.round(converted)}`
+  }
+  return `$${Math.round(converted)}`
+}
+
+function formatPriceDetail(fcfa: number, currency: Currency): string {
+  const rate = RATES[currency]
+  const converted = fcfa * rate
+  const otherCurrency = currency === 'EUR' ? 'USD' : 'EUR'
+  const otherRate = RATES[otherCurrency]
+  const otherConverted = fcfa * otherRate
+
+  if (currency === 'EUR') {
+    return `€${Math.round(converted)} / $${Math.round(otherConverted)}`
+  }
+  return `$${Math.round(converted)} / €${Math.round(otherConverted)}`
+}
+
 /* ── Icônes SVG inline (lucide-like) ────────────────────────────── */
 const IconArrowDown = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
@@ -75,6 +105,8 @@ export function ReservationForm() {
   const [autoAssign, setAutoAssign] = useState(true)
   const [clientGps, setClientGps] = useState<{ lat: number; lng: number } | null>(null)
   const [gpsState, setGpsState] = useState<'idle' | 'loading' | 'ok' | 'denied'>('idle')
+  
+  const [currency, setCurrency] = useState<Currency>('EUR')
   
   // Pays et indicatifs téléphoniques avec formats spécifiques
   const [countryCode, setCountryCode] = useState('+221')
@@ -420,13 +452,20 @@ export function ReservationForm() {
     setLoading(true)
     try {
       const payload: any = {
-        ...formData,
-        clientPhone: countryCode + formData.clientPhone.replace(/\s/g, ''),
-        tripType,
-        passengers: Number(formData.passengers),
-        vehicleCount: Math.ceil(formData.passengers / 4),
-        language: lang,
-      }
+  ...formData,
+  clientPhone: countryCode + formData.clientPhone.replace(/\s/g, ''),
+  tripType,
+  passengers: Number(formData.passengers),
+  vehicleCount: Math.ceil(formData.passengers / 4),
+  language: lang,
+  // ✅ FIX: Convertir les dates en ISO 8601 valide
+  pickupDateTime: formData.pickupDateTime 
+    ? new Date(formData.pickupDateTime).toISOString() 
+    : undefined,
+  returnDateTime: formData.returnDateTime 
+    ? new Date(formData.returnDateTime).toISOString() 
+    : undefined,
+}
       
       // Gérer les adresses personnalisées
       if (pickupType === 'custom') {
@@ -468,6 +507,7 @@ export function ReservationForm() {
         delete payload.promoCode
       }
       payload.autoAssign = autoAssign
+      payload.currency = currency  // Envoyer la préférence de devise au backend
       if (clientGps) {
         payload.clientLatitude = clientGps.lat
         payload.clientLongitude = clientGps.lng
@@ -653,6 +693,38 @@ export function ReservationForm() {
 
             <div className="p-5 border-b border-gray-100 space-y-4">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{f.itinerary}</p>
+
+              {/* Toggle devise EUR/USD */}
+              <div className="bg-gray-50 rounded-xl p-2">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-gray-500">Devise d'affichage</p>
+                  <p className="text-[10px] text-gray-400">Paiement en FCFA</p>
+                </div>
+                <div className="flex gap-1 bg-white rounded-lg p-1 border border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setCurrency('EUR')}
+                    className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${
+                      currency === 'EUR'
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    EUR €
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrency('USD')}
+                    className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${
+                      currency === 'USD'
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    USD $
+                  </button>
+                </div>
+              </div>
 
               <Field label={f.departure}>
                 {/* Pour RETOUR_SIMPLE, le départ est forcé à AIBD */}
@@ -870,7 +942,8 @@ export function ReservationForm() {
                   )}
                 </div>
                 <div className="text-right">
-                  <p className="text-xl font-bold text-gray-900">{formatCurrency(estimatedPrice)}</p>
+                  <p className="text-xl font-bold text-gray-900">{formatPriceCurrency(estimatedPrice, currency)}</p>
+                  <p className="text-xs text-gray-400">{formatPriceDetail(estimatedPrice, currency)}</p>
                   {formData.passengers > 4 && (
                     <p className="text-xs text-amber-600">Prix doublé (2 véhicules)</p>
                   )}
@@ -893,7 +966,7 @@ export function ReservationForm() {
                   <span className="truncate font-medium text-white">{dropoffName}</span>
                 </div>
                 {estimatedPrice && (
-                  <span className="text-emerald-300 font-bold text-sm flex-shrink-0 ml-3">{formatCurrency(estimatedPrice)}</span>
+                  <span className="text-emerald-300 font-bold text-sm flex-shrink-0 ml-3">{formatPriceCurrency(estimatedPrice, currency)}</span>
                 )}
               </div>
             )}

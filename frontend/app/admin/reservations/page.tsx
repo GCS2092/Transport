@@ -357,6 +357,9 @@ export default function AdminReservations() {
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-bold text-gray-900">{formatCurrency(res.amount)}</p>
+                    {res.currency && (
+                      <p className="text-[10px] text-blue-600 font-semibold">Affiché en {res.currency}</p>
+                    )}
                     <p className="text-xs text-gray-500">
                       {format(new Date(res.pickupDateTime), 'dd MMM HH:mm', { locale: fr })}
                     </p>
@@ -461,34 +464,9 @@ export default function AdminReservations() {
                 <p className="text-sm text-gray-700">{selectedReservation.clientFirstName} {selectedReservation.clientLastName}</p>
               </div>
 
-              <div className="mb-4">
-                <button
-                  onClick={handleAutoAssign}
-                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 transition-all shadow-md flex items-center justify-center gap-2"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M12 6v6l4 2"/>
-                  </svg>
-                  Assignation automatique (chauffeur le plus proche)
-                </button>
-                <p className="text-xs text-gray-500 text-center mt-2">
-                  Le système choisira le chauffeur disponible le plus proche basé sur la géolocalisation
-                </p>
-              </div>
-
-              <div className="relative mb-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200"></div>
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="px-2 bg-white text-gray-500">OU</span>
-                </div>
-              </div>
-
               <div className="mb-6">
                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
-                  Sélectionner manuellement un chauffeur
+                  Sélectionner un chauffeur
                 </label>
                 <div className="space-y-2 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-2">
                   {drivers
