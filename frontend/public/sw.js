@@ -20,6 +20,7 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  // Ne pas intercepter : assets Next.js, API, autres origines
   if (
     url.pathname.startsWith('/_next/') ||
     url.pathname.startsWith('/api/')   ||
@@ -28,9 +29,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Navigation : tenter le réseau, fallback cache, sinon réponse offline minimale
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match(request))
+      fetch(request)
+        .catch(() =>
+          caches.match(request).then(cached => {
+            if (cached) return cached;
+            // Fallback offline : réponse vide valide plutôt que undefined
+            return new Response('', {
+              status: 503,
+              statusText: 'Service Unavailable',
+              headers: { 'Content-Type': 'text/html' },
+            });
+          })
+        )
     );
   }
 });
