@@ -584,43 +584,54 @@ export function ReservationForm() {
   }
 
   /* ══════════════════════════════════════════════════════════════
-     ÉCRAN DE SUCCÈS
+     ÉCRAN DE SUCCÈS - Redirection vers confirmation paiement
   ══════════════════════════════════════════════════════════════ */
   if (success) {
     return (
-      <div className="min-h-[calc(100dvh-7rem)] bg-gray-50 flex flex-col items-center justify-center px-4 py-10">
-        <div className="w-full max-w-sm">
-          <div className="flex justify-center mb-5">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
+      <div className="min-h-[calc(100dvh-7rem)] bg-[#f5f5f0] flex flex-col items-center justify-center px-4 py-10">
+        <div className="w-full max-w-md">
+          
+          {/* Header */}
+          <div className="bg-blue-700 rounded-t-2xl p-6 text-white text-center">
+            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
+            <h1 className="text-lg font-bold">Réservation enregistrée</h1>
+            <p className="text-sm text-white/80">En attente de confirmation paiement</p>
           </div>
 
-          <h2 className="text-xl font-bold text-gray-900 text-center mb-1">{f.successTitle}</h2>
-          <p className="text-sm text-gray-500 text-center mb-6">{f.successSubtitle} {formData.clientEmail}</p>
+          {/* Code et infos */}
+          <div className="bg-white border-x border-b border-gray-200 p-6 text-center">
+            <p className="text-sm text-gray-500 mb-2">Code réservation</p>
+            <p className="text-4xl font-mono font-bold text-gray-900 mb-4">{reservationCode}</p>
+            <p className="text-sm text-gray-600 mb-4">
+              {pickupName} → {dropoffName}
+              <span className="mx-2">•</span>
+              {estimatedPrice && formatCurrency(estimatedPrice)}
+            </p>
+            <p className="text-xs text-gray-500 mb-6">
+              {f.successSubtitle} {formData.clientEmail}
+            </p>
 
-          <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide text-center mb-3">{f.bookingCode}</p>
-            <p className="text-2xl font-mono font-bold text-center text-gray-900 tracking-widest bg-gray-50 rounded-lg py-3">{reservationCode}</p>
-            <p className="text-xs text-gray-400 text-center mt-3">{f.keepCode}</p>
-          </div>
-
-          <div className="flex gap-3">
+            {/* Bouton continuer vers paiement */}
             <a
-              href={`/suivi?code=${reservationCode}`}
-              className="flex-1 py-3 rounded-xl bg-[var(--primary)] text-white text-sm font-semibold text-center hover:bg-[var(--primary-hover)] transition-colors"
+              href={`/reservation/confirmation/${reservationCode}`}
+              className="block w-full py-4 bg-emerald-600 text-white rounded-xl text-base font-semibold text-center hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200"
             >
-              {f.trackBooking}
+              Continuer vers le paiement →
             </a>
+
+            {/* Bouton annuler */}
             <button
               onClick={resetForm}
-              className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors"
+              className="w-full py-3 mt-3 text-gray-500 text-sm hover:text-gray-700 transition-colors"
             >
-              {f.newBooking}
+              Annuler la réservation
             </button>
           </div>
+
         </div>
       </div>
     )
