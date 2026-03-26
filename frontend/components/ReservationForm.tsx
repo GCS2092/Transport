@@ -586,6 +586,9 @@ export function ReservationForm() {
   /* ══════════════════════════════════════════════════════════════
      ÉCRAN DE SUCCÈS - Redirection vers confirmation paiement
   ══════════════════════════════════════════════════════════════ */
+  const pickupName  = pickupType === 'custom' ? customPickupAddress : (zones.find(z => z.id === formData.pickupZoneId)?.name ?? '')
+  const dropoffName = dropoffType === 'custom' ? customDropoffAddress : (zones.find(z => z.id === formData.dropoffZoneId)?.name ?? '')
+
   if (success) {
     return (
       <div className="min-h-[calc(100dvh-7rem)] bg-[#f5f5f0] flex flex-col items-center justify-center px-4 py-10">
@@ -636,9 +639,6 @@ export function ReservationForm() {
       </div>
     )
   }
-
-  const pickupName  = pickupType === 'custom' ? customPickupAddress : (zones.find(z => z.id === formData.pickupZoneId)?.name ?? '')
-  const dropoffName = dropoffType === 'custom' ? customDropoffAddress : (zones.find(z => z.id === formData.dropoffZoneId)?.name ?? '')
 
   /* ══════════════════════════════════════════════════════════════
      RENDU PRINCIPAL
