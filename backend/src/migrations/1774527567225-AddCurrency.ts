@@ -5,29 +5,49 @@ export class AddCurrency1774527567225 implements MigrationInterface {
 
     public async up(queryRunner: QueryRunner): Promise<void> {
 
-        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_reservations_airlineCompany"`);
-        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_reservations_archive_pickupDateTime"`);
-        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_reservations_archive_archivedAt"`);
+        await queryRunner.query(`
+        DROP INDEX IF EXISTS "public"."IDX_reservations_airlineCompany"
+        `);
 
-        // SAFE ENUM
+        await queryRunner.query(`
+        DROP INDEX IF EXISTS "public"."IDX_reservations_archive_pickupDateTime"
+        `);
+
+        await queryRunner.query(`
+        DROP INDEX IF EXISTS "public"."IDX_reservations_archive_archivedAt"
+        `);
+
+        // ENUM driver_proposals_status_enum (SAFE)
+
         await queryRunner.query(`
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM pg_type WHERE typname = 'driver_proposals_status_enum'
+                SELECT 1
+                FROM pg_type
+                WHERE typname = 'driver_proposals_status_enum'
             ) THEN
                 CREATE TYPE "public"."driver_proposals_status_enum"
-                AS ENUM ('PENDING','ACCEPTED','DECLINED','EXPIRED','SKIPPED');
+                AS ENUM (
+                    'PENDING',
+                    'ACCEPTED',
+                    'DECLINED',
+                    'EXPIRED',
+                    'SKIPPED'
+                );
             END IF;
         END$$;
         `);
+
+        // TABLE driver_proposals
 
         await queryRunner.query(`
         CREATE TABLE IF NOT EXISTS "driver_proposals" (
             "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
             "reservationId" uuid NOT NULL,
             "driverId" uuid NOT NULL,
-            "status" "public"."driver_proposals_status_enum"
+            "status"
+                "public"."driver_proposals_status_enum"
                 NOT NULL DEFAULT 'PENDING',
             "token" character varying(64) NOT NULL,
             "position" integer NOT NULL,
@@ -36,9 +56,11 @@ export class AddCurrency1774527567225 implements MigrationInterface {
             "respondedAt" TIMESTAMP,
             "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
             "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
-            CONSTRAINT "UQ_eb08d4af80e26a0b4515b015103"
+            CONSTRAINT
+                "UQ_eb08d4af80e26a0b4515b015103"
                 UNIQUE ("token"),
-            CONSTRAINT "PK_85f2b6c45afac79337dcab02788"
+            CONSTRAINT
+                "PK_85f2b6c45afac79337dcab02788"
                 PRIMARY KEY ("id")
         )
         `);
@@ -52,19 +74,35 @@ export class AddCurrency1774527567225 implements MigrationInterface {
         await queryRunner.query(`
         CREATE INDEX IF NOT EXISTS
         "IDX_9532786474b9d3926152d8b484"
-        ON "driver_proposals" ("reservationId","status")
+        ON "driver_proposals"
+        ("reservationId", "status")
         `);
+
+        // currency column
 
         await queryRunner.query(`
         ALTER TABLE "reservations"
-        ADD COLUMN IF NOT EXISTS "currency" character varying
+        ADD COLUMN IF NOT EXISTS "currency"
+        character varying
         `);
 
+        // UNIQUE constraint email (SAFE)
+
         await queryRunner.query(`
-        ALTER TABLE "drivers"
-        ADD CONSTRAINT IF NOT EXISTS
-        "UQ_d4cfc1aafe3a14622aee390edb2"
-        UNIQUE ("email")
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname =
+                'UQ_d4cfc1aafe3a14622aee390edb2'
+            ) THEN
+                ALTER TABLE "drivers"
+                ADD CONSTRAINT
+                "UQ_d4cfc1aafe3a14622aee390edb2"
+                UNIQUE ("email");
+            END IF;
+        END$$;
         `);
 
         await queryRunner.query(`
@@ -73,18 +111,21 @@ export class AddCurrency1774527567225 implements MigrationInterface {
         SET NOT NULL
         `);
 
+        // STATUS
+
         await queryRunner.query(`
         ALTER TABLE "reservations_archive"
         DROP COLUMN IF EXISTS "status"
         `);
 
-        // SAFE ENUM status
         await queryRunner.query(`
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM pg_type
-                WHERE typname = 'reservations_archive_status_enum'
+                SELECT 1
+                FROM pg_type
+                WHERE typname =
+                'reservations_archive_status_enum'
             ) THEN
                 CREATE TYPE
                 "public"."reservations_archive_status_enum"
@@ -106,6 +147,8 @@ export class AddCurrency1774527567225 implements MigrationInterface {
         NOT NULL
         `);
 
+        // TRIP TYPE
+
         await queryRunner.query(`
         ALTER TABLE "reservations_archive"
         DROP COLUMN IF EXISTS "tripType"
@@ -115,8 +158,10 @@ export class AddCurrency1774527567225 implements MigrationInterface {
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM pg_type
-                WHERE typname = 'reservations_archive_triptype_enum'
+                SELECT 1
+                FROM pg_type
+                WHERE typname =
+                'reservations_archive_triptype_enum'
             ) THEN
                 CREATE TYPE
                 "public"."reservations_archive_triptype_enum"
@@ -136,6 +181,8 @@ export class AddCurrency1774527567225 implements MigrationInterface {
         NOT NULL
         `);
 
+        // LANGUAGE
+
         await queryRunner.query(`
         ALTER TABLE "reservations_archive"
         DROP COLUMN IF EXISTS "language"
@@ -145,12 +192,17 @@ export class AddCurrency1774527567225 implements MigrationInterface {
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM pg_type
-                WHERE typname = 'reservations_archive_language_enum'
+                SELECT 1
+                FROM pg_type
+                WHERE typname =
+                'reservations_archive_language_enum'
             ) THEN
                 CREATE TYPE
                 "public"."reservations_archive_language_enum"
-                AS ENUM ('fr','en');
+                AS ENUM (
+                    'fr',
+                    'en'
+                );
             END IF;
         END$$;
         `);
@@ -164,5 +216,7 @@ export class AddCurrency1774527567225 implements MigrationInterface {
 
     }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {}
+    public async down(
+        queryRunner: QueryRunner
+    ): Promise<void> {}
 }
