@@ -184,6 +184,25 @@ export default function AdminReservations() {
     }
   }
 
+  const handleUnassignDriver = async (id: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir retirer le chauffeur de cette course ?')) return
+    try {
+      await reservationsApi.assignDriver(id, '')
+      loadData()
+    } catch (err) {
+      console.error('Failed to unassign driver', err)
+      alert('Erreur lors du retrait du chauffeur')
+    }
+  }
+
+  // Compter les courses actives par chauffeur
+  const getDriverActiveCourseCount = (driverId: string) => {
+    return reservations.filter(r => 
+      r.driver?.id === driverId && 
+      (r.status === 'ASSIGNEE' || r.status === 'EN_COURS')
+    ).length
+  }
+
   const statusColors: Record<string, string> = {
     EN_ATTENTE: 'bg-amber-100 text-amber-800',
     ASSIGNEE: 'bg-blue-100 text-blue-800',
@@ -438,7 +457,17 @@ export default function AdminReservations() {
 
                 {res.driver && (
                   <div className="bg-gray-50 rounded-lg p-2 mb-3">
-                    <p className="text-xs text-gray-500 mb-0.5">Chauffeur assigné</p>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <p className="text-xs text-gray-500">Chauffeur assigné</p>
+                      {['EN_ATTENTE', 'ASSIGNEE'].includes(res.status) && (
+                        <button
+                          onClick={() => handleUnassignDriver(res.id)}
+                          className="text-xs text-red-600 hover:text-red-800 font-medium"
+                        >
+                          ✕ Retirer
+                        </button>
+                      )}
+                    </div>
                     <p className="text-sm font-semibold text-gray-900">
                       {res.driver.firstName} {res.driver.lastName}
                     </p>
@@ -564,29 +593,35 @@ export default function AdminReservations() {
                   {drivers
                     .filter(d => d.isActive)
                     .sort((a, b) => {
+                      const countA = getDriverActiveCourseCount(a.id)
+                      const countB = getDriverActiveCourseCount(b.id)
+                      // Priorité aux chauffeurs avec moins de courses
+                      if (countA !== countB) return countA - countB
+                      // Puis aux disponibles
                       if (a.status === 'DISPONIBLE' && b.status !== 'DISPONIBLE') return -1
                       if (a.status !== 'DISPONIBLE' && b.status === 'DISPONIBLE') return 1
                       return 0
                     })
                     .map(d => {
-                      const hasActiveCourse = reservations.some(r => 
-                        r.driver?.id === d.id && 
-                        (r.status === 'ASSIGNEE' || r.status === 'EN_COURS')
-                      )
-                      const isAvailable = d.status === 'DISPONIBLE' && !hasActiveCourse
+                      const activeCourseCount = getDriverActiveCourseCount(d.id)
+                      const hasActiveCourse = activeCourseCount > 0
+                      const isAtLimit = activeCourseCount >= 3
+                      const isAvailable = d.status === 'DISPONIBLE' && !isAtLimit
                       
                       return (
                         <button
                           key={d.id}
                           type="button"
-                          onClick={() => isAvailable && setSelectedDriver(d.id)}
-                          disabled={!isAvailable}
+                          onClick={() => !isAtLimit && setSelectedDriver(d.id)}
+                          disabled={isAtLimit}
                           className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all ${
                             selectedDriver === d.id
                               ? 'border-emerald-500 bg-emerald-50'
+                              : isAtLimit
+                              ? 'border-red-200 bg-red-50 opacity-60 cursor-not-allowed'
                               : isAvailable
                               ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                              : 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+                              : 'border-gray-200 bg-gray-50 opacity-80'
                           }`}
                         >
                           <div className="flex items-center justify-between">
@@ -598,7 +633,7 @@ export default function AdminReservations() {
                             </div>
                             <div className="flex flex-col items-end gap-1">
                               <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                                d.status === 'DISPONIBLE' 
+                                d.status === 'DISPONIBLE' && !isAtLimit
                                   ? 'bg-emerald-100 text-emerald-700' 
                                   : d.status === 'EN_COURSE'
                                   ? 'bg-blue-100 text-blue-700'
@@ -606,8 +641,13 @@ export default function AdminReservations() {
                               }`}>
                                 {d.status === 'DISPONIBLE' ? 'Disponible' : d.status === 'EN_COURSE' ? 'En course' : 'Hors ligne'}
                               </span>
-                              {hasActiveCourse && (
-                                <span className="text-xs font-semibold text-orange-600">Course active</span>
+                              {activeCourseCount > 0 && (
+                                <span className={`text-xs font-semibold ${
+                                  isAtLimit ? 'text-red-600 font-bold' : 'text-orange-600'
+                                }`}>
+                                  {activeCourseCount} course{activeCourseCount > 1 ? 's' : ''} active{activeCourseCount > 1 ? 's' : ''}
+                                  {isAtLimit && ' ⚠️ MAX'}
+                                </span>
                               )}
                             </div>
                           </div>
@@ -618,6 +658,9 @@ export default function AdminReservations() {
                     <p className="text-sm text-gray-500 text-center py-4">Aucun chauffeur actif</p>
                   )}
                 </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  💡 Les chauffeurs avec 3 courses actives sont désactivés pour éviter la surcharge.
+                </p>
               </div>
 
               <div className="flex gap-3">

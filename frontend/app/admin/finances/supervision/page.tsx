@@ -18,6 +18,7 @@ export default function PaymentSupervisionPage() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState<PaymentSupervisionFilters>({ paymentStatus: 'IMPAYE' })
+  const [searchQuery, setSearchQuery] = useState('')
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -130,6 +131,22 @@ export default function PaymentSupervisionPage() {
 
   const impayes = reservations.filter(r => r.paymentStatus === 'IMPAYE')
   const montantImpaye = impayes.reduce((sum, r) => sum + (r.amount || 0), 0)
+
+  // Filtrage par recherche
+  const filteredReservations = reservations.filter(r => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      r.code.toLowerCase().includes(query) ||
+      r.clientEmail.toLowerCase().includes(query) ||
+      `${r.clientFirstName} ${r.clientLastName}`.toLowerCase().includes(query) ||
+      r.clientPhone.includes(query) ||
+      r.pickupZone?.name?.toLowerCase().includes(query) ||
+      r.dropoffZone?.name?.toLowerCase().includes(query) ||
+      r.driver?.firstName?.toLowerCase().includes(query) ||
+      r.driver?.lastName?.toLowerCase().includes(query)
+    )
+  })
 
   // ─── ÉCRAN DE CONNEXION ────────────────────────────────────────────────────
   if (!isAuthenticated) {
@@ -247,6 +264,42 @@ export default function PaymentSupervisionPage() {
           </div>
         </div>
 
+        {/* Barre de recherche */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Recherche</p>
+          <div className="relative">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Rechercher par code, client, chauffeur, trajet..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <p className="text-xs text-gray-500 mt-2">
+              {filteredReservations.length} résultat(s) trouvé(s) sur {reservations.length} courses
+            </p>
+          )}
+        </div>
+
         {/* Filtres */}
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Filtres</p>
@@ -298,12 +351,12 @@ export default function PaymentSupervisionPage() {
             <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">
               Chargement...
             </div>
-          ) : reservations.length === 0 ? (
+          ) : filteredReservations.length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">
               Aucune course trouvée
             </div>
           ) : (
-            reservations.map((reservation) => (
+            filteredReservations.map((reservation) => (
               <div
                 key={reservation.id}
                 className="bg-white rounded-xl border border-gray-200 p-4 space-y-3"
@@ -407,14 +460,14 @@ export default function PaymentSupervisionPage() {
                       Chargement...
                     </td>
                   </tr>
-                ) : reservations.length === 0 ? (
+                ) : filteredReservations.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-4 py-10 text-center text-gray-400 text-sm">
                       Aucune course trouvée
                     </td>
                   </tr>
                 ) : (
-                  reservations.map((reservation) => (
+                  filteredReservations.map((reservation) => (
                     <tr key={reservation.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
                         <span className="font-mono text-sm font-bold text-gray-900">

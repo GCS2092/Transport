@@ -1,15 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { paymentSupervisionApi, Reservation } from '@/lib/api'
+import { reservationsApi, Reservation } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 export default function PaymentManagementPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [password, setPassword] = useState('')
-  const [supervisionToken, setSupervisionToken] = useState<string | null>(null)
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'refused'>('all')
@@ -17,21 +14,10 @@ export default function PaymentManagementPage() {
   const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month'>('today')
 
   useEffect(() => {
-    const savedToken = sessionStorage.getItem('supervision_token')
-    if (savedToken) {
-      setSupervisionToken(savedToken)
-      setIsAuthenticated(true)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (isAuthenticated && supervisionToken) {
-      loadReservations()
-    }
-  }, [isAuthenticated, supervisionToken, dateFilter])
+    loadReservations()
+  }, [dateFilter])
 
   const loadReservations = async () => {
-    if (!supervisionToken) return
     setLoading(true)
     try {
       const today = new Date()
@@ -45,13 +31,13 @@ export default function PaymentManagementPage() {
         dateFrom.setDate(today.getDate() - 30)
       }
 
-      const response = await paymentSupervisionApi.getSupervisionList({
+      const response = await reservationsApi.getAll({
         page: 1,
         limit: 100,
         dateFrom: dateFrom.toISOString(),
         dateTo: today.toISOString(),
-      }, supervisionToken)
-      setReservations(response.data.reservations)
+      })
+      setReservations(response.data.data)
     } catch (err) {
       console.error('Failed to load reservations', err)
     } finally {
@@ -60,10 +46,9 @@ export default function PaymentManagementPage() {
   }
 
   const handleConfirmPayment = async (id: string) => {
-    if (!supervisionToken) return
     setUpdatingId(id)
     try {
-      await paymentSupervisionApi.updatePaymentStatus(id, 'PAIEMENT_COMPLET', supervisionToken)
+      await reservationsApi.updatePaymentStatus(id, 'PAIEMENT_COMPLET')
       await loadReservations()
     } catch (err) {
       console.error('Failed to confirm payment', err)
@@ -74,10 +59,9 @@ export default function PaymentManagementPage() {
   }
 
   const handleRefusePayment = async (id: string) => {
-    if (!supervisionToken) return
     setUpdatingId(id)
     try {
-      await paymentSupervisionApi.updatePaymentStatus(id, 'IMPAYE', supervisionToken)
+      await reservationsApi.updatePaymentStatus(id, 'IMPAYE')
       await loadReservations()
     } catch (err) {
       console.error('Failed to refuse payment', err)
@@ -85,25 +69,6 @@ export default function PaymentManagementPage() {
     } finally {
       setUpdatingId(null)
     }
-  }
-
-  const handleVerifyPassword = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      const response = await paymentSupervisionApi.verifyPassword(password)
-      const { supervisionToken: token } = response.data
-      setSupervisionToken(token)
-      setIsAuthenticated(true)
-      sessionStorage.setItem('supervision_token', token)
-    } catch {
-      alert('Mot de passe incorrect')
-    }
-  }
-
-  const handleLogout = () => {
-    setIsAuthenticated(false)
-    setSupervisionToken(null)
-    sessionStorage.removeItem('supervision_token')
   }
 
   // Filtrer selon le statut
@@ -139,38 +104,7 @@ export default function PaymentManagementPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {!isAuthenticated ? (
-        <div className="min-h-screen flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 w-full max-w-sm">
-            <div className="flex justify-center mb-6">
-              <div className="w-14 h-14 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center">
-                <svg className="w-7 h-7 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-              </div>
-            </div>
-            <h1 className="text-lg font-bold text-gray-900 text-center mb-1">Gestion des Paiements</h1>
-            <p className="text-sm text-gray-500 text-center mb-6">Confirmez votre mot de passe admin pour accéder.</p>
-            <form onSubmit={handleVerifyPassword} className="space-y-4">
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm"
-                placeholder="Mot de passe"
-                required
-              />
-              <button
-                type="submit"
-                className="w-full bg-gray-900 text-white py-3 rounded-xl text-sm font-semibold hover:bg-gray-800"
-              >
-                Accéder
-              </button>
-            </form>
-          </div>
-        </div>
-      ) : (
-        <div className="max-w-6xl mx-auto px-4 pt-6">
+      <div className="max-w-6xl mx-auto px-4 pt-6">
         
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -298,6 +232,14 @@ export default function PaymentManagementPage() {
                           <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full border ${status.style}`}>
                             {reservation.paymentStatus === 'EN_ATTENTE' && isPending ? 'En attente ✓' : status.label}
                           </span>
+                          {reservation.paymentUpdatedBy && (
+                            <p className="text-[10px] text-gray-500 mt-1">
+                              {reservation.paymentUpdatedBy === 'DRIVER' ? '👤 Chauffeur' : '🛡️ Admin'}: {reservation.paymentUpdatedByName}
+                              {reservation.paymentUpdatedAt && (
+                                <span className="text-gray-400"> • {format(new Date(reservation.paymentUpdatedAt), 'dd/MM HH:mm', { locale: fr })}</span>
+                              )}
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex gap-2">
@@ -336,7 +278,6 @@ export default function PaymentManagementPage() {
         </div>
 
       </div>
-    )}
     </div>
   )
 }

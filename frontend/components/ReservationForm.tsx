@@ -568,7 +568,13 @@ export function ReservationForm() {
       window.dispatchEvent(new Event('vtc_code_saved'))
     } catch (e: any) {
       const msg = e.response?.data?.message
-      const errorMsg = Array.isArray(msg) ? msg[0] : typeof msg === 'string' ? msg : (f.genericError || 'Une erreur est survenue')
+      let errorMsg = Array.isArray(msg) ? msg[0] : typeof msg === 'string' ? msg : (f.genericError || 'Une erreur est survenue')
+      
+      // Message spécifique pour la limite de réservations
+      if (typeof errorMsg === 'string' && errorMsg.includes('Maximum 3 reservations')) {
+        errorMsg = '⚠️ Limite atteinte : Maximum 3 réservations par jour et par email. Veuillez réessayer demain ou utiliser une autre adresse email.'
+      }
+      
       setError(errorMsg)
     } finally {
       setLoading(false)

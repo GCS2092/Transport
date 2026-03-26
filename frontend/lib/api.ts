@@ -336,7 +336,10 @@ export const reservationsApi = {
     api.put<Reservation>(`/reservations/${id}/status`, { status }),
 
   updatePaymentStatus: (id: string, paymentStatus: string) =>
-    api.put<Reservation>(`/reservations/${id}/status`, { paymentStatus }),
+    api.patch<Reservation>(`/reservations/${id}/payment-status/admin`, { paymentStatus }),
+
+  updatePaymentStatusByDriver: (id: string, paymentStatus: string) =>
+    api.patch<Reservation>(`/reservations/${id}/payment-status`, { paymentStatus }),
 
   getAll: (params?: { page?: number; limit?: number; status?: string; driverId?: string; dateFrom?: string; dateTo?: string }) =>
     api.get<{ data: Reservation[]; total: number }>('/reservations', { params }),
