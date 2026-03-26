@@ -1,2 +1,1 @@
-// OneSignal gère le Service Worker
-importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
+// Service Worker désactivé temporairement

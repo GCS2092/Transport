@@ -106,26 +106,17 @@ export default function RootLayout({
                       try {
                         await OneSignal.login(email);
                       } catch(e) {
-                        if (!String(e).includes('409')) {
+                        if (!String(e).includes("409")) {
                           console.warn("[OneSignal] login error", e);
                         }
                       }
-                      console.log("[OneSignal] user linked:", email);
-
-                      // ✅ Mapping rôle BDD → tag OneSignal
-                      const roleMap = {
-                        'driver': 'chauffeur',
-                        'admin': 'admin',
-                      };
+                      const roleMap = { driver: "chauffeur", admin: "admin" };
                       const rawRole = (user.role || "").toLowerCase();
-                      const role = roleMap[rawRole] || 'client';
+                      const role = roleMap[rawRole] || "client";
                       OneSignal.User.addTags({ role });
-                      console.log("[OneSignal] tag role:", role);
-                    } else {
-                      console.log("[OneSignal] no user in localStorage, skipping login");
                     }
                   } catch (e) {
-                    console.warn("[OneSignal] login error", e);
+                    console.warn("[OneSignal] error", e);
                   }
 
                   try {
@@ -136,9 +127,7 @@ export default function RootLayout({
                         } else if (OneSignal.Notifications?.requestPermission) {
                           await OneSignal.Notifications.requestPermission();
                         }
-                      } catch (e) {
-                        console.warn("[OneSignal] permission request error", e);
-                      }
+                      } catch (e) {}
                     };
                     document.addEventListener("click", requestPermission, { once: true, passive: true });
                     document.addEventListener("touchstart", requestPermission, { once: true, passive: true });
@@ -150,17 +139,19 @@ export default function RootLayout({
           />
         )}
 
-        {/* Service Worker PWA */}
+        {/* Désinstaller TOUS les Service Workers existants sans en réenregistrer */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                  navigator.serviceWorker.register('/sw.js').then(
-                    r => console.log('[SW] registered:', r.scope),
-                    e => console.warn('[SW] registration failed:', e)
-                  );
+                navigator.serviceWorker.getRegistrations().then(function(regs) {
+                  regs.forEach(function(r) { r.unregister(); });
                 });
+                if ('caches' in window) {
+                  caches.keys().then(function(keys) {
+                    keys.forEach(function(k) { caches.delete(k); });
+                  });
+                }
               }
             `,
           }}

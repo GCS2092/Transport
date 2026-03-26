@@ -46,15 +46,26 @@ async function bootstrap() {
     .map(o => o?.trim())
     .filter(Boolean) as string[];
 
+  // Regex pour accepter toutes les URLs de preview Vercel du projet
+  const vercelPreviewRegex = /^https:\/\/transport-[a-z0-9-]+\.vercel\.app$/;
+
   console.log('✅ CORS allowed origins:', allowedOrigins.length ? allowedOrigins : ['(none — only localhost)']);
 
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
+
+      // Origines explicitement autorisées
       if (allowedOrigins.includes(origin)) return callback(null, true);
+
+      // Toutes les previews Vercel du projet transport-*
+      if (vercelPreviewRegex.test(origin)) return callback(null, true);
+
+      // Localhost en dev
       if (isDev && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
         return callback(null, true);
       }
+
       console.warn(`CORS blocked: ${origin}`);
       callback(new Error(`CORS: origin ${origin} not allowed`));
     },
