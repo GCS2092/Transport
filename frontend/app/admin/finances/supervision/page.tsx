@@ -129,7 +129,7 @@ export default function PaymentSupervisionPage() {
   }
 
   const impayes = reservations.filter(r => r.paymentStatus === 'IMPAYE')
-  const montantImpaye = impayes.reduce((sum, r) => sum + r.amount, 0)
+  const montantImpaye = impayes.reduce((sum, r) => sum + (r.amount || 0), 0)
 
   // ─── ÉCRAN DE CONNEXION ────────────────────────────────────────────────────
   if (!isAuthenticated) {
