@@ -4,6 +4,7 @@ import { Reservation } from '../reservations/entities/reservation.entity';
 import { Language } from '../../common/enums/language.enum';
 import { Driver } from '../drivers/entities/driver.entity';
 import { PaymentStatus } from '../../common/enums/payment-status.enum';
+import { ReservationStatus } from '../../common/enums/reservation-status.enum';
 
 @Injectable()
 export class PdfService {
@@ -409,6 +410,286 @@ export class PdfService {
         doc.page.height - 48,
         { align: 'center', width: doc.page.width - 84 },
       );
+      doc.end();
+    });
+  }
+
+  /**
+   * Rapport PDF d'archivage pour l'admin.
+   * Contient : stats globales, CA, payé/impayé, meilleurs chauffeurs, zones actives, détail impayés avec contacts.
+   */
+  async generateArchiveReportPdf(opts: {
+    rows: Reservation[];
+    reason: 'manual' | 'auto';
+    generatedAt: Date;
+  }): Promise<Buffer> {
+    const { rows, reason, generatedAt } = opts;
+    const primary = '#1a1a2e';
+    const accent = '#0d3b2e';
+    const red = '#b91c1c';
+    const green = '#15803d';
+    const M = 42;
+    const pageW = 595.28; // A4
+    const contentW = pageW - M * 2;
+
+    // ── Calculs financiers ──────────────────────────────────────────────────
+    const totalArchived = rows.length;
+    const completed = rows.filter(r => r.status === ReservationStatus.TERMINEE);
+    const cancelled = rows.filter(r => r.status === ReservationStatus.ANNULEE);
+
+    const paid = rows.filter(r => r.paymentStatus === PaymentStatus.PAIEMENT_COMPLET);
+    const unpaid = rows.filter(r => r.paymentStatus === PaymentStatus.IMPAYE);
+    const partial = rows.filter(r => r.paymentStatus === PaymentStatus.ACOMPTE_VERSE);
+    const pending = rows.filter(r => r.paymentStatus === PaymentStatus.EN_ATTENTE);
+
+    const totalCA = paid.reduce((s, r) => s + Number(r.amount), 0);
+    const totalImpaye = unpaid.reduce((s, r) => s + Number(r.amount), 0);
+    const totalAcompte = partial.reduce((s, r) => s + Number(r.amount), 0);
+    const totalBrut = rows.reduce((s, r) => s + Number(r.amount), 0);
+    const tauxRecouvrement = totalBrut > 0 ? ((totalCA / totalBrut) * 100).toFixed(1) : '0.0';
+
+    // ── Meilleurs chauffeurs (par CA encaissé) ──────────────────────────────
+    const driverStats = new Map<string, { name: string; rides: number; ca: number; impaye: number }>();
+    for (const r of rows) {
+      if (!r.driver) continue;
+      const key = r.driverId || r.driver.id;
+      const name = `${r.driver.firstName} ${r.driver.lastName}`;
+      const entry = driverStats.get(key) || { name, rides: 0, ca: 0, impaye: 0 };
+      entry.rides += 1;
+      if (r.paymentStatus === PaymentStatus.PAIEMENT_COMPLET) entry.ca += Number(r.amount);
+      if (r.paymentStatus === PaymentStatus.IMPAYE) entry.impaye += Number(r.amount);
+      driverStats.set(key, entry);
+    }
+    const topDrivers = [...driverStats.values()]
+      .sort((a, b) => b.ca - a.ca)
+      .slice(0, 10);
+
+    // ── Zones les plus actives (départ) ─────────────────────────────────────
+    const zoneBuckets = new Map<string, { rides: number; ca: number }>();
+    for (const r of rows) {
+      const z = (r.pickupCustomAddress || r.pickupZone?.name || 'Inconnue').slice(0, 60);
+      const entry = zoneBuckets.get(z) || { rides: 0, ca: 0 };
+      entry.rides += 1;
+      if (r.paymentStatus === PaymentStatus.PAIEMENT_COMPLET) entry.ca += Number(r.amount);
+      zoneBuckets.set(z, entry);
+    }
+    const topZones = [...zoneBuckets.entries()]
+      .sort((a, b) => b[1].rides - a[1].rides)
+      .slice(0, 10);
+
+    // ── Impayés avec contacts complets ──────────────────────────────────────
+    const unpaidWithContacts = unpaid.filter(r => r.clientPhone || r.clientEmail);
+
+    // ── Répartition par type de course ──────────────────────────────────────
+    const tripTypeBuckets = new Map<string, number>();
+    for (const r of rows) {
+      tripTypeBuckets.set(r.tripType, (tripTypeBuckets.get(r.tripType) || 0) + 1);
+    }
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'A4', margin: M });
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      // ── Helper : nouvelle ligne avec saut de page auto ───────────────────
+      let y = 0;
+      const nl = (h = 14) => {
+        y += h;
+        if (y > doc.page.height - 80) {
+          doc.addPage();
+          y = M;
+        }
+      };
+
+      const sectionTitle = (title: string, color = primary) => {
+        nl(16);
+        doc.rect(M, y, contentW, 20).fill(color);
+        doc.fillColor('#fff').font('Helvetica-Bold').fontSize(10).text(title, M + 6, y + 5, { width: contentW - 12 });
+        nl(26);
+      };
+
+      const kv = (label: string, value: string, valueColor = primary) => {
+        doc.fillColor('#555').font('Helvetica').fontSize(9).text(label, M, y, { width: 220, continued: false });
+        doc.fillColor(valueColor).font('Helvetica-Bold').fontSize(9).text(value, M + 230, y, { width: contentW - 230 });
+        nl(14);
+      };
+
+      // ════════════════════════════════════════════════════════════════════
+      // PAGE 1 — EN-TÊTE + STATS GLOBALES
+      // ════════════════════════════════════════════════════════════════════
+      doc.rect(0, 0, pageW, 76).fill(accent);
+      doc.fillColor('#fff').fontSize(18).font('Helvetica-Bold').text("WEND'D Transport — Rapport d'archivage", M, 18);
+      doc.fontSize(9).font('Helvetica').text(
+        `Généré le ${generatedAt.toLocaleString('fr-FR')} — Type : ${reason === 'auto' ? 'Automatique' : 'Manuel'}`,
+        M, 46,
+      );
+      y = 90;
+
+      // ── Section 1 : Vue d'ensemble ───────────────────────────────────────
+      sectionTitle('📊  Vue d\'ensemble — Courses archivées');
+      kv('Total courses archivées', String(totalArchived));
+      kv('Courses terminées', String(completed.length));
+      kv('Courses annulées', String(cancelled.length));
+      kv('Montant brut total (toutes courses)', `${totalBrut.toLocaleString('fr-FR')} FCFA`);
+      nl(4);
+
+      // ── Section 2 : Finances ─────────────────────────────────────────────
+      sectionTitle('💰  Finances — Chiffre d\'affaires & Recouvrement');
+      kv('Chiffre d\'affaires (paiements complets)', `${totalCA.toLocaleString('fr-FR')} FCFA`, green);
+      kv('  → Nombre de courses payées', String(paid.length));
+      nl(2);
+      kv('Montant total impayé', `${totalImpaye.toLocaleString('fr-FR')} FCFA`, red);
+      kv('  → Nombre de courses impayées', String(unpaid.length));
+      nl(2);
+      kv('Acomptes versés (montant)', `${totalAcompte.toLocaleString('fr-FR')} FCFA`);
+      kv('  → Nombre de courses (acompte)', String(partial.length));
+      nl(2);
+      kv('Paiements en attente', String(pending.length));
+      nl(2);
+      kv('Taux de recouvrement (CA / Brut)', `${tauxRecouvrement} %`, Number(tauxRecouvrement) >= 80 ? green : red);
+      nl(4);
+
+      // ── Section 3 : Répartition par type de course ──────────────────────
+      sectionTitle('🗂️  Répartition par type de course');
+      tripTypeBuckets.forEach((count, type) => {
+        const pct = ((count / totalArchived) * 100).toFixed(1);
+        kv(type, `${count} course(s)  —  ${pct} %`);
+      });
+      nl(4);
+
+      // ════════════════════════════════════════════════════════════════════
+      // PAGE 2 — MEILLEURS CHAUFFEURS + ZONES
+      // ════════════════════════════════════════════════════════════════════
+      doc.addPage();
+      y = M;
+
+      sectionTitle('🏆  Meilleurs chauffeurs (par CA encaissé)');
+      // En-tête de tableau
+      doc.fillColor('#888').font('Helvetica').fontSize(8)
+        .text('Chauffeur', M, y, { width: 160 })
+        .text('Courses', M + 165, y, { width: 45 })
+        .text('CA encaissé', M + 215, y, { width: 110 })
+        .text('Impayé', M + 330, y, { width: 100 });
+      nl(13);
+      doc.moveTo(M, y).lineTo(M + contentW, y).strokeColor('#ddd').stroke();
+      nl(4);
+
+      if (topDrivers.length === 0) {
+        doc.fillColor('#888').font('Helvetica').fontSize(9).text('Aucune course avec chauffeur assigné.', M, y);
+        nl(14);
+      } else {
+        topDrivers.forEach((d, i) => {
+          if (i % 2 === 0) {
+            doc.rect(M, y - 2, contentW, 14).fill('#f8f8f8');
+          }
+          doc.fillColor(primary).font('Helvetica-Bold').fontSize(8).text(d.name, M, y, { width: 160 });
+          doc.fillColor('#333').font('Helvetica').fontSize(8)
+            .text(String(d.rides), M + 165, y, { width: 45 })
+            .text(`${d.ca.toLocaleString('fr-FR')} FCFA`, M + 215, y, { width: 110 })
+            .text(d.impaye > 0 ? `${d.impaye.toLocaleString('fr-FR')} FCFA` : '—', M + 330, y, { width: 100 });
+          nl(14);
+          if (y > doc.page.height - 80) { doc.addPage(); y = M; }
+        });
+      }
+      nl(6);
+
+      sectionTitle('📍  Zones de départ les plus actives');
+      doc.fillColor('#888').font('Helvetica').fontSize(8)
+        .text('Zone', M, y, { width: 280 })
+        .text('Courses', M + 285, y, { width: 60 })
+        .text('CA encaissé', M + 350, y, { width: 110 });
+      nl(13);
+      doc.moveTo(M, y).lineTo(M + contentW, y).strokeColor('#ddd').stroke();
+      nl(4);
+
+      if (topZones.length === 0) {
+        doc.fillColor('#888').font('Helvetica').fontSize(9).text('Aucune donnée de zone.', M, y);
+        nl(14);
+      } else {
+        topZones.forEach(([zone, stats], i) => {
+          if (i % 2 === 0) {
+            doc.rect(M, y - 2, contentW, 14).fill('#f8f8f8');
+          }
+          doc.fillColor(primary).font('Helvetica-Bold').fontSize(8).text(zone, M, y, { width: 280 });
+          doc.fillColor('#333').font('Helvetica').fontSize(8)
+            .text(String(stats.rides), M + 285, y, { width: 60 })
+            .text(`${stats.ca.toLocaleString('fr-FR')} FCFA`, M + 350, y, { width: 110 });
+          nl(14);
+          if (y > doc.page.height - 80) { doc.addPage(); y = M; }
+        });
+      }
+
+      // ════════════════════════════════════════════════════════════════════
+      // PAGE(S) SUIVANTES — DÉTAIL IMPAYÉS AVEC CONTACTS
+      // ════════════════════════════════════════════════════════════════════
+      doc.addPage();
+      y = M;
+
+      doc.rect(0, 0, pageW, 36).fill(red);
+      doc.fillColor('#fff').font('Helvetica-Bold').fontSize(13)
+        .text(`🚨  Courses impayées — Contacts pour suivi (${unpaidWithContacts.length})`, M, 10);
+      y = 50;
+
+      if (unpaidWithContacts.length === 0) {
+        doc.fillColor(green).font('Helvetica-Bold').fontSize(12)
+          .text('✅  Aucune course impayée dans cet archivage. Excellent taux de recouvrement !', M, y, { width: contentW });
+      } else {
+        unpaidWithContacts.forEach((r, i) => {
+          if (y > doc.page.height - 120) {
+            doc.addPage();
+            y = M;
+          }
+
+          // Carte impayé
+          const cardH = 70;
+          const bgColor = i % 2 === 0 ? '#fff5f5' : '#fff';
+          doc.rect(M, y, contentW, cardH).fill(bgColor).strokeColor('#fca5a5').stroke();
+
+          // Ligne 1 : code + montant
+          doc.fillColor(red).font('Helvetica-Bold').fontSize(9)
+            .text(`#${r.code}`, M + 6, y + 6, { width: 100 });
+          doc.fillColor(red).font('Helvetica-Bold').fontSize(10)
+            .text(`${Number(r.amount).toLocaleString('fr-FR')} FCFA`, M + 110, y + 6, { width: 140 });
+          doc.fillColor('#666').font('Helvetica').fontSize(8)
+            .text(new Date(r.pickupDateTime).toLocaleString('fr-FR'), M + 260, y + 6, { width: 200 });
+
+          // Ligne 2 : client
+          doc.fillColor(primary).font('Helvetica-Bold').fontSize(8)
+            .text(`Client : ${r.clientFirstName} ${r.clientLastName}`, M + 6, y + 20, { width: 250 });
+          doc.fillColor('#333').font('Helvetica').fontSize(8)
+            .text(`📞 ${r.clientPhone || 'N/A'}`, M + 260, y + 20, { width: 160 });
+
+          // Ligne 3 : email
+          doc.fillColor('#333').font('Helvetica').fontSize(8)
+            .text(`✉️  ${r.clientEmail || 'N/A'}`, M + 6, y + 33, { width: 350 });
+
+          // Ligne 4 : chauffeur + trajet
+          const driverStr = r.driver
+            ? `Chauffeur : ${r.driver.firstName} ${r.driver.lastName} — ${r.driver.phone || 'N/A'}`
+            : 'Chauffeur : Non assigné';
+          doc.fillColor('#555').font('Helvetica').fontSize(7.5)
+            .text(driverStr, M + 6, y + 46, { width: 280 });
+
+          const trajet = `${(r.pickupCustomAddress || r.pickupZone?.name || '?').slice(0, 35)} → ${(r.dropoffCustomAddress || r.dropoffZone?.name || '?').slice(0, 35)}`;
+          doc.fillColor('#555').font('Helvetica').fontSize(7.5)
+            .text(trajet, M + 6, y + 57, { width: contentW - 12 });
+
+          y += cardH + 6;
+        });
+      }
+
+      // ── Pied de page final ───────────────────────────────────────────────
+      const lastPageFooterY = doc.page.height - 36;
+      doc.rect(0, lastPageFooterY, pageW, 36).fill('#f4f4f4');
+      doc.fillColor('#aaa').font('Helvetica').fontSize(7.5)
+        .text(
+          `WEND'D Transport — Document confidentiel généré automatiquement — ${generatedAt.toLocaleString('fr-FR')}`,
+          M, lastPageFooterY + 12,
+          { align: 'center', width: contentW },
+        );
+
       doc.end();
     });
   }

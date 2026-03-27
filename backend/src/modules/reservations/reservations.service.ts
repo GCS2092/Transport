@@ -631,7 +631,11 @@ export class ReservationsService {
     return createHash('sha256').update(`${salt}:${email.trim().toLowerCase()}`).digest('hex');
   }
 
-  async archiveToExcelAndPurge(opts: { olderThanDays: number; statuses: ReservationStatus[]; reason: 'manual' | 'auto' }): Promise<{ archived: number }> {
+  async archiveToExcelAndPurge(opts: {
+    olderThanDays: number;
+    statuses: ReservationStatus[];
+    reason: 'manual' | 'auto';
+  }): Promise<{ archived: number }> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - opts.olderThanDays);
 
@@ -643,58 +647,160 @@ export class ReservationsService {
 
     if (!rows.length) return { archived: 0 };
 
+    const generatedAt = new Date();
+    const dateSlug = generatedAt.toISOString().slice(0, 10);
+
+    // ── 1. Génération du fichier Excel (données brutes anonymisées) ──────────
     const wb = new ExcelJS.Workbook();
     wb.creator = "WEND'D Transport";
-    wb.created = new Date();
+    wb.created = generatedAt;
     const ws = wb.addWorksheet('Archives');
     ws.columns = [
-      { header: 'Code', key: 'code', width: 14 }, { header: 'Statut', key: 'status', width: 12 },
-      { header: 'Type', key: 'tripType', width: 14 }, { header: 'Langue', key: 'language', width: 8 },
-      { header: 'Départ', key: 'pickup', width: 22 }, { header: 'Arrivée', key: 'dropoff', width: 22 },
-      { header: 'Pickup', key: 'pickupDateTime', width: 20 }, { header: 'Montant', key: 'amount', width: 12 },
-      { header: 'ChauffeurId', key: 'driverId', width: 38 }, { header: 'ClientHash', key: 'clientHash', width: 66 },
+      { header: 'Code', key: 'code', width: 14 },
+      { header: 'Statut', key: 'status', width: 12 },
+      { header: 'Type', key: 'tripType', width: 14 },
+      { header: 'Langue', key: 'language', width: 8 },
+      { header: 'Départ', key: 'pickup', width: 22 },
+      { header: 'Arrivée', key: 'dropoff', width: 22 },
+      { header: 'Pickup', key: 'pickupDateTime', width: 20 },
+      { header: 'Montant', key: 'amount', width: 12 },
+      { header: 'Paiement', key: 'paymentStatus', width: 18 },
+      { header: 'ChauffeurId', key: 'driverId', width: 38 },
+      { header: 'ClientHash', key: 'clientHash', width: 66 },
       { header: 'Archivé le', key: 'archivedAt', width: 20 },
     ];
 
-    const archivedAt = new Date();
     for (const r of rows) {
       ws.addRow({
-        code: r.code, status: r.status, tripType: r.tripType, language: r.language,
+        code: r.code,
+        status: r.status,
+        tripType: r.tripType,
+        language: r.language,
         pickup: r.pickupCustomAddress || r.pickupZone?.name || '',
         dropoff: r.dropoffCustomAddress || r.dropoffZone?.name || '',
         pickupDateTime: new Date(r.pickupDateTime).toISOString(),
-        amount: Number(r.amount), driverId: r.driverId || '',
-        clientHash: this.hashClient(r.clientEmail) || '', archivedAt: archivedAt.toISOString(),
+        amount: Number(r.amount),
+        paymentStatus: r.paymentStatus,
+        driverId: r.driverId || '',
+        clientHash: this.hashClient(r.clientEmail) || '',
+        archivedAt: generatedAt.toISOString(),
       });
     }
 
     ws.getRow(1).font = { bold: true };
-    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } };
+    ws.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: ws.columns.length },
+    };
 
     const xlsxBuffer = Buffer.from(await wb.xlsx.writeBuffer());
-    const filename = `archives-${opts.reason}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    const xlsxFilename = `archives-${opts.reason}-${dateSlug}.xlsx`;
 
+    // ── 2. Génération du PDF rapport financier complet ───────────────────────
+    let pdfBuffer: Buffer | null = null;
+    let pdfFilename: string | null = null;
+    try {
+      pdfBuffer = await this.pdfService.generateArchiveReportPdf({
+        rows,
+        reason: opts.reason,
+        generatedAt,
+      });
+      pdfFilename = `rapport-archivage-${opts.reason}-${dateSlug}.pdf`;
+      this.logger.log(`Archive PDF report generated: ${rows.length} reservations, ${pdfBuffer.length} bytes`);
+    } catch (pdfErr) {
+      // On ne bloque pas l'archivage si le PDF échoue
+      this.logger.error(`Failed to generate archive PDF report: ${pdfErr?.message}`);
+    }
+
+    // ── 3. Sauvegarde en base (table archive) ────────────────────────────────
     const archiveEntities = rows.map(r =>
       this.reservationArchiveRepository.create({
-        code: r.code, status: r.status, tripType: r.tripType, language: r.language,
-        pickupDateTime: r.pickupDateTime, completedAt: r.completedAt, amount: r.amount,
-        driverId: r.driverId, pickupLabel: r.pickupCustomAddress || r.pickupZone?.name || null,
+        code: r.code,
+        status: r.status,
+        tripType: r.tripType,
+        language: r.language,
+        pickupDateTime: r.pickupDateTime,
+        completedAt: r.completedAt,
+        amount: r.amount,
+        driverId: r.driverId,
+        pickupLabel: r.pickupCustomAddress || r.pickupZone?.name || null,
         dropoffLabel: r.dropoffCustomAddress || r.dropoffZone?.name || null,
         clientHash: this.hashClient(r.clientEmail),
       }),
     );
     await this.reservationArchiveRepository.save(archiveEntities);
 
+    // ── 4. Envoi de l'email admin avec Excel + PDF en pièces jointes ─────────
     const admins = await this.usersService.findAdmins();
     const adminEmails = admins.map(a => a.email).filter(Boolean);
+
+    const paid = rows.filter(r => r.paymentStatus === PaymentStatus.PAIEMENT_COMPLET);
+    const unpaid = rows.filter(r => r.paymentStatus === PaymentStatus.IMPAYE);
+    const totalCA = paid.reduce((s, r) => s + Number(r.amount), 0);
+    const totalImpaye = unpaid.reduce((s, r) => s + Number(r.amount), 0);
+
+    const emailHtml = `<!DOCTYPE html>
+<html>
+<body style="font-family:Arial,sans-serif;background:#f4f4f4;padding:20px;">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+    <div style="background:#0d3b2e;color:#fff;padding:24px 32px;">
+      <h1 style="margin:0;font-size:20px;">WEND'D Transport — Archivage terminé</h1>
+    </div>
+    <div style="padding:32px;">
+      <h2 style="color:#1a1a2e;margin-top:0;">📦 ${rows.length} réservations archivées</h2>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Type d'archivage</td>
+          <td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${opts.reason === 'auto' ? 'Automatique' : 'Manuel'}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Courses archivées</td>
+          <td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${rows.length}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #eee;color:#666;">CA encaissé (payées)</td>
+          <td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;color:#15803d;">${totalCA.toLocaleString('fr-FR')} FCFA</td>
+        </tr>
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Montant impayé</td>
+          <td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;color:#b91c1c;">${totalImpaye.toLocaleString('fr-FR')} FCFA</td>
+        </tr>
+        <tr>
+          <td style="padding:8px;color:#666;">Date d'archivage</td>
+          <td style="padding:8px;font-weight:bold;">${generatedAt.toLocaleString('fr-FR')}</td>
+        </tr>
+      </table>
+      <div style="background:#f0f9ff;padding:12px;border-radius:6px;border-left:4px solid #0284c7;margin-top:16px;">
+        <p style="margin:0;font-size:13px;color:#0c4a6e;">
+          <strong>Pièces jointes :</strong><br>
+          📊 <strong>${xlsxFilename}</strong> — données brutes anonymisées (Excel)<br>
+          ${pdfFilename ? `📄 <strong>${pdfFilename}</strong> — rapport financier complet (PDF)` : ''}
+        </p>
+      </div>
+      <p style="font-size:12px;color:#999;margin-top:20px;">
+        Ces réservations ont été supprimées du dashboard et conservées dans la base d'archives.
+      </p>
+    </div>
+    <div style="background:#f8f8f8;padding:16px 32px;text-align:center;">
+      <p style="font-size:11px;color:#aaa;margin:0;">WEND'D Transport — Dakar, Sénégal</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
     await this.notificationsService.sendAdminArchiveReport(
       adminEmails,
-      `Archivage ${opts.reason} — ${rows.length} réservations`,
-      `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;"><h2>Archivage terminé</h2><p><strong>${rows.length}</strong> réservations ont été archivées et supprimées du dashboard.</p><p>Pièce jointe : <strong>${filename}</strong></p></body></html>`,
-      filename, xlsxBuffer,
+      `Archivage ${opts.reason} — ${rows.length} réservations — ${dateSlug}`,
+      emailHtml,
+      xlsxFilename,
+      xlsxBuffer,
+      pdfFilename && pdfBuffer ? { filename: pdfFilename, buffer: pdfBuffer } : null,
     );
 
+    // ── 5. Suppression des réservations du dashboard ─────────────────────────
     await this.reservationsRepository.delete(rows.map(r => r.id));
+
+    this.logger.log(`Archived ${rows.length} reservations (reason: ${opts.reason}), Excel + PDF sent to ${adminEmails.length} admin(s)`);
     return { archived: rows.length };
   }
 
@@ -748,7 +854,7 @@ export class ReservationsService {
     if (!driver || reservation.driverId !== driver.id) throw new ForbiddenException("Vous n'êtes pas assigné à cette course");
 
     const oldPaymentStatus = reservation.paymentStatus;
-    await this.reservationsRepository.update(reservationId, { 
+    await this.reservationsRepository.update(reservationId, {
       paymentStatus,
       paymentUpdatedBy: 'DRIVER',
       paymentUpdatedByName: `${driver.firstName} ${driver.lastName}`,
@@ -799,7 +905,7 @@ export class ReservationsService {
     if (!reservation) throw new NotFoundException('Réservation non trouvée');
 
     const oldPaymentStatus = reservation.paymentStatus;
-    await this.reservationsRepository.update(reservationId, { 
+    await this.reservationsRepository.update(reservationId, {
       paymentStatus,
       paymentUpdatedBy: 'ADMIN',
       paymentUpdatedByName: admin.email,

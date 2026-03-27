@@ -132,18 +132,34 @@ export class NotificationsService {
     return !!existing;
   }
 
+  /**
+   * Envoi du rapport d'archivage aux admins.
+   * Accepte obligatoirement le fichier Excel, et optionnellement un PDF de rapport financier.
+   */
   async sendAdminArchiveReport(
     adminEmails: string[],
     subject: string,
     html: string,
-    filename: string,
+    xlsxFilename: string,
     xlsxBuffer: Buffer,
+    pdf?: { filename: string; buffer: Buffer } | null,
   ): Promise<void> {
     if (!adminEmails.length) return;
-    const attachment = {
-      filename,
-      content: xlsxBuffer.toString('base64'),
-    };
+
+    // Construction des pièces jointes : Excel toujours présent, PDF si fourni
+    const attachments: { filename: string; content: string }[] = [
+      {
+        filename: xlsxFilename,
+        content: xlsxBuffer.toString('base64'),
+      },
+    ];
+
+    if (pdf?.buffer && pdf?.filename) {
+      attachments.push({
+        filename: pdf.filename,
+        content: pdf.buffer.toString('base64'),
+      });
+    }
 
     for (const email of adminEmails) {
       await this.sendEmail(
@@ -152,14 +168,18 @@ export class NotificationsService {
         html,
         NotificationType.ADMIN_ARCHIVE,
         'archive',
-        [attachment],
+        attachments,
       );
     }
+
+    const pushMessage = pdf
+      ? "Un fichier Excel et un rapport PDF d'archivage ont été générés et envoyés par email."
+      : "Un fichier Excel d'archivage a été généré et envoyé par email.";
 
     await this.sendPushNotification(
       adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
       'Archivage terminé',
-      "Un fichier Excel d'archivage a été généré et envoyé par email.",
+      pushMessage,
       {},
     );
   }
@@ -269,7 +289,6 @@ export class NotificationsService {
       reservation.id,
     );
 
-    // ✅ Push client — confirmation réservation
     await this.sendPushNotification(
       [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
       this.t(lang, 'Réservation confirmée', 'Booking confirmed'),
@@ -347,7 +366,6 @@ export class NotificationsService {
       reservation.id,
     );
 
-    // ✅ Push client — chauffeur assigné
     await this.sendPushNotification(
       [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
       this.t(lang, 'Chauffeur assigné', 'Driver assigned'),
@@ -382,7 +400,6 @@ export class NotificationsService {
       reservation.id,
     );
 
-    // ✅ Push client — rappel J-1
     await this.sendPushNotification(
       [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
       title,
@@ -419,7 +436,6 @@ export class NotificationsService {
       reservation.id,
     );
 
-    // ✅ Push client — rappel H-1
     await this.sendPushNotification(
       [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
       title,
@@ -449,7 +465,6 @@ export class NotificationsService {
       reservation.id,
     );
 
-    // ✅ Push client — annulation
     await this.sendPushNotification(
       [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
       title,
@@ -492,7 +507,6 @@ export class NotificationsService {
       reservation.id,
     );
 
-    // ✅ CORRECTION : utilise driver.email (jamais driver.userId)
     await this.sendPushNotification(
       [this.normalizeExternalId(reservation.driver.email)].filter(Boolean),
       'Nouvelle course assignée',
@@ -526,7 +540,6 @@ export class NotificationsService {
       reservation.id,
     );
 
-    // ✅ CORRECTION : utilise driver.email (jamais driver.userId)
     await this.sendPushNotification(
       [this.normalizeExternalId(reservation.driver.email)].filter(Boolean),
       title,
@@ -557,7 +570,6 @@ export class NotificationsService {
       reservation.id,
     );
 
-    // ✅ CORRECTION : utilise driver.email (jamais driver.userId)
     await this.sendPushNotification(
       [this.normalizeExternalId(reservation.driver.email)].filter(Boolean),
       title,
@@ -590,7 +602,6 @@ export class NotificationsService {
       reservation.id,
     );
 
-    // ✅ Push client — course démarrée
     await this.sendPushNotification(
       [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
       title,
@@ -632,7 +643,6 @@ export class NotificationsService {
       attachments,
     );
 
-    // ✅ Push client — course terminée + reçu
     await this.sendPushNotification(
       [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
       this.t(lang, 'Reçu disponible', 'Receipt available'),
@@ -673,7 +683,6 @@ export class NotificationsService {
       reservation.id,
     );
 
-    // ✅ Push chauffeur — rappel J-1
     await this.sendPushNotification(
       [this.normalizeExternalId(reservation.driver.email)].filter(Boolean),
       title,
@@ -717,7 +726,6 @@ export class NotificationsService {
       );
     }
 
-    // ✅ Push admin — nouvelle réservation
     await this.sendPushNotification(
       adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
       title,
@@ -757,7 +765,6 @@ export class NotificationsService {
       );
     }
 
-    // ✅ AJOUT : Push admin — chauffeur assigné (manquait)
     await this.sendPushNotification(
       adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
       title,
@@ -814,7 +821,6 @@ export class NotificationsService {
       reservation.id,
     );
 
-    // ✅ Push chauffeur — nouvelle proposition
     await this.sendPushNotification(
       [this.normalizeExternalId(proposal.driver.email)].filter(Boolean),
       '🚗 Nouvelle course disponible',
@@ -840,7 +846,6 @@ export class NotificationsService {
       reservation.id,
     );
 
-    // ✅ Push chauffeur — course déjà prise
     await this.sendPushNotification(
       [this.normalizeExternalId(driver.email)].filter(Boolean),
       title,
@@ -875,7 +880,6 @@ export class NotificationsService {
       await this.sendEmail(email, `${title} — #${reservation.code}`, html, NotificationType.ADMIN_NEW_RESERVATION, reservation.id);
     }
 
-    // ✅ AJOUT : Push admin — aucun chauffeur dispo (manquait)
     await this.sendPushNotification(
       adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
       title,
@@ -910,7 +914,6 @@ export class NotificationsService {
       await this.sendEmail(email, `${title} — #${reservation.code}`, html, NotificationType.ADMIN_NEW_RESERVATION, reservation.id);
     }
 
-    // ✅ AJOUT : Push admin — tous chauffeurs ont décliné (manquait)
     await this.sendPushNotification(
       adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
       title,
@@ -960,7 +963,6 @@ export class NotificationsService {
       );
     }
 
-    // ✅ AJOUT : Push admin — course impayée (manquait)
     await this.sendPushNotification(
       adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
       '🚨 Course impayée',
@@ -1052,7 +1054,6 @@ export class NotificationsService {
       reservation.id,
     );
 
-    // ✅ Push chauffeur — paiement régularisé
     await this.sendPushNotification(
       [this.normalizeExternalId(reservation.driver.email)].filter(Boolean),
       title,
