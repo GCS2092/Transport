@@ -36,6 +36,7 @@ export default function AdminReservations() {
   const [selectedDriver, setSelectedDriver] = useState('')
   const [exporting, setExporting] = useState(false)
   const [archiving, setArchiving] = useState(false)
+  const [archivePeriod, setArchivePeriod] = useState<number>(90) // ✅ AJOUTÉ
   const [searchQuery, setSearchQuery] = useState('')
   const [searchType, setSearchType] = useState<'code' | 'client'>('code')
   const [showEditModal, setShowEditModal] = useState(false)
@@ -125,11 +126,12 @@ export default function AdminReservations() {
     }
   }
 
+  // ✅ MODIFIÉ : utilise archivePeriod au lieu de 90 hardcodé
   const handleArchiveCompleted = async () => {
-    if (!confirm('Archiver toutes les réservations terminées/annulées de plus de 90 jours ?\n\nCette action est irréversible !')) return
+    if (!confirm(`Archiver toutes les réservations terminées/annulées de plus de ${archivePeriod} jours ?\n\nCette action est irréversible !`)) return
     try {
       setArchiving(true)
-      const result = await reservationsApi.archiveCompleted(90)
+      const result = await reservationsApi.archiveCompleted(archivePeriod)
       alert(`${result.data.archived} réservation(s) archivée(s)`)
       loadData()
     } catch (err) {
@@ -337,7 +339,7 @@ export default function AdminReservations() {
               <IconFilter />
               <span className="text-sm font-semibold text-gray-700">Filtrer par statut</span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <button
                 onClick={handleExportCsv}
                 disabled={exporting}
@@ -350,17 +352,33 @@ export default function AdminReservations() {
                 </svg>
                 {exporting ? 'Export...' : 'Export CSV'}
               </button>
-              <button
-                onClick={handleArchiveCompleted}
-                disabled={archiving}
-                className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-all disabled:opacity-50 flex items-center gap-1"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6"/>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
-                {archiving ? 'Archivage...' : 'Archiver (>90j)'}
-              </button>
+
+              {/* ✅ MODIFIÉ : sélecteur de période + bouton archivage */}
+              <div className="flex items-center gap-1">
+                <select
+                  value={archivePeriod}
+                  onChange={(e) => setArchivePeriod(Number(e.target.value))}
+                  disabled={archiving}
+                  className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-50"
+                >
+                  <option value={30}>30 jours</option>
+                  <option value={60}>60 jours</option>
+                  <option value={90}>90 jours</option>
+                  <option value={180}>6 mois</option>
+                  <option value={365}>1 an</option>
+                </select>
+                <button
+                  onClick={handleArchiveCompleted}
+                  disabled={archiving}
+                  className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-all disabled:opacity-50 flex items-center gap-1"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                  {archiving ? 'Archivage...' : `Archiver (>${archivePeriod}j)`}
+                </button>
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -595,9 +613,7 @@ export default function AdminReservations() {
                     .sort((a, b) => {
                       const countA = getDriverActiveCourseCount(a.id)
                       const countB = getDriverActiveCourseCount(b.id)
-                      // Priorité aux chauffeurs avec moins de courses
                       if (countA !== countB) return countA - countB
-                      // Puis aux disponibles
                       if (a.status === 'DISPONIBLE' && b.status !== 'DISPONIBLE') return -1
                       if (a.status !== 'DISPONIBLE' && b.status === 'DISPONIBLE') return 1
                       return 0
