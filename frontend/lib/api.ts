@@ -20,6 +20,16 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Routes qui ne doivent JAMAIS déclencher le refresh/redirect automatique
+const AUTH_BYPASS_URLS = [
+  '/auth/verify-password',
+  '/auth/login',
+  '/auth/refresh',
+]
+
+const isAuthBypassUrl = (url?: string): boolean =>
+  AUTH_BYPASS_URLS.some(bypass => url?.includes(bypass))
+
 // Intercepteur de réponse — refresh automatique sur 401
 let isRefreshing = false
 let failedQueue: Array<{ resolve: (v: string) => void; reject: (e: unknown) => void }> = []
@@ -35,13 +45,18 @@ api.interceptors.response.use(
     const original = error.config
     const status = error.response?.status
 
+    // ✅ Ne jamais intercepter les routes d'auth (login, verify-password, refresh)
+    // → laisser l'erreur remonter directement au composant qui l'a appelée
+    if (isAuthBypassUrl(original?.url)) {
+      return Promise.reject(error)
+    }
+
     // Network error ou 401 → tenter le refresh
     if ((status === 401 || !error.response) && !original._retry && typeof window !== 'undefined') {
       const refreshToken = localStorage.getItem('vtc_refresh_token')
-      const userId      = localStorage.getItem('vtc_user_id')
+      const userId       = localStorage.getItem('vtc_user_id')
 
       if (!refreshToken || !userId) {
-        // Pas de refresh token → déconnecter seulement si l'utilisateur était connecté
         const wasLoggedIn = !!localStorage.getItem('vtc_token')
         localStorage.removeItem('vtc_token')
         localStorage.removeItem('vtc_user')
@@ -160,7 +175,6 @@ export interface Reservation {
     vehiclePlate: string
     status: string
   }
-  // Champs vol & multi-véhicules
   vehicleCount?: number
   airlineCompany?: string
   departureTime?: string
@@ -305,7 +319,7 @@ export const zonesApi = {
 }
 
 export const tariffsApi = {
-  getPrice: (from: string, to: string) => 
+  getPrice: (from: string, to: string) =>
     api.get<Tariff>('/tariffs/price', { params: { from, to } }),
   getAll: () => api.get<Tariff[]>('/tariffs'),
   create: (data: CreateTariffDto) => api.post<Tariff>('/tariffs', data),
@@ -314,13 +328,13 @@ export const tariffsApi = {
 }
 
 export const reservationsApi = {
-  create: (data: CreateReservationDto) => 
+  create: (data: CreateReservationDto) =>
     api.post<Reservation>('/reservations', data),
-  
-  getByCode: (code: string) => 
+
+  getByCode: (code: string) =>
     api.get<Reservation>(`/reservations/code/${code}`),
-  
-  cancel: (code: string, token: string) => 
+
+  cancel: (code: string, token: string) =>
     api.post('/reservations/cancel', { code, token }),
 
   updateByClient: (code: string, cancelToken: string, updates: any) =>
@@ -357,7 +371,7 @@ export const reservationsApi = {
 
   archiveCompleted: (olderThanDays?: number) =>
     api.delete<{ archived: number }>('/reservations/archive/completed', { params: { olderThanDays } }),
-  
+
   updateReservation: (id: string, updates: Partial<CreateReservationDto>) =>
     api.patch<Reservation>(`/reservations/${id}`, updates),
 }
@@ -454,14 +468,14 @@ export const adminApi = {
   deactivateUser: (id: string) =>
     api.post(`/admin/users/${id}/deactivate`),
   activateUser: (id: string) =>
-     api.put(`/admin/users/${id}/activate`),
-  deleteUser: (id: string) =>         
+    api.put(`/admin/users/${id}/activate`),
+  deleteUser: (id: string) =>
     api.delete(`/admin/users/${id}`),
   sendReportsNow: (password: string) =>
-  api.post<{ driversNotified: number; adminsNotified: number; period: string }>(
-    '/admin/reports/send-now',
-    { password }
-  ),
+    api.post<{ driversNotified: number; adminsNotified: number; period: string }>(
+      '/admin/reports/send-now',
+      { password }
+    ),
   getEmailLogs: (params?: { page?: number; limit?: number; status?: string }) =>
     api.get<{ data: EmailLog[]; total: number }>('/admin/email-logs', { params }),
   getClients: (params?: { page?: number; limit?: number }) =>
@@ -473,7 +487,7 @@ export const adminApi = {
       reservations: Reservation[];
     }>(`/admin/clients/${encodeURIComponent(email)}/history`),
   getFinancialStats: () =>
-    api.get<{ 
+    api.get<{
       dailyRevenue: { date: string; revenue: number }[];
       monthlyRevenue: { month: string; revenue: number }[];
       topDrivers: { name: string; revenue: number }[];
@@ -521,18 +535,15 @@ export interface PaymentSupervisionResponse {
 }
 
 export const paymentSupervisionApi = {
-  // Vérifier le mot de passe et obtenir le token de supervision
   verifyPassword: (password: string) =>
     api.post<{ supervisionToken: string; expiresAt: string }>('/auth/verify-password', { password }),
 
-  // Lister les courses avec filtres de paiement (nécessite X-Supervision-Token)
   getSupervisionList: (filters?: PaymentSupervisionFilters, supervisionToken?: string) =>
     api.get<PaymentSupervisionResponse>('/reservations/payment/supervision', {
       params: filters,
       headers: supervisionToken ? { 'X-Supervision-Token': supervisionToken } : undefined,
     }),
 
-  // Mettre à jour le statut de paiement par admin (nécessite X-Supervision-Token)
   updatePaymentStatus: (id: string, paymentStatus: string, supervisionToken?: string) =>
     api.patch<Reservation>(`/reservations/${id}/payment-status/admin`, { paymentStatus }, {
       headers: supervisionToken ? { 'X-Supervision-Token': supervisionToken } : undefined,
@@ -555,6 +566,6 @@ export const promoCodesApi = {
   update: (id: string, dto: Partial<CreatePromoCodeDto>) => api.put<PromoCode>(`/promo-codes/${id}`, dto),
   toggleActive: (id: string) => api.put<PromoCode>(`/promo-codes/${id}/toggle`),
   delete: (id: string) => api.delete(`/promo-codes/${id}`),
-  validate: (code: string, amount: number) => 
+  validate: (code: string, amount: number) =>
     api.post<{ valid: boolean; discount: number; message?: string }>('/promo-codes/validate', { code, amount }),
 }

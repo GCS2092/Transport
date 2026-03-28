@@ -214,7 +214,7 @@ export class ReservationsController {
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.OK)
   archiveCompleted(@Query('olderThanDays') olderThanDays?: string) {
-    const days = olderThanDays ? parseInt(olderThanDays, 10) : 90;
+    const days = olderThanDays ? parseInt(olderThanDays, 10) : 0;
     return this.reservationsService.archiveCompleted(days);
   }
 
