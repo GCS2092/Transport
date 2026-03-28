@@ -1,11 +1,17 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { reservationsApi, Reservation } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import {
+  fetchPublicContacts,
+  paymentDisplayFromContacts,
+  whatsappDigitsFromContacts,
+  type SettingsContactRow,
+} from '@/lib/settingsPublic'
 
 export default function PaymentConfirmationPage() {
   const params = useParams()
@@ -20,13 +26,26 @@ export default function PaymentConfirmationPage() {
   const [notifying, setNotifying] = useState(false)
   const [notified, setNotified] = useState(false)
   const [showBankDetails, setShowBankDetails] = useState(false)
+  const [publicContacts, setPublicContacts] = useState<SettingsContactRow[]>([])
 
-  // Numéros de paiement
-  const PAYMENT_NUMBERS = {
-    wave: '77 123 45 67',
-    orange: '77 987 65 43',
-    free: '76 543 21 09',
-  }
+  useEffect(() => {
+    fetchPublicContacts()
+      .then(setPublicContacts)
+      .catch(() => setPublicContacts([]))
+  }, [])
+
+  const PAYMENT_NUMBERS = useMemo(
+    () =>
+      paymentDisplayFromContacts(publicContacts, {
+        wave: '77 123 45 67',
+        orange: '77 987 65 43',
+        free: '76 543 21 09',
+        bank: 'RIB sur demande',
+      }),
+    [publicContacts],
+  )
+
+  const waDigits = useMemo(() => whatsappDigitsFromContacts(publicContacts), [publicContacts])
 
   useEffect(() => {
     if (!code) return
@@ -108,9 +127,8 @@ export default function PaymentConfirmationPage() {
   }
 
   const openWhatsApp = () => {
-    const phone = '221771234567'
     const message = `Bonjour, je viens d'effectuer le paiement pour ma réservation ${code}. Voici mon reçu.`
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank')
+    window.open(`https://wa.me/${waDigits}?text=${encodeURIComponent(message)}`, '_blank')
   }
 
   if (loading) {

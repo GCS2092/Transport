@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
 import { driverApi, Driver } from '@/lib/api'
+import { exportDriverCoursesPdf } from '@/lib/export-driver-courses-pdf'
 
 const STATUS_CFG: Record<string, { label: string; dot: string; text: string }> = {
   DISPONIBLE: { label: 'Disponible',  dot: 'bg-emerald-500', text: 'text-emerald-700' },
@@ -30,6 +31,7 @@ export default function DriverProfil() {
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState('')
   const [success,  setSuccess]  = useState(false)
+  const [exportingPdf, setExportingPdf] = useState(false)
 
   const [form, setForm] = useState({ phone: '', vehiclePlate: '', email: '' })
 
@@ -44,6 +46,20 @@ export default function DriverProfil() {
       .catch(() => setError('Impossible de charger le profil.'))
       .finally(() => setLoading(false))
   }, [authLoading, user, router])
+
+  const handleExportPdf = async () => {
+    if (!driver || exportingPdf) return
+    setExportingPdf(true)
+    setError('')
+    try {
+      const { data: rides } = await driverApi.getMyRides()
+      await exportDriverCoursesPdf(driver, rides, 'Mes courses')
+    } catch {
+      setError('Export PDF impossible pour le moment.')
+    } finally {
+      setExportingPdf(false)
+    }
+  }
 
   const handleSave = async () => {
     if (!driver || saving) return
@@ -224,6 +240,21 @@ export default function DriverProfil() {
           <Row label="Email compte" value={user?.email} />
           <Row label="Rôle" value="Chauffeur" />
         </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-2">
+        <p className="text-sm font-bold text-gray-900">Exporter mes courses (PDF)</p>
+        <p className="text-xs text-gray-500 leading-relaxed">
+          Télécharge un récapitulatif de toutes vos courses visibles sur votre compte (tous statuts). Les données restent aussi sur le serveur.
+        </p>
+        <button
+          type="button"
+          onClick={handleExportPdf}
+          disabled={exportingPdf}
+          className="w-full py-3 rounded-xl border-2 border-[var(--primary)] text-[var(--primary)] text-sm font-bold hover:bg-[var(--primary)]/5 transition-colors disabled:opacity-50"
+        >
+          {exportingPdf ? 'Génération…' : 'Télécharger le PDF'}
+        </button>
       </div>
     </div>
   )

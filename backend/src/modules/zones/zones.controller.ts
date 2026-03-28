@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { ZonesService } from './zones.service';
 import { CreateZoneDto } from './dto/create-zone.dto';
+import { BulkDeactivateZonesDto } from './dto/bulk-deactivate-zones.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -20,6 +21,13 @@ export class ZonesController {
   @Roles(Role.ADMIN)
   findAll() {
     return this.zonesService.findAll();
+  }
+
+  @Post('bulk-deactivate')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  bulkDeactivate(@Body() dto: BulkDeactivateZonesDto) {
+    return this.zonesService.bulkDeactivate(dto.zoneIds);
   }
 
   @Post()

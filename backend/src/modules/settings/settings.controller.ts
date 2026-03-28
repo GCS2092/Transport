@@ -12,15 +12,37 @@ import { Role } from '../../common/enums/role.enum';
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
+  // Chemins statiques avant @Get(':key') pour éviter que "contacts" soit pris pour une clé.
+
+  /** Public — contacts actifs (page Contact, paiement, etc.). */
+  @Get('contacts')
+  getPublicContacts() {
+    return this.settingsService.getPublicContacts();
+  }
+
+  /** Public — FAQ actives ; ?language=fr|en */
+  @Get('faqs')
+  getPublicFaqs(@Query('language') language?: string) {
+    return this.settingsService.getPublicFaqs(language);
+  }
+
+  @Get('contacts/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  getAllContactsAdmin() {
+    return this.settingsService.getAllContactsAdmin();
+  }
+
+  @Get('faqs/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  getAllFaqsAdmin(@Query('language') language?: string) {
+    return this.settingsService.getAllFaqsAdmin(language);
+  }
+
   @Get()
   async getAll() {
     return this.settingsService.getAll();
-  }
-
-  @Get(':key')
-  async get(@Param('key') key: string) {
-    const value = await this.settingsService.get(key);
-    return { key, value };
   }
 
   @Put(':key')
@@ -30,12 +52,7 @@ export class SettingsController {
     return this.settingsService.set(key, dto);
   }
 
-  // ── Contacts ──────────────────────────────────────────────────────────
-  @Get('contacts/all')
-  async getAllContacts() {
-    return this.settingsService.getAllContacts();
-  }
-
+  // ── Contacts CRUD ─────────────────────────────────────────────────────
   @Post('contacts')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -58,12 +75,7 @@ export class SettingsController {
     return { success: true };
   }
 
-  // ── FAQ ───────────────────────────────────────────────────────────────
-  @Get('faqs/all')
-  async getAllFaqs(@Query('language') language?: string) {
-    return this.settingsService.getAllFaqs(language);
-  }
-
+  // ── FAQ CRUD ──────────────────────────────────────────────────────────
   @Post('faqs')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -84,5 +96,11 @@ export class SettingsController {
   async deleteFaq(@Param('id') id: string) {
     await this.settingsService.deleteFaq(id);
     return { success: true };
+  }
+
+  @Get(':key')
+  async get(@Param('key') key: string) {
+    const value = await this.settingsService.get(key);
+    return { key, value };
   }
 }

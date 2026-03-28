@@ -213,9 +213,16 @@ export class ReservationsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.OK)
-  archiveCompleted(@Query('olderThanDays') olderThanDays?: string) {
+  archiveCompleted(
+    @Query('olderThanDays') olderThanDays?: string,
+    @Query('createdBefore') createdBefore?: string,
+  ) {
     const days = olderThanDays ? parseInt(olderThanDays, 10) : 0;
-    return this.reservationsService.archiveCompleted(days);
+    const before = createdBefore ? new Date(createdBefore) : undefined;
+    if (before && Number.isNaN(before.getTime())) {
+      throw new BadRequestException('createdBefore must be a valid ISO date');
+    }
+    return this.reservationsService.archiveCompleted(days, before);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -253,7 +260,7 @@ export class ReservationsController {
   }
 
   @Patch(':id/payment-status/admin')
-  @UseGuards(JwtAuthGuard, RolesGuard, SupervisionGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   updatePaymentStatusByAdmin(
     @Param('id') id: string,

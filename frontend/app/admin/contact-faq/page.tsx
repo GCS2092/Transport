@@ -20,7 +20,7 @@ interface Faq {
   id: string
   question: string
   answer: string
-  language: 'FR' | 'EN'
+  language: 'fr' | 'en'
   order: number
   active: boolean
 }
@@ -261,6 +261,7 @@ export default function AdminContactFaqPage() {
       {/* Contact Modal */}
       {showContactModal && (
         <ContactModal
+          key={editingContact?.id ?? 'new'}
           contact={editingContact}
           onSave={saveContact}
           onClose={() => {
@@ -273,6 +274,7 @@ export default function AdminContactFaqPage() {
       {/* FAQ Modal */}
       {showFaqModal && (
         <FaqModal
+          key={editingFaq?.id ?? 'new'}
           faq={editingFaq}
           onSave={saveFaq}
           onClose={() => {
@@ -393,7 +395,7 @@ function FaqModal({ faq, onSave, onClose }: { faq: Faq | null; onSave: (data: Pa
   const [formData, setFormData] = useState({
     question: faq?.question || '',
     answer: faq?.answer || '',
-    language: faq?.language || 'FR' as 'FR' | 'EN',
+    language: (faq?.language === 'en' ? 'en' : 'fr') as 'fr' | 'en',
     order: faq?.order || 0,
     active: faq?.active ?? true,
   })
@@ -431,11 +433,11 @@ function FaqModal({ faq, onSave, onClose }: { faq: Faq | null; onSave: (data: Pa
               <label className="block text-sm font-semibold text-gray-700 mb-1">Langue</label>
               <select
                 value={formData.language}
-                onChange={e => setFormData({ ...formData, language: e.target.value as 'FR' | 'EN' })}
+                onChange={e => setFormData({ ...formData, language: e.target.value as 'fr' | 'en' })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="FR">🇫🇷 FR</option>
-                <option value="EN">🇬🇧 EN</option>
+                <option value="fr">🇫🇷 Français</option>
+                <option value="en">🇬🇧 English</option>
               </select>
             </div>
             <div>

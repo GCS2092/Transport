@@ -185,11 +185,10 @@ export default function RideDetail() {
 
     setActing(true); setError('')
     try {
-      if (markAsPaid) {
-        await reservationsApi.updatePaymentStatus(ride.id, 'PAIEMENT_COMPLET')
-      }
-      const { data } = await reservationsApi.updateStatus(ride.id, pendingStatus)
-      setRide(data)
+      await reservationsApi.updateStatus(ride.id, pendingStatus)
+      const paymentPayload = markAsPaid ? 'PAIEMENT_COMPLET' : 'IMPAYE'
+      const { data: final } = await reservationsApi.updatePaymentStatusByDriver(ride.id, paymentPayload)
+      setRide(final)
       setShowPaymentConfirm(false)
       setPendingStatus(null)
     } catch (e: any) {
@@ -225,7 +224,7 @@ export default function RideDetail() {
     if (!ride || acting) return
     setActing(true); setError('')
     try {
-      const { data } = await reservationsApi.updatePaymentStatus(ride.id, paymentStatus)
+      const { data } = await reservationsApi.updatePaymentStatusByDriver(ride.id, paymentStatus)
       setRide(data)
     } catch (e: any) {
       setError(e.response?.data?.message || 'Erreur lors de la mise à jour du paiement')
@@ -589,20 +588,30 @@ export default function RideDetail() {
         </div>
       )}
 
-      {/* Bouton pour marquer le paiement comme effectué */}
+      {/* Paiement course terminée : payé / impayé (notif admin si impayé) */}
       {ride.status === 'TERMINEE' && ride.paymentStatus !== 'PAIEMENT_COMPLET' && (
-        <button
-          onClick={() => updatePaymentStatus('PAIEMENT_COMPLET')}
-          disabled={acting}
-          className="w-full py-4 rounded-2xl bg-blue-600 text-white font-bold text-base hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
-        >
-          {acting ? (
-            <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 12a8 8 0 018-8"/></svg>
-          ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          )}
-          Confirmer le paiement reçu
-        </button>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => updatePaymentStatus('IMPAYE')}
+            disabled={acting}
+            className="py-4 rounded-2xl border border-red-200 bg-red-50 text-red-700 font-bold text-sm hover:bg-red-100 active:scale-[0.98] transition-all disabled:opacity-60"
+          >
+            {acting ? '…' : 'Impayé'}
+          </button>
+          <button
+            type="button"
+            onClick={() => updatePaymentStatus('PAIEMENT_COMPLET')}
+            disabled={acting}
+            className="py-4 rounded-2xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            {acting ? (
+              <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 12a8 8 0 018-8"/></svg>
+            ) : (
+              'Payé'
+            )}
+          </button>
+        </div>
       )}
 
       {(ride.status === 'TERMINEE' || ride.status === 'ANNULEE') && (

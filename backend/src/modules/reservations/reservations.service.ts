@@ -616,14 +616,15 @@ export class ReservationsService {
     return [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
   }
 
-  async archiveCompleted(olderThanDays: number): Promise<{ archived: number }> {
-  const { archived } = await this.archiveToExcelAndPurge({
-    olderThanDays,          // 0 = tout archiver, >0 = seulement les plus vieux
-    statuses: [ReservationStatus.TERMINEE, ReservationStatus.ANNULEE],
-    reason: 'manual',
-  });
-  return { archived };
-}
+  async archiveCompleted(olderThanDays: number, createdBefore?: Date): Promise<{ archived: number }> {
+    const { archived } = await this.archiveToExcelAndPurge({
+      olderThanDays,
+      createdBefore,
+      statuses: [ReservationStatus.TERMINEE, ReservationStatus.ANNULEE],
+      reason: 'manual',
+    });
+    return { archived };
+  }
 
   private hashClient(email?: string | null): string | null {
     if (!email) return null;
@@ -635,29 +636,27 @@ export class ReservationsService {
     olderThanDays: number;
     statuses: ReservationStatus[];
     reason: 'manual' | 'auto';
+    createdBefore?: Date;
   }): Promise<{ archived: number }> {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - opts.olderThanDays);
-
     const rows = await (() => {
-  const qb = this.reservationsRepository
-    .createQueryBuilder('r')
-    .leftJoinAndSelect('r.pickupZone', 'pickupZone')
-    .leftJoinAndSelect('r.dropoffZone', 'dropoffZone')
-    .leftJoinAndSelect('r.driver', 'driver')
-    .where('r.status IN (:...statuses)', { statuses: opts.statuses })
-    .orderBy('r.createdAt', 'ASC');
+      const qb = this.reservationsRepository
+        .createQueryBuilder('r')
+        .leftJoinAndSelect('r.pickupZone', 'pickupZone')
+        .leftJoinAndSelect('r.dropoffZone', 'dropoffZone')
+        .leftJoinAndSelect('r.driver', 'driver')
+        .where('r.status IN (:...statuses)', { statuses: opts.statuses })
+        .orderBy('r.createdAt', 'ASC');
 
-  // Si olderThanDays > 0, on filtre par date
-  // Si olderThanDays === 0, on archive TOUT sans filtre de date
-  if (opts.olderThanDays > 0) {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - opts.olderThanDays);
-    qb.andWhere('r.createdAt < :cutoffDate', { cutoffDate });
-  }
+      if (opts.createdBefore) {
+        qb.andWhere('r.createdAt < :cb', { cb: opts.createdBefore });
+      } else if (opts.olderThanDays > 0) {
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - opts.olderThanDays);
+        qb.andWhere('r.createdAt < :cutoffDate', { cutoffDate });
+      }
 
-  return qb.getMany();
-})();
+      return qb.getMany();
+    })();
 
     if (!rows.length) return { archived: 0 };
 

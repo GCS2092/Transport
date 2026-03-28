@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { reservationsApi, driverApi, Reservation, Driver, paymentSupervisionApi } from '@/lib/api'
+import { reservationsApi, driverApi, Reservation, Driver } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -36,7 +36,8 @@ export default function AdminReservations() {
   const [selectedDriver, setSelectedDriver] = useState('')
   const [exporting, setExporting] = useState(false)
   const [archiving, setArchiving] = useState(false)
-  const [archivePeriod, setArchivePeriod] = useState<number>(90) // ✅ AJOUTÉ
+  const [archivePeriod, setArchivePeriod] = useState<number>(90)
+  const [archiveBeforeLocal, setArchiveBeforeLocal] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchType, setSearchType] = useState<'code' | 'client'>('code')
   const [showEditModal, setShowEditModal] = useState(false)
@@ -128,10 +129,39 @@ export default function AdminReservations() {
 
   // ✅ MODIFIÉ : utilise archivePeriod au lieu de 90 hardcodé
   const handleArchiveCompleted = async () => {
-    if (!confirm(`Archiver toutes les réservations terminées/annulées de plus de ${archivePeriod} jours ?\n\nCette action est irréversible !`)) return
+    if (!confirm(`Archiver toutes les réservations terminées/annulées créées il y a plus de ${archivePeriod} jours ?\n\nElles seront retirées du tableau de bord ; un email de confirmation avec pièces jointes sera envoyé aux administrateurs.`)) return
     try {
       setArchiving(true)
-      const result = await reservationsApi.archiveCompleted(archivePeriod)
+      const result = await reservationsApi.archiveCompleted({ olderThanDays: archivePeriod })
+      alert(`${result.data.archived} réservation(s) archivée(s)`)
+      loadData()
+    } catch (err) {
+      console.error('Failed to archive', err)
+      alert('Erreur lors de l\'archivage')
+    } finally {
+      setArchiving(false)
+    }
+  }
+
+  const handleArchiveBeforeDate = async () => {
+    if (!archiveBeforeLocal) {
+      alert('Indiquez une date et heure : toutes les réservations terminées ou annulées créées avant ce moment seront archivées.')
+      return
+    }
+    const d = new Date(archiveBeforeLocal)
+    if (Number.isNaN(d.getTime())) {
+      alert('Date invalide')
+      return
+    }
+    if (
+      !confirm(
+        `Archiver toutes les réservations terminées/annulées dont la date de création est antérieure au ${d.toLocaleString('fr-FR')} ?\n\nUn email de confirmation sera envoyé. Les lignes disparaissent du dashboard mais restent en base (table d'archives).`,
+      )
+    )
+      return
+    try {
+      setArchiving(true)
+      const result = await reservationsApi.archiveCompleted({ createdBefore: d.toISOString() })
       alert(`${result.data.archived} réservation(s) archivée(s)`)
       loadData()
     } catch (err) {
@@ -178,7 +208,7 @@ export default function AdminReservations() {
 
   const handleUpdatePaymentStatus = async (reservationId: string, status: string) => {
     try {
-      await paymentSupervisionApi.updatePaymentStatus(reservationId, status)
+      await reservationsApi.updatePaymentStatus(reservationId, status)
       loadData()
     } catch (err: any) {
       console.error('Failed to update payment status', err)
@@ -354,30 +384,51 @@ export default function AdminReservations() {
               </button>
 
               {/* ✅ MODIFIÉ : sélecteur de période + bouton archivage */}
-              <div className="flex items-center gap-1">
-                <select
-                  value={archivePeriod}
-                  onChange={(e) => setArchivePeriod(Number(e.target.value))}
-                  disabled={archiving}
-                  className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-50"
-                >
-                  <option value={30}>30 jours</option>
-                  <option value={60}>60 jours</option>
-                  <option value={90}>90 jours</option>
-                  <option value={180}>6 mois</option>
-                  <option value={365}>1 an</option>
-                </select>
-                <button
-                  onClick={handleArchiveCompleted}
-                  disabled={archiving}
-                  className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-all disabled:opacity-50 flex items-center gap-1"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                  </svg>
-                  {archiving ? 'Archivage...' : `Archiver (>${archivePeriod}j)`}
-                </button>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <select
+                    value={archivePeriod}
+                    onChange={(e) => setArchivePeriod(Number(e.target.value))}
+                    disabled={archiving}
+                    className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-50"
+                  >
+                    <option value={30}>30 jours</option>
+                    <option value={60}>60 jours</option>
+                    <option value={90}>90 jours</option>
+                    <option value={180}>6 mois</option>
+                    <option value={365}>1 an</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleArchiveCompleted}
+                    disabled={archiving}
+                    className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-all disabled:opacity-50 flex items-center gap-1"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                    {archiving ? 'Archivage...' : `Archiver (>${archivePeriod}j)`}
+                  </button>
+                </div>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[10px] text-gray-500 uppercase font-semibold">ou avant</span>
+                  <input
+                    type="datetime-local"
+                    value={archiveBeforeLocal}
+                    onChange={(e) => setArchiveBeforeLocal(e.target.value)}
+                    disabled={archiving}
+                    className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-800 disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleArchiveBeforeDate}
+                    disabled={archiving}
+                    className="px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-semibold hover:bg-red-100 transition-all disabled:opacity-50"
+                  >
+                    Archiver par date
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { adminApi, AdminStats } from '@/lib/api'
+import { adminApi, AdminStats, feedbackApi } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 
 const IconTrendingUp = () => (
@@ -45,6 +45,7 @@ const IconAlertCircle = () => (
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null)
+  const [ratingSummary, setRatingSummary] = useState<{ count: number; average: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [showReportModal, setShowReportModal] = useState(false)
   const [reportPassword, setReportPassword] = useState('')
@@ -58,8 +59,12 @@ export default function AdminDashboard() {
 
   const loadStats = async () => {
     try {
-      const { data } = await adminApi.getStats()
+      const [{ data }, ratingRes] = await Promise.all([
+        adminApi.getStats(),
+        feedbackApi.getRatingSummary().catch(() => null),
+      ])
       setStats(data)
+      if (ratingRes?.data) setRatingSummary(ratingRes.data)
     } catch (err) {
       console.error('Failed to load stats', err)
     } finally {
@@ -184,6 +189,15 @@ export default function AdminDashboard() {
               </p>
               <p className="text-xs text-red-700 mt-0.5">Consultez les logs pour plus de détails</p>
             </div>
+          </div>
+        )}
+
+        {ratingSummary && ratingSummary.count > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+            <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1">Satisfaction clients (site)</p>
+            <p className="text-lg font-bold text-gray-900">
+              {ratingSummary.average.toFixed(1)} / 5 <span className="text-sm font-normal text-gray-600">— {ratingSummary.count} avis</span>
+            </p>
           </div>
         )}
 

@@ -9,10 +9,35 @@ export const api = axios.create({
   },
 })
 
+/** Même logique que AuthProvider : localStorage puis cookie (Safari / mode restreint). */
+function readCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'))
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+export function getAccessTokenForRequest(): string | null {
+  try {
+    const t = localStorage.getItem('vtc_token')
+    if (t) return t
+  } catch { /* private mode */ }
+  return readCookie('vtc_token')
+}
+
+/** Token supervision paiements (session admin, même clé que la page Finances > Supervision). */
+export function getSupervisionTokenFromSession(): string | null {
+  if (typeof window === 'undefined') return null
+  const token = sessionStorage.getItem('supervision_token')
+  const expiry = sessionStorage.getItem('supervision_token_expiry')
+  if (!token || !expiry) return null
+  if (new Date(expiry) <= new Date()) return null
+  return token
+}
+
 // Intercepteur pour ajouter le token JWT
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('vtc_token')
+    const token = getAccessTokenForRequest()
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -57,7 +82,7 @@ api.interceptors.response.use(
       const userId       = localStorage.getItem('vtc_user_id')
 
       if (!refreshToken || !userId) {
-        const wasLoggedIn = !!localStorage.getItem('vtc_token')
+        const wasLoggedIn = !!getAccessTokenForRequest()
         localStorage.removeItem('vtc_token')
         localStorage.removeItem('vtc_user')
         localStorage.removeItem('vtc_refresh_token')
@@ -316,6 +341,8 @@ export const zonesApi = {
   create: (data: CreateZoneDto) => api.post<Zone>('/zones', data),
   update: (id: string, data: Partial<CreateZoneDto>) => api.put<Zone>(`/zones/${id}`, data),
   delete: (id: string) => api.delete(`/zones/${id}`),
+  bulkDeactivate: (zoneIds: string[]) =>
+    api.post<{ deactivatedZoneIds: string[] }>('/zones/bulk-deactivate', { zoneIds }),
 }
 
 export const tariffsApi = {
@@ -369,8 +396,8 @@ export const reservationsApi = {
   exportCsv: (params?: { status?: string; driverId?: string; dateFrom?: string; dateTo?: string }) =>
     api.get('/reservations/export/csv', { params, responseType: 'blob' }),
 
-  archiveCompleted: (olderThanDays?: number) =>
-    api.delete<{ archived: number }>('/reservations/archive/completed', { params: { olderThanDays } }),
+  archiveCompleted: (params: { olderThanDays?: number; createdBefore?: string }) =>
+    api.delete<{ archived: number }>('/reservations/archive/completed', { params }),
 
   updateReservation: (id: string, updates: Partial<CreateReservationDto>) =>
     api.patch<Reservation>(`/reservations/${id}`, updates),
@@ -548,6 +575,13 @@ export const paymentSupervisionApi = {
     api.patch<Reservation>(`/reservations/${id}/payment-status/admin`, { paymentStatus }, {
       headers: supervisionToken ? { 'X-Supervision-Token': supervisionToken } : undefined,
     }),
+}
+
+export const feedbackApi = {
+  submitRating: (body: { rating: number; comment?: string; email?: string }) =>
+    api.post<{ id: string; ok: boolean }>('/feedback/rating', body),
+  getRatingSummary: () =>
+    api.get<{ count: number; average: number }>('/feedback/rating/summary'),
 }
 
 export const authApi = {

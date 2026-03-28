@@ -1,14 +1,16 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Zone } from './entities/zone.entity';
 import { CreateZoneDto } from './dto/create-zone.dto';
+import { TariffsService } from '../tariffs/tariffs.service';
 
 @Injectable()
 export class ZonesService {
   constructor(
     @InjectRepository(Zone)
     private zonesRepository: Repository<Zone>,
+    private tariffsService: TariffsService,
   ) {}
 
   // Géocode automatiquement un nom de zone via Nominatim (OpenStreetMap)
@@ -106,6 +108,21 @@ export class ZonesService {
   async remove(id: string): Promise<void> {
     await this.findById(id);
     await this.zonesRepository.update(id, { isActive: false });
+  }
+
+  /** Désactive les tarifs liés puis met les zones en inactif (soft delete). */
+  async bulkDeactivate(zoneIds: string[]): Promise<{ deactivatedZoneIds: string[] }> {
+    const unique = [...new Set(zoneIds)];
+    if (!unique.length) return { deactivatedZoneIds: [] };
+
+    for (const id of unique) {
+      await this.findById(id);
+    }
+
+    await this.tariffsService.deactivateByZoneIds(unique);
+    await this.zonesRepository.update({ id: In(unique) }, { isActive: false });
+
+    return { deactivatedZoneIds: unique };
   }
 
   // Géocoder toutes les zones qui n'ont pas encore de coordonnées

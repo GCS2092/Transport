@@ -907,6 +907,23 @@ export function ReservationForm() {
             <div className="p-5 space-y-4">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{f.datePassengers}</p>
 
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 space-y-1.5">
+                <p className="text-xs font-bold text-gray-800">{f.scheduleSectionTitle}</p>
+                {tripType === 'ALLER_SIMPLE' && (
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    <span className="font-semibold text-gray-800">{f.scheduleAllerHint}</span> {f.scheduleAllerSimpleExtra}
+                  </p>
+                )}
+                {tripType === 'RETOUR_SIMPLE' && (
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    <span className="font-semibold text-gray-800">{f.pickupDateTime}</span> — {f.scheduleRetourSimpleExtra}
+                  </p>
+                )}
+                {tripType === 'ALLER_RETOUR' && (
+                  <p className="text-[11px] text-gray-600 leading-relaxed">{f.scheduleRoundTripExplain}</p>
+                )}
+              </div>
+
               <Field label={f.pickupDateTime}>
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><IconCalendar /></div>
@@ -915,12 +932,15 @@ export function ReservationForm() {
               </Field>
 
               {tripType === 'ALLER_RETOUR' && (
-                <Field label={f.returnDateTime}>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><IconCalendar /></div>
-                    <input type="datetime-local" value={formData.returnDateTime} onChange={e => set('returnDateTime', e.target.value)} className={inputCls + ' pl-9'} />
-                  </div>
-                </Field>
+                <>
+                  <p className="text-[11px] text-gray-500 -mt-1">{f.scheduleRetourHint}</p>
+                  <Field label={f.scheduleRetourTitle}>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><IconCalendar /></div>
+                      <input type="datetime-local" value={formData.returnDateTime} onChange={e => set('returnDateTime', e.target.value)} className={inputCls + ' pl-9'} />
+                    </div>
+                  </Field>
+                </>
               )}
 
               <Field label={f.passengers}>

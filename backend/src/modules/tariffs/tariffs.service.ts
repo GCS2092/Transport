@@ -60,4 +60,15 @@ export class TariffsService {
     await this.findById(id);
     await this.tariffsRepository.update(id, { isActive: false });
   }
+
+  /** Désactive tous les tarifs dont la zone départ ou arrivée est dans la liste. */
+  async deactivateByZoneIds(zoneIds: string[]): Promise<void> {
+    if (!zoneIds.length) return;
+    await this.tariffsRepository
+      .createQueryBuilder()
+      .update(Tariff)
+      .set({ isActive: false })
+      .where('zoneFromId IN (:...ids) OR zoneToId IN (:...ids)', { ids: zoneIds })
+      .execute();
+  }
 }
