@@ -85,3 +85,6 @@ backend/.nyc_output/
 .cache/
 tmp/
 temp/
+
+# SQL scripts locaux
+backend/truncate_except_core.sql
