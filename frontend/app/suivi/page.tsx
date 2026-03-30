@@ -113,6 +113,17 @@ function SuiviContent() {
       const { data } = await reservationsApi.getByCode(c.trim())
       setReservation(data)
 
+      // ✅ Nettoyer le code local si course terminée ou annulée
+      if (data.status === 'TERMINEE' || data.status === 'ANNULEE') {
+        try {
+          const lastCode = localStorage.getItem('vtc_last_code')
+          if (lastCode === data.code) {
+            localStorage.removeItem('vtc_last_code')
+            window.dispatchEvent(new Event('vtc_code_cleared'))
+          }
+        } catch {}
+      }
+
       try {
         const email = (data as any)?.clientEmail
         if (typeof window !== 'undefined' && window.OneSignalDeferred && typeof email === 'string' && email.trim()) {
@@ -129,7 +140,15 @@ function SuiviContent() {
       updateReservationStatus(data.code, data.status)
       window.dispatchEvent(new Event('vtc_code_saved'))
     } catch (err: any) {
-      setError(err.response?.data?.message || tr.notFound)
+      // ✅ Toujours extraire une string pour éviter le crash React #31
+      const msg = err.response?.data?.message
+      setError(
+        typeof msg === 'string'
+          ? msg
+          : typeof msg === 'object' && msg !== null
+          ? (msg as any).message || tr.notFound
+          : tr.notFound
+      )
     } finally {
       setLoading(false)
     }

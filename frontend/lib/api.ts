@@ -50,6 +50,7 @@ const AUTH_BYPASS_URLS = [
   '/auth/verify-password',
   '/auth/login',
   '/auth/refresh',
+  '/reservations/code/', // ✅ évite le refresh sur les 404 publics
 ]
 
 const isAuthBypassUrl = (url?: string): boolean =>

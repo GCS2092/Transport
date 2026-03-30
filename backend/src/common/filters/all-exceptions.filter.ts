@@ -22,10 +22,26 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    const message =
-      exception instanceof HttpException
-        ? exception.getResponse()
-        : 'Internal server error';
+    // ✅ On extrait toujours une string propre
+    let message: string;
+    if (exception instanceof HttpException) {
+      const res = exception.getResponse();
+      if (typeof res === 'string') {
+        message = res;
+      } else if (typeof res === 'object' && res !== null) {
+        const obj = res as Record<string, unknown>;
+        message =
+          typeof obj['message'] === 'string'
+            ? obj['message']
+            : Array.isArray(obj['message'])
+            ? (obj['message'] as string[]).join(', ')
+            : exception.message;
+      } else {
+        message = exception.message;
+      }
+    } else {
+      message = 'Internal server error';
+    }
 
     const browserOnlyPaths = ['/favicon.ico', '/robots.txt', '/apple-touch-icon.png'];
     const isBrowserNoise = browserOnlyPaths.includes(request.url);
@@ -45,7 +61,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       statusCode: status,
       timestamp: new Date().toISOString(),
       path: request.url,
-      message,
+      message, // ✅ Toujours une string
     });
   }
 }
