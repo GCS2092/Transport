@@ -48,6 +48,12 @@ export const metadata: Metadata = {
     icon: "/favicon.ico",
     apple: "/images/FOND.jpeg",
   },
+
+  // ✅ AJOUTEZ VOTRE CODE WING ICI ↓
+  other: {
+    "msvalidate.01": "0423F349B4AF06C39E755F3FC158441E",
+  },
+  // ✅ FIN DE L'AJOUT ↑
 };
 
 export const viewport: Viewport = {
