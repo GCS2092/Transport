@@ -140,6 +140,17 @@ function SuiviContent() {
       updateReservationStatus(data.code, data.status)
       window.dispatchEvent(new Event('vtc_code_saved'))
     } catch (err: any) {
+      // ✅ Si code introuvable (404), on le supprime de la navbar
+      if (err.response?.status === 404) {
+        try {
+          const lastCode = localStorage.getItem('vtc_last_code')
+          if (lastCode === c.trim()) {
+            localStorage.removeItem('vtc_last_code')
+            window.dispatchEvent(new Event('vtc_code_cleared'))
+          }
+        } catch {}
+      }
+
       // ✅ Toujours extraire une string pour éviter le crash React #31
       const msg = err.response?.data?.message
       setError(

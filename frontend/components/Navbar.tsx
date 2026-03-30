@@ -121,11 +121,11 @@ export function Navbar() {
     return () => clearInterval(id)
   }, [lang])
 
-  /* Dernier code */
+  /* Dernier code — écoute aussi vtc_code_cleared pour effacer le badge */
   useEffect(() => {
     setLastCode(safeGet('vtc_last_code'))
     const handler      = () => setLastCode(safeGet('vtc_last_code'))
-    const clearHandler = () => setLastCode(null)
+    const clearHandler = () => { safeRemove('vtc_last_code'); setLastCode(null) }
     window.addEventListener('vtc_code_saved',   handler)
     window.addEventListener('vtc_code_cleared', clearHandler)
     return () => {
