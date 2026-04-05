@@ -1,86 +1,318 @@
-Voici tous les outils utilisés depuis le début :
+
+# 1) RÈGLE GÉNÉRALE — SUPPRESSION DU FRANC CFA SUR LES ÉCRANS CLIENT
+
+**Sur tous les écrans de réservation visibles par le client :**
+
+➡️ Supprimer toutes les références au **Franc CFA (FCFA)**
+➡️ Ne pas afficher de prix en FCFA
+➡️ Afficher uniquement :
+
+* le **départ**
+* l’**arrivée**
+* la **date**
+* l’**heure**
+* le **type de course**
+* le **statut**
 
 ---
 
-## 🛠️ Infrastructure & Déploiement
+# 2) ÉCRANS DE RÉSERVATION — FORMAT CORRECT
 
-| Outil | Rôle | Lien |
-|---|---|---|
-| **GitHub** | Hébergement du code source | github.com |
-| **Vercel** | Déploiement frontend Next.js | vercel.com |
-| **Render** | Déploiement backend | render.com |
+## Exemple corrigé
 
----
+WEND'D Transport
+FR | EN
 
-## 🌐 Domaine & DNS
+Code de réservation
+VTC-GL2PMR
 
-| Outil | Rôle |
-|---|---|
-| **Vercel Domains** | Achat et gestion du domaine `wenddtransport.com` |
-| **Vercel DNS Records** | Configuration DNS (Google, Resend, etc.) |
+Trajet
 
----
+Almadies → Aéroport International Blaise Diagne (AIBD)
 
-## 📊 Analytics & Performance
+Date
+30 mars 2026
 
-| Outil | Rôle | Lien |
-|---|---|---|
-| **Vercel Analytics** | Suivi des visites | Intégré dans Vercel |
-| **Vercel Speed Insights** | Performance de l'app | Intégré dans Vercel |
-| **Google Search Console** | Indexation et référencement Google | search.google.com/search-console |
+Heure
+15:00
 
----
+Type
+ALLER SIMPLE
 
-## 🔍 SEO
+Statut
+En attente de confirmation paiement
 
-| Outil | Rôle |
-|---|---|
-| **sitemap.ts** | Liste des pages pour Google |
-| **robots.ts** | Instructions pour les robots Google |
-| **OpenGraph** | Aperçu lors du partage de liens |
-| **opengraph.xyz** | Vérification de l'OpenGraph |
+Votre réservation expire dans
+19 minutes
+
+Passé ce délai, la réservation sera annulée
 
 ---
 
-## 📧 Emails
+# 3) SECTION SUIVI DE RÉSERVATION — MODIFICATION
 
-| Outil | Rôle | Lien |
-|---|---|---|
-| **Resend** | Envoi d'emails principal depuis `noreply@wenddtransport.com` | resend.com |
-| **Gmail SMTP** | Fallback automatique si Resend tombe | `wenddtransport@gmail.com` |
+## Supprimer
 
----
+Tarif fixe garanti
+50 000 FCFA
 
-## 🔔 Notifications Push
+## Remplacer par
 
-| Outil | Rôle | Lien |
-|---|---|---|
-| **OneSignal** | Notifications push clients & chauffeurs | onesignal.com |
+Trajet
+Almadies → Aéroport International Blaise Diagne (AIBD)
 
----
+Date & Heure
+30 mars à 15:00
 
-## 📦 Variables d'environnement utilisées
+Passagers
+8
 
-**Vercel (frontend) :**
-```
-NEXT_PUBLIC_ONESIGNAL_APP_ID
-```
+Type
+ALLER SIMPLE
 
-**Render (backend) :**
-```
-RESEND_API_KEY
-MAIL_FROM
-MAIL_FROM_NAME
-REPLY_TO_EMAIL
-GMAIL_USER
-GMAIL_APP_PASSWORD
-GMAIL_HOST
-GMAIL_PORT
-ONESIGNAL_REST_API_KEY
-```
+Paiement
+En attente
 
 ---
 
-**Total : 10 outils configurés** pour ton app WEND'D Transport. 🚀
+# 4) SECTION "GESTION DES PAIEMENTS" — NOUVELLE LOGIQUE
 
-Tu veux qu'on continue avec autre chose ?
+Actuellement :
+La course apparaît directement.
+
+Nouvelle règle :
+
+La course doit apparaître dans la section :
+
+Gestion des paiements
+
+UNIQUEMENT lorsque le client clique sur :
+
+J'ai effectué mon paiement
+
+---
+
+## Logique attendue
+
+1. Le client réserve
+2. Il clique sur :
+
+J'ai effectué mon paiement
+
+3. La réservation est ajoutée dans :
+
+Menu → Paiements → En attente
+
+---
+
+# 5) NOTIFICATION AUTOMATIQUE À L’ADMIN
+
+Lorsqu’un client clique :
+
+J'ai effectué mon paiement
+
+Le système doit envoyer immédiatement une notification à l’admin contenant :
+
+* Code réservation
+* Nom du client
+* Email
+* Téléphone
+* Numéro de paiement utilisé
+* Montant attendu
+* Date de la course
+
+---
+
+## Message de notification admin
+
+Nouvelle demande de vérification de paiement
+
+Code réservation : VTC-GL2PMR
+Client : Nom du client
+Email : [client@email.com](mailto:client@email.com)
+Téléphone : 77 XXX XX XX
+Statut : Paiement déclaré par le client
+
+Veuillez vérifier le paiement correspondant.
+
+---
+
+# 6) AFFICHAGE DES TARIFS SELON LA DEVISE CHOISIE
+
+Nouvelle règle :
+
+Les prix doivent s’afficher selon la devise sélectionnée par le client :
+
+* Euro (EUR)
+* Dollar (USD)
+
+---
+
+## Exemple
+
+Si devise choisie :
+
+EUR
+
+Afficher :
+
+Prix
+75 €
+
+---
+
+Si devise choisie :
+
+USD
+
+Afficher :
+
+Prix
+82 $
+
+---
+
+Important :
+
+Le prix doit correspondre au type de course choisi :
+
+* Aller simple
+* Aller-retour
+* Groupe
+* VIP
+* Nuit
+* Urgence
+
+---
+
+# 7) CAS SPÉCIAL — DEUX VÉHICULES
+
+Si la course nécessite :
+
+2 véhicules
+
+Alors :
+
+Le prix doit être multiplié automatiquement.
+
+---
+
+## Exemple facture
+
+Trajet
+Almadies → AIBD
+
+Nombre de véhicules
+2
+
+Prix unitaire
+75 €
+
+Total
+150 €
+
+---
+
+# 8) FACTURE TÉLÉCHARGÉE PAR LE CLIENT
+
+La facture doit afficher :
+
+* la devise choisie par le client
+* le nombre de véhicules
+* la justification du prix
+
+---
+
+## Exemple facture
+
+Facture
+
+Code réservation
+VTC-GL2PMR
+
+Trajet
+Almadies → Aéroport International Blaise Diagne
+
+Type
+ALLER SIMPLE
+
+Nombre de véhicules
+2
+
+Prix unitaire
+75 €
+
+Total
+150 €
+
+---
+
+# 9) EMAIL ENVOYÉ AU CLIENT — RÈGLE IMPORTANTE
+
+Même si le site est en :
+
+* Euro
+* Dollar
+
+Le prix dans l’email doit toujours être affiché en :
+
+FRANC CFA
+
+---
+
+## Exemple email
+
+Objet : Confirmation de votre réservation
+
+Bonjour,
+
+Votre réservation a été enregistrée.
+
+Code réservation
+VTC-GL2PMR
+
+Trajet
+Almadies → Aéroport International Blaise Diagne
+
+Montant à payer
+50 000 FCFA
+
+Merci pour votre confiance.
+
+---
+
+# 10) ACTION ADMIN — POSSIBILITÉ DE MODIFIER LA DEVISE
+
+Depuis le dashboard admin, il doit être possible de :
+
+* changer la devise affichée
+* définir les taux de conversion
+* forcer une devise
+
+---
+
+## Menu attendu
+
+Admin → Configuration → Devises
+
+* EUR
+* USD
+* FCFA
+* Taux de conversion
+* Devise par défaut
+
+---
+
+# 11) RÉSUMÉ TECHNIQUE POUR TON DÉVELOPPEUR
+
+À implémenter :
+
+1. Supprimer FCFA sur les écrans client
+2. Afficher trajet au lieu du prix
+3. Ajouter la réservation dans Paiements uniquement après clic client
+4. Envoyer notification automatique à l’admin
+5. Afficher prix selon devise choisie
+6. Multiplier prix si plusieurs véhicules
+7. Afficher devise choisie sur facture
+8. Afficher FCFA uniquement dans les emails
+9. Permettre configuration devise côté admin
