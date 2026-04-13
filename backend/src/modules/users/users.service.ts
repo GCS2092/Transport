@@ -1,4 +1,10 @@
-import { Injectable, ConflictException, NotFoundException, forwardRef, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  forwardRef,
+  Inject,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as argon2 from 'argon2';
@@ -23,12 +29,24 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { id } });
   }
 
-  async create(email: string, password: string, role: Role, firstName?: string, lastName?: string): Promise<User> {
+  async create(
+    email: string,
+    password: string,
+    role: Role,
+    firstName?: string,
+    lastName?: string,
+  ): Promise<User> {
     const existing = await this.findByEmail(email);
     if (existing) throw new ConflictException('Email already in use');
 
     const hashed = await argon2.hash(password);
-    const user = this.usersRepository.create({ email, password: hashed, role, firstName, lastName });
+    const user = this.usersRepository.create({
+      email,
+      password: hashed,
+      role,
+      firstName,
+      lastName,
+    });
     return this.usersRepository.save(user);
   }
 
@@ -43,9 +61,20 @@ export class UsersService {
     }
   }
 
-  async findAll(page = 1, limit = 50): Promise<{ data: Partial<User>[]; total: number }> {
+  async findAll(
+    page = 1,
+    limit = 50,
+  ): Promise<{ data: Partial<User>[]; total: number }> {
     const [data, total] = await this.usersRepository.findAndCount({
-      select: ['id', 'email', 'role', 'firstName', 'lastName', 'isActive', 'createdAt'],
+      select: [
+        'id',
+        'email',
+        'role',
+        'firstName',
+        'lastName',
+        'isActive',
+        'createdAt',
+      ],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -76,7 +105,7 @@ export class UsersService {
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');
 
-    // Supprimer le driver lié avant de supprimer le user
+    // Soft delete du driver lié si besoin
     if (user.role === Role.DRIVER) {
       const driver = await this.driversService.findByUserId(id);
       if (driver) {
@@ -84,6 +113,16 @@ export class UsersService {
       }
     }
 
-    await this.usersRepository.delete(id);
+    // Anonymiser les données personnelles (RGPD)
+    await this.usersRepository.update(id, {
+      email: `deleted_${id}@anonymized.com`,
+      password: 'REDACTED',
+      firstName: 'Utilisateur',
+      lastName: 'Supprimé',
+      isActive: false,
+    });
+
+    // Soft delete — conserve les audit_logs, évite la foreign key error
+    await this.usersRepository.softDelete(id);
   }
 }
