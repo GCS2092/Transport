@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "build": "nest build",
-    "start": "npm run build && node dist/main",
+    "start": "node dist/src/main.js",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "typeorm": "typeorm-ts-node-commonjs -d src/config/database.config.ts",
