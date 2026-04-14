@@ -10,7 +10,6 @@ export default function AdminFinances() {
   const [data, setData] = useState<{
     dailyRevenue: { date: string; revenue: number }[]
     monthlyRevenue: { month: string; revenue: number }[]
-    topDrivers: { name: string; revenue: number }[]
     paymentStats: { completed: number; pending: number; totalCompleted: number; totalPending: number }
     totalRevenue: number
     totalRides: number
@@ -150,22 +149,6 @@ export default function AdminFinances() {
                 </div>
               )
             })}
-          </div>
-        </div>
-
-        {/* Top chauffeurs */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-          <h2 className="text-sm font-bold text-gray-900 mb-4">Top 10 chauffeurs par revenu</h2>
-          <div className="space-y-3">
-            {data.topDrivers.map((driver, idx) => (
-              <div key={idx} className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-[var(--primary)] text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
-                  {idx + 1}
-                </div>
-                <span className="text-sm text-gray-900 flex-1 truncate">{driver.name}</span>
-                <span className="text-sm font-bold text-gray-900">{formatCurrency(driver.revenue)}</span>
-              </div>
-            ))}
           </div>
         </div>
 

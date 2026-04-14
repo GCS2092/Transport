@@ -4,22 +4,6 @@ import { useEffect, useState } from 'react'
 import { adminApi, AdminStats, feedbackApi } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 
-const IconTrendingUp = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-    <polyline points="17 6 23 6 23 12"/>
-  </svg>
-)
-
-const IconUsers = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-    <circle cx="9" cy="7" r="4"/>
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-  </svg>
-)
-
 const IconCar = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M5 17H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1l2-4h10l2 4h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/>
@@ -80,7 +64,7 @@ export default function AdminDashboard() {
     try {
       const { data } = await adminApi.sendReportsNow(reportPassword)
       setReportSuccess(
-        `Rapports envoyés : ${data.driversNotified} chauffeur(s), ${data.adminsNotified} admin(s) — période : ${data.period}`
+        `Rapports envoyés : ${data.adminsNotified} admin(s) — période : ${data.period}`
       )
       setShowReportModal(false)
       setReportPassword('')
@@ -304,7 +288,7 @@ export default function AdminDashboard() {
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
                 <p className="text-sm font-semibold text-amber-900">⚠ Action sensible</p>
                 <p className="text-xs text-amber-700 mt-1">
-                  Tous les chauffeurs et administrateurs recevront immédiatement leur rapport PDF par email.
+                  Tous les administrateurs recevront immédiatement leur rapport PDF par email.
                   Cette action ne peut pas être annulée.
                 </p>
                 <p className="text-xs text-amber-600 mt-2 font-medium">

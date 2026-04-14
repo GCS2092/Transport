@@ -46,6 +46,7 @@ export default function AdminAudit() {
     UPDATE: 'bg-blue-100 text-blue-800',
     DELETE: 'bg-red-100 text-red-800',
     ASSIGN_DRIVER: 'bg-purple-100 text-purple-800',
+    ASSIGN_EXTERNAL_DRIVER: 'bg-emerald-100 text-emerald-800',
     UPDATE_STATUS: 'bg-amber-100 text-amber-800',
     CANCEL: 'bg-red-100 text-red-800',
   }
@@ -55,6 +56,7 @@ export default function AdminAudit() {
     UPDATE: 'Modification',
     DELETE: 'Suppression',
     ASSIGN_DRIVER: 'Assignation',
+    ASSIGN_EXTERNAL_DRIVER: 'Assignation externe',
     UPDATE_STATUS: 'Changement statut',
     CANCEL: 'Annulation',
   }
@@ -85,7 +87,6 @@ export default function AdminAudit() {
               >
                 <option value="">Tous</option>
                 <option value="Reservation">Réservations</option>
-                <option value="Driver">Chauffeurs</option>
                 <option value="User">Utilisateurs</option>
                 <option value="Zone">Zones</option>
                 <option value="Tariff">Tarifs</option>

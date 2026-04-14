@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { adminApi, User, CreateDriverUserDto, authApi } from '@/lib/api'
+import { adminApi, User, authApi } from '@/lib/api'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
@@ -36,16 +36,13 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true)
 
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [formData, setFormData] = useState<CreateDriverUserDto>({
-    email: '', password: '', firstName: '', lastName: '',
-    phone: '', vehicleType: '', vehiclePlate: '',
+  const [formData, setFormData] = useState({
+    email: '', password: '', firstName: '', lastName: '', phone: '',
   })
   const [creating, setCreating] = useState(false)
-  const [adminMode, setAdminMode] = useState(false)
   const [adminPassword, setAdminPassword] = useState('')
   const [adminPasswordError, setAdminPasswordError] = useState('')
   const [adminPasswordValid, setAdminPasswordValid] = useState(false)
-  const [showAdminPassword, setShowAdminPassword] = useState(false)
   const [verifying, setVerifying] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
@@ -80,40 +77,31 @@ export default function AdminUsers() {
     }
   }
 
-  // Validation mot de passe pour créer un admin
   const handleAdminPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setAdminPasswordError('')
     const valid = await verifyAdminPassword(adminPassword)
     if (valid) {
       setAdminPasswordValid(true)
-      setAdminMode(true)
-      setShowAdminPassword(false)
     } else {
       setAdminPasswordError('Mot de passe incorrect')
     }
   }
 
-  const handleCreateDriver = async (e: React.FormEvent) => {
+  const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault()
     if (creating) return
     try {
       setCreating(true)
-      if (adminMode) {
-        await adminApi.createUser({
-          email: formData.email, password: formData.password,
-          firstName: formData.firstName, lastName: formData.lastName,
-          phone: formData.phone, role: 'ADMIN'
-        })
-      } else {
-        await adminApi.createDriverUser(formData)
-      }
+      await adminApi.createUser({
+        email: formData.email, password: formData.password,
+        firstName: formData.firstName, lastName: formData.lastName,
+        phone: formData.phone, role: 'ADMIN'
+      })
       setShowCreateModal(false)
-      setFormData({ email: '', password: '', firstName: '', lastName: '', phone: '', vehicleType: '', vehiclePlate: '' })
-      setAdminMode(false)
+      setFormData({ email: '', password: '', firstName: '', lastName: '', phone: '' })
       setAdminPassword('')
       setAdminPasswordValid(false)
-      setShowAdminPassword(false)
       loadUsers()
     } catch (err: any) {
       alert(err.response?.data?.message || 'Erreur lors de la création')
@@ -172,11 +160,11 @@ export default function AdminUsers() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Gestion des utilisateurs</h1>
-            <p className="text-sm text-gray-500 mt-1">Administrateurs et chauffeurs</p>
+            <p className="text-sm text-gray-500 mt-1">Comptes administrateurs</p>
           </div>
-          <button onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-lg text-sm font-semibold hover:bg-[var(--primary-hover)] transition-colors">
-            <IconPlus /> Nouveau chauffeur
+          <button onClick={() => { setShowCreateModal(true); setAdminPasswordValid(false); setAdminPassword(''); }}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition-colors">
+            <IconPlus /> Nouvel admin
           </button>
         </div>
 
@@ -205,21 +193,19 @@ export default function AdminUsers() {
                     </p>
                   </div>
 
-                  {user.role === 'DRIVER' && (
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button onClick={() => handleToggleActive(user)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                          user.isActive ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
-                        }`}>
-                        {user.isActive ? <IconUserX /> : <IconUserCheck />}
-                        {user.isActive ? 'Désactiver' : 'Activer'}
-                      </button>
-                      <button onClick={() => openDeleteModal(user)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors">
-                        <IconTrash /> Supprimer
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={() => handleToggleActive(user)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                        user.isActive ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                      }`}>
+                      {user.isActive ? <IconUserX /> : <IconUserCheck />}
+                      {user.isActive ? 'Désactiver' : 'Activer'}
+                    </button>
+                    <button onClick={() => openDeleteModal(user)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors">
+                      <IconTrash /> Supprimer
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -231,7 +217,7 @@ export default function AdminUsers() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl max-w-sm w-full p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900">Supprimer le chauffeur</h3>
+                <h3 className="text-lg font-bold text-gray-900">Supprimer l'utilisateur</h3>
                 <button onClick={closeDeleteModal} className="text-gray-400 hover:text-gray-600"><IconX /></button>
               </div>
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5">
@@ -266,115 +252,92 @@ export default function AdminUsers() {
           </div>
         )}
 
-        {/* Modal création */}
+        {/* Modal création admin */}
         {showCreateModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl max-w-md w-full p-6 my-8">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900">
-                  {adminMode ? 'Nouveau compte admin' : 'Nouveau chauffeur'}
-                </h3>
-                <button onClick={() => { setShowCreateModal(false); setAdminMode(false); setAdminPassword(''); setAdminPasswordValid(false); setShowAdminPassword(false); }}
+                <h3 className="text-lg font-bold text-gray-900">Nouveau compte admin</h3>
+                <button onClick={() => { setShowCreateModal(false); setAdminPassword(''); setAdminPasswordValid(false); }}
                   className="text-gray-400 hover:text-gray-600"><IconX /></button>
               </div>
 
-              {!showAdminPassword && !adminPasswordValid && (
-                <div className="mb-4">
-                  <button type="button" onClick={() => setShowAdminPassword(true)}
-                    className="w-full py-2 px-4 bg-purple-50 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-100 transition-colors border border-purple-200">
-                    🔐 Créer un compte admin
-                  </button>
-                </div>
-              )}
-
-              {showAdminPassword && !adminPasswordValid && (
-                <form onSubmit={handleAdminPasswordSubmit} className="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
-                  <h4 className="text-sm font-semibold text-purple-900 mb-2">Confirmez votre mot de passe admin</h4>
-                  <input type="password" value={adminPassword}
-                    onChange={e => { setAdminPassword(e.target.value); setAdminPasswordError('') }}
-                    placeholder="Votre mot de passe"
-                    className="w-full px-3 py-2 rounded-lg border border-purple-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 mb-2"
-                    required />
-                  {adminPasswordError && <p className="text-xs text-red-600 mb-2 font-medium">{adminPasswordError}</p>}
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => { setShowAdminPassword(false); setAdminPassword(''); setAdminPasswordError('') }}
-                      className="flex-1 py-2 border border-purple-200 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-100 transition-colors">
+              {!adminPasswordValid ? (
+                <form onSubmit={handleAdminPasswordSubmit} className="space-y-4">
+                  <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <p className="text-sm text-purple-800 font-medium">🔐 Confirmez votre mot de passe admin pour continuer</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Mot de passe admin</label>
+                    <input type="password" value={adminPassword}
+                      onChange={e => { setAdminPassword(e.target.value); setAdminPasswordError('') }}
+                      placeholder="Votre mot de passe"
+                      className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      required autoFocus />
+                    {adminPasswordError && <p className="text-xs text-red-600 mt-1.5 font-medium">{adminPasswordError}</p>}
+                  </div>
+                  <div className="flex gap-3">
+                    <button type="button" onClick={() => { setShowCreateModal(false); setAdminPassword(''); }}
+                      className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors">
                       Annuler
                     </button>
-                    <button type="submit" disabled={verifying}
-                      className="flex-1 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors disabled:opacity-50">
-                      {verifying ? 'Vérification...' : 'Valider'}
+                    <button type="submit" disabled={verifying || !adminPassword}
+                      className="flex-1 py-2.5 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50">
+                      {verifying ? 'Vérification...' : 'Continuer'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleCreateAdmin} className="space-y-4">
+                  <div className="p-3 bg-purple-50 rounded-lg border border-purple-200 mb-2">
+                    <p className="text-sm text-purple-700 font-medium">✅ Identité vérifiée</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Prénom</label>
+                      <input type="text" required value={formData.firstName}
+                        onChange={e => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                        className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Nom</label>
+                      <input type="text" required value={formData.lastName}
+                        onChange={e => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                        className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Email</label>
+                    <input type="email" required value={formData.email}
+                      onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Mot de passe</label>
+                    <input type="password" required minLength={8} value={formData.password}
+                      onChange={e => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                      className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                    <p className="text-xs text-gray-400 mt-1">Minimum 8 caractères</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Téléphone</label>
+                    <input type="tel" required placeholder="+221771234567" value={formData.phone}
+                      onChange={e => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                      className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button type="button"
+                      onClick={() => { setShowCreateModal(false); setAdminPasswordValid(false); setAdminPassword(''); }}
+                      className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors">
+                      Annuler
+                    </button>
+                    <button type="submit" disabled={creating}
+                      className="flex-1 py-2.5 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50">
+                      {creating ? 'Création...' : "Créer l'admin"}
                     </button>
                   </div>
                 </form>
               )}
-
-              <form onSubmit={handleCreateDriver} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Prénom</label>
-                  <input type="text" required value={formData.firstName}
-                    onChange={e => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                    className={`w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 ${adminMode ? 'focus:ring-purple-500' : 'focus:ring-emerald-500'}`} />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Nom</label>
-                  <input type="text" required value={formData.lastName}
-                    onChange={e => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                    className={`w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 ${adminMode ? 'focus:ring-purple-500' : 'focus:ring-emerald-500'}`} />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Email</label>
-                  <input type="email" required value={formData.email}
-                    onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    className={`w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 ${adminMode ? 'focus:ring-purple-500' : 'focus:ring-emerald-500'}`} />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Mot de passe</label>
-                  <input type="password" required minLength={8} value={formData.password}
-                    onChange={e => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                    className={`w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 ${adminMode ? 'focus:ring-purple-500' : 'focus:ring-emerald-500'}`} />
-                  <p className="text-xs text-gray-400 mt-1">Minimum 8 caractères</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Téléphone</label>
-                  <input type="tel" required placeholder="+221771234567" value={formData.phone}
-                    onChange={e => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                    className={`w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 ${adminMode ? 'focus:ring-purple-500' : 'focus:ring-emerald-500'}`} />
-                  <p className="text-xs text-gray-400 mt-1">Format international: +221...</p>
-                </div>
-                {!adminMode && (
-                  <>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Type de véhicule</label>
-                      <input type="text" required placeholder="ex: Berline, SUV, Van..." value={formData.vehicleType}
-                        onChange={e => setFormData(prev => ({ ...prev, vehicleType: e.target.value }))}
-                        className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Plaque d'immatriculation (optionnel)</label>
-                      <input type="text" placeholder="ex: DK-1234-AB" value={formData.vehiclePlate}
-                        onChange={e => setFormData(prev => ({ ...prev, vehiclePlate: e.target.value }))}
-                        className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-                    </div>
-                  </>
-                )}
-                {adminPasswordValid && (
-                  <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-                    <p className="text-sm text-purple-700 font-medium">✅ Mode admin activé</p>
-                  </div>
-                )}
-                <div className="flex gap-3 pt-2">
-                  <button type="button"
-                    onClick={() => { setShowCreateModal(false); setAdminMode(false); setAdminPassword(''); setAdminPasswordValid(false); setShowAdminPassword(false); }}
-                    className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors">
-                    Annuler
-                  </button>
-                  <button type="submit" disabled={creating}
-                    className={`flex-1 py-2.5 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 ${adminMode ? 'bg-purple-600 hover:bg-purple-700' : 'bg-[var(--primary)] hover:bg-[var(--primary-hover)]'}`}>
-                    {creating ? 'Création...' : `Créer ${adminMode ? "l'admin" : 'le chauffeur'}`}
-                  </button>
-                </div>
-              </form>
             </div>
           </div>
         )}
