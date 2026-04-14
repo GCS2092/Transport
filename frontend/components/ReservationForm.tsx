@@ -368,15 +368,21 @@ export function ReservationForm() {
 
   const validateStep1 = () => {
     // Vérifier que le départ est bien défini (zone OU adresse personnalisée)
-    const hasPickup = pickupType === 'zone' 
-      ? formData.pickupZoneId 
-      : (customPickupAddress.trim().length > 5)
-    
+    // Pour RETOUR_SIMPLE, le départ est forcé à AIBD donc toujours valide
+    const hasPickup = tripType === 'RETOUR_SIMPLE'
+      ? true
+      : (pickupType === 'zone'
+        ? formData.pickupZoneId
+        : (customPickupAddress.trim().length > 5))
+
     // Vérifier que l'arrivée est bien définie (zone OU adresse personnalisée)
-    const hasDropoff = dropoffType === 'zone'
-      ? formData.dropoffZoneId
-      : (customDropoffAddress.trim().length > 5)
-    
+    // Pour ALLER_SIMPLE, l'arrivée est forcée à AIBD donc toujours valide
+    const hasDropoff = tripType === 'ALLER_SIMPLE'
+      ? true
+      : (dropoffType === 'zone'
+        ? formData.dropoffZoneId
+        : (customDropoffAddress.trim().length > 5))
+
     if (!hasPickup || !hasDropoff) return f.selectZones
     
     // Vérifier que les zones sont différentes seulement si les deux sont des zones prédéfinies
@@ -599,45 +605,53 @@ export function ReservationForm() {
     return (
       <div className="min-h-[calc(100dvh-7rem)] bg-[#f5f5f0] flex flex-col items-center justify-center px-4 py-10">
         <div className="w-full max-w-md">
-          
+
           {/* Header */}
-          <div className="bg-blue-700 rounded-t-2xl p-6 text-white text-center">
+          <div className="bg-emerald-600 rounded-t-2xl p-6 text-white text-center">
             <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-lg font-bold">Réservation enregistrée</h1>
-            <p className="text-sm text-white/80">En attente de confirmation paiement</p>
+            <h1 className="text-lg font-bold">Réservation confirmée</h1>
+            <p className="text-sm text-white/80">Votre course est en cours de validation</p>
           </div>
 
           {/* Code et infos */}
           <div className="bg-white border-x border-b border-gray-200 p-6 text-center">
             <p className="text-sm text-gray-500 mb-2">Code réservation</p>
-            <p className="text-4xl font-mono font-bold text-gray-900 mb-4">{reservationCode}</p>
+            <p className="text-4xl font-mono font-bold text-emerald-600 mb-4">{reservationCode}</p>
             <p className="text-sm text-gray-600 mb-4">
               {pickupName} → {dropoffName}
               <span className="mx-2">•</span>
               {estimatedPrice && formatCurrency(estimatedPrice)}
             </p>
-            <p className="text-xs text-gray-500 mb-6">
+            <p className="text-xs text-gray-500 mb-2">
               {f.successSubtitle} {formData.clientEmail}
             </p>
 
-            {/* Bouton continuer vers paiement */}
+            {/* Message de validation */}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-6">
+              <p className="text-sm text-amber-800">
+                <span className="font-semibold">⏳ En cours de validation</span><br/>
+                Vous recevrez un email de confirmation avec les détails du chauffeur sous peu.
+              </p>
+            </div>
+
+            {/* Bouton suivre ma réservation */}
             <a
-              href={`/reservation/confirmation/${reservationCode}`}
-              className="block w-full py-4 bg-emerald-600 text-white rounded-xl text-base font-semibold text-center hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200"
+              href={`/suivi?code=${reservationCode}`}
+              className="block w-full py-4 bg-gray-900 text-white rounded-xl text-base font-semibold text-center hover:bg-gray-800 transition-colors shadow-lg"
             >
-              Continuer vers le paiement →
+              Suivre ma réservation →
             </a>
 
-            {/* Bouton annuler */}
+            {/* Bouton nouvelle réservation */}
             <button
               onClick={resetForm}
               className="w-full py-3 mt-3 text-gray-500 text-sm hover:text-gray-700 transition-colors"
             >
-              Annuler la réservation
+              Nouvelle réservation
             </button>
           </div>
 

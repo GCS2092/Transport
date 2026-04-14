@@ -353,6 +353,54 @@ export class ReservationsService {
     return this.assignDriver(reservationId, closest.driver.id);
   }
 
+  async assignExternalDriver(
+    id: string,
+    data: { name: string; phone: string; plate: string; vehicle: string },
+  ): Promise<Reservation> {
+    const reservation = await this.findById(id);
+    if (reservation.status !== ReservationStatus.EN_ATTENTE) {
+      throw new BadRequestException('Can only assign driver to pending reservations');
+    }
+
+    await this.reservationsRepository.update(id, {
+      driverId: null,
+      externalDriverName: data.name,
+      externalDriverPhone: data.phone,
+      externalDriverPlate: data.plate,
+      externalDriverVehicle: data.vehicle,
+      status: ReservationStatus.ASSIGNEE,
+    });
+
+    const updated = await this.findById(id);
+
+    await this.auditService.log({
+      userId: null,
+      action: 'ASSIGN_EXTERNAL_DRIVER',
+      entityType: 'Reservation',
+      entityId: id,
+      oldData: { status: reservation.status },
+      newData: {
+        externalDriverName: data.name,
+        externalDriverPhone: data.phone,
+        status: ReservationStatus.ASSIGNEE,
+      },
+      description: `External driver ${data.name} assigned to reservation ${reservation.code}`,
+    });
+
+    setImmediate(async () => {
+      try {
+        await this.notificationsService.sendDriverAssigned(updated);
+        const admins = await this.usersService.findAdmins();
+        const adminEmails = admins.map(a => a.email);
+        await this.notificationsService.sendAdminDriverAssigned(updated, adminEmails);
+      } catch (e) {
+        this.logger.error('Failed to send external driver assigned emails', JSON.stringify(e));
+      }
+    });
+
+    return updated;
+  }
+
   private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 6371;
     const dLat = this.toRad(lat2 - lat1);

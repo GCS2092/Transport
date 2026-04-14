@@ -201,6 +201,11 @@ export interface Reservation {
     vehiclePlate: string
     status: string
   }
+  // Chauffeur externe (partenaire sans compte)
+  externalDriverName?: string
+  externalDriverPhone?: string
+  externalDriverPlate?: string
+  externalDriverVehicle?: string
   vehicleCount?: number
   airlineCompany?: string
   departureTime?: string
@@ -390,6 +395,9 @@ export const reservationsApi = {
     api.put<Reservation>(`/reservations/${id}/assign`, { driverId }),
 
   autoAssignDriver: (id: string) => api.post(`/reservations/${id}/auto-assign`),
+
+  assignExternalDriver: (id: string, data: { name: string; phone: string; plate: string; vehicle: string }) =>
+    api.post<Reservation>(`/reservations/${id}/assign-external`, data),
 
   cancelByAdmin: (id: string) =>
     api.put<Reservation>(`/reservations/${id}/cancel`, {}),

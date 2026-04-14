@@ -149,6 +149,16 @@ export class ReservationsController {
     return this.reservationsService.autoAssignDriver(id);
   }
 
+  @Post(':id/assign-external')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  assignExternalDriver(
+    @Param('id') id: string,
+    @Body() data: { name: string; phone: string; plate: string; vehicle: string },
+  ) {
+    return this.reservationsService.assignExternalDriver(id, data);
+  }
+
   @Post(':id/proposals')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)

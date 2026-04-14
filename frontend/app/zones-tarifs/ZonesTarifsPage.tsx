@@ -176,35 +176,6 @@ export default function ZonesTarifsPage() {
           ))}
         </div>
 
-        {/* Zones desservies */}
-        <div className="bg-white rounded-2xl border border-[var(--border)] overflow-hidden">
-          <div className="px-5 py-4 border-b border-[var(--border)]">
-            <h2 className="text-base font-bold text-[var(--ink)]">{z.zonesTitle}</h2>
-            <p className="text-xs text-[var(--muted)] mt-0.5">
-              {zones.length} {lang === 'fr' ? 'zones disponibles 24h/24' : 'zones available 24/7'}
-            </p>
-          </div>
-          <div className="divide-y divide-[var(--border)]">
-            {zones.map((zone, i) => (
-              <div key={zone.id} className="flex items-center gap-4 px-5 py-3.5">
-                <div className="w-8 h-8 rounded-full bg-[var(--accent-light)] text-[var(--accent-hover)] flex items-center justify-center text-sm font-bold flex-shrink-0">
-                  {i + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-[var(--ink)] truncate">{zone.name}</p>
-                  {zone.description && <p className="text-xs text-[var(--muted)] truncate mt-0.5">{zone.description}</p>}
-                </div>
-                <span className="text-xs text-[var(--accent)] font-semibold flex-shrink-0">{z.active}</span>
-              </div>
-            ))}
-            {zones.length === 0 && (
-              <div className="px-5 py-8 text-center text-sm text-[var(--muted)]">
-                {lang === 'fr' ? 'Chargement des zones...' : 'Loading zones...'}
-              </div>
-            )}
-          </div>
-        </div>
-
       </div>
     </div>
   )

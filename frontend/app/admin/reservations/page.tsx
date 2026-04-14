@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { reservationsApi, driverApi, Reservation, Driver } from '@/lib/api'
+import { reservationsApi, Reservation } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -28,12 +28,10 @@ const IconX = () => (
 
 export default function AdminReservations() {
   const [reservations, setReservations] = useState<Reservation[]>([])
-  const [drivers, setDrivers] = useState<Driver[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('')
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null)
   const [showAssignModal, setShowAssignModal] = useState(false)
-  const [selectedDriver, setSelectedDriver] = useState('')
   const [exporting, setExporting] = useState(false)
   const [archiving, setArchiving] = useState(false)
   const [archivePeriod, setArchivePeriod] = useState<number>(90)
@@ -42,6 +40,15 @@ export default function AdminReservations() {
   const [searchType, setSearchType] = useState<'code' | 'client'>('code')
   const [showEditModal, setShowEditModal] = useState(false)
   const [editForm, setEditForm] = useState<Partial<Reservation>>({})
+  // Seulement assignation externe (partenaires) - pas de chauffeurs plateforme internes
+  const [externalDriver, setExternalDriver] = useState({
+    name: '',
+    phone: '',
+    plate: '',
+    vehicle: ''
+  })
+  const [showReservationSheet, setShowReservationSheet] = useState(false)
+  const [sheetReservation, setSheetReservation] = useState<Reservation | null>(null)
 
   useEffect(() => {
     loadData()
@@ -50,48 +57,32 @@ export default function AdminReservations() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [resData, driverData] = await Promise.all([
-        reservationsApi.getAll({ limit: 100, status: filter || undefined }),
-        driverApi.getAll(),
-      ])
+      const resData = await reservationsApi.getAll({ limit: 100, status: filter || undefined })
       setReservations(resData.data.data || [])
-      setDrivers(driverData.data || [])
     } catch (err: any) {
       console.error('Failed to load data', err)
       alert(`Erreur lors du chargement des données: ${err.response?.data?.message || err.message}`)
       setReservations([])
-      setDrivers([])
     } finally {
       setLoading(false)
     }
   }
 
-  const handleAssignDriver = async () => {
-    if (!selectedReservation || !selectedDriver) return
-    try {
-      await reservationsApi.assignDriver(selectedReservation.id, selectedDriver)
-      setShowAssignModal(false)
-      setSelectedReservation(null)
-      setSelectedDriver('')
-      loadData()
-    } catch (err) {
-      console.error('Failed to assign driver', err)
-      alert('Erreur lors de l\'assignation du chauffeur')
-    }
-  }
-
-  const handleAutoAssign = async () => {
+  const handleAssignExternalDriver = async () => {
     if (!selectedReservation) return
+    if (!externalDriver.name || !externalDriver.phone || !externalDriver.plate || !externalDriver.vehicle) {
+      alert('Veuillez remplir tous les champs du chauffeur externe')
+      return
+    }
     try {
-      await reservationsApi.autoAssignDriver(selectedReservation.id)
+      await reservationsApi.assignExternalDriver(selectedReservation.id, externalDriver)
       setShowAssignModal(false)
       setSelectedReservation(null)
-      setSelectedDriver('')
+      setExternalDriver({ name: '', phone: '', plate: '', vehicle: '' })
       loadData()
-      alert('Chauffeur assigné automatiquement avec succès !')
     } catch (err: any) {
-      console.error('Failed to auto-assign driver', err)
-      alert(err.response?.data?.message || 'Erreur lors de l\'assignation automatique')
+      console.error('Failed to assign external driver', err)
+      alert(err.response?.data?.message || 'Erreur lors de l\'assignation du chauffeur externe')
     }
   }
 
@@ -216,25 +207,7 @@ export default function AdminReservations() {
     }
   }
 
-  const handleUnassignDriver = async (id: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir retirer le chauffeur de cette course ?')) return
-    try {
-      await reservationsApi.assignDriver(id, '')
-      loadData()
-    } catch (err) {
-      console.error('Failed to unassign driver', err)
-      alert('Erreur lors du retrait du chauffeur')
-    }
-  }
-
-  // Compter les courses actives par chauffeur
-  const getDriverActiveCourseCount = (driverId: string) => {
-    return reservations.filter(r => 
-      r.driver?.id === driverId && 
-      (r.status === 'ASSIGNEE' || r.status === 'EN_COURS')
-    ).length
-  }
-
+  // Statistiques des réservations
   const statusColors: Record<string, string> = {
     EN_ATTENTE: 'bg-amber-100 text-amber-800',
     ASSIGNEE: 'bg-blue-100 text-blue-800',
@@ -524,23 +497,43 @@ export default function AdminReservations() {
                   </div>
                 )}
 
-                {res.driver && (
-                  <div className="bg-gray-50 rounded-lg p-2 mb-3">
+
+                {/* Chauffeur externe (partenaire) */}
+                {res.externalDriverName && (
+                  <div className="bg-emerald-50 rounded-lg p-2 mb-3 border border-emerald-100">
                     <div className="flex items-center justify-between mb-0.5">
-                      <p className="text-xs text-gray-500">Chauffeur assigné</p>
-                      {['EN_ATTENTE', 'ASSIGNEE'].includes(res.status) && (
-                        <button
-                          onClick={() => handleUnassignDriver(res.id)}
-                          className="text-xs text-red-600 hover:text-red-800 font-medium"
-                        >
-                          ✕ Retirer
-                        </button>
-                      )}
+                      <p className="text-xs text-emerald-600 font-medium">🤝 Chauffeur partenaire</p>
                     </div>
                     <p className="text-sm font-semibold text-gray-900">
-                      {res.driver.firstName} {res.driver.lastName}
+                      {res.externalDriverName}
                     </p>
-                    <p className="text-xs text-gray-600">{res.driver.vehicleType} • {res.driver.vehiclePlate}</p>
+                    <p className="text-xs text-gray-600">{res.externalDriverVehicle} • {res.externalDriverPlate}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">📞 {res.externalDriverPhone}</p>
+
+                    {/* Bouton WhatsApp */}
+                    <a
+                      href={`https://wa.me/${res.externalDriverPhone?.replace(/\D/g, '')}?text=${encodeURIComponent(
+                        `Bonjour ${res.externalDriverName},\n\n` +
+                        `Nouvelle course WEND'D Transport :\n` +
+                        `📋 Code: ${res.code}\n` +
+                        `👤 Client: ${res.clientFirstName} ${res.clientLastName}\n` +
+                        `📞 Client: ${res.clientPhone}\n` +
+                        `📍 Départ: ${res.pickupZone?.name || res.pickupCustomAddress}\n` +
+                        `🏁 Destination: ${res.dropoffZone?.name || res.dropoffCustomAddress}\n` +
+                        `🕐 Date: ${format(new Date(res.pickupDateTime), 'dd/MM HH:mm', { locale: fr })}\n` +
+                        `👥 Passagers: ${res.passengers}\n\n` +
+                        `Véhicule: ${res.externalDriverVehicle} (${res.externalDriverPlate})\n\n` +
+                        `Merci de confirmer la prise en charge.`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-semibold hover:bg-green-600 transition-colors"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                      </svg>
+                      WhatsApp
+                    </a>
                   </div>
                 )}
 
@@ -569,12 +562,11 @@ export default function AdminReservations() {
                     <button
                       onClick={() => {
                         setSelectedReservation(res)
-                        setSelectedDriver(res.driver?.id || '')
                         setShowAssignModal(true)
                       }}
                       className="flex-1 py-2 bg-[var(--primary)] text-white rounded-lg text-xs font-semibold hover:bg-[var(--primary-hover)] transition-colors"
                     >
-                      {res.driver ? 'Réassigner chauffeur' : 'Assigner un chauffeur'}
+                      {res.externalDriverName ? 'Changer chauffeur' : 'Assigner chauffeur'}
                     </button>
                   )}
                   
@@ -640,111 +632,98 @@ export default function AdminReservations() {
         {/* Modal assignation */}
         {showAssignModal && selectedReservation && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl max-w-md w-full p-6">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900">Assigner un chauffeur</h3>
+                <h3 className="text-lg font-bold text-gray-900">Assigner un chauffeur externe</h3>
                 <button onClick={() => setShowAssignModal(false)} className="text-gray-400 hover:text-gray-600">
                   <IconX />
                 </button>
               </div>
 
-              <div className="mb-4">
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600 mb-1">Réservation</p>
                 <p className="font-mono font-bold text-gray-900">{selectedReservation.code}</p>
                 <p className="text-sm text-gray-700">{selectedReservation.clientFirstName} {selectedReservation.clientLastName}</p>
-              </div>
-
-              <div className="mb-6">
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
-                  Sélectionner un chauffeur
-                </label>
-                <div className="space-y-2 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-2">
-                  {drivers
-                    .filter(d => d.isActive)
-                    .sort((a, b) => {
-                      const countA = getDriverActiveCourseCount(a.id)
-                      const countB = getDriverActiveCourseCount(b.id)
-                      if (countA !== countB) return countA - countB
-                      if (a.status === 'DISPONIBLE' && b.status !== 'DISPONIBLE') return -1
-                      if (a.status !== 'DISPONIBLE' && b.status === 'DISPONIBLE') return 1
-                      return 0
-                    })
-                    .map(d => {
-                      const activeCourseCount = getDriverActiveCourseCount(d.id)
-                      const hasActiveCourse = activeCourseCount > 0
-                      const isAtLimit = activeCourseCount >= 3
-                      const isAvailable = d.status === 'DISPONIBLE' && !isAtLimit
-                      
-                      return (
-                        <button
-                          key={d.id}
-                          type="button"
-                          onClick={() => !isAtLimit && setSelectedDriver(d.id)}
-                          disabled={isAtLimit}
-                          className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all ${
-                            selectedDriver === d.id
-                              ? 'border-emerald-500 bg-emerald-50'
-                              : isAtLimit
-                              ? 'border-red-200 bg-red-50 opacity-60 cursor-not-allowed'
-                              : isAvailable
-                              ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                              : 'border-gray-200 bg-gray-50 opacity-80'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <p className="text-sm font-semibold text-gray-900">
-                                {d.firstName} {d.lastName}
-                              </p>
-                              <p className="text-xs text-gray-500">{d.vehicleType} • {d.vehiclePlate}</p>
-                            </div>
-                            <div className="flex flex-col items-end gap-1">
-                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                                d.status === 'DISPONIBLE' && !isAtLimit
-                                  ? 'bg-emerald-100 text-emerald-700' 
-                                  : d.status === 'EN_COURSE'
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-gray-100 text-gray-700'
-                              }`}>
-                                {d.status === 'DISPONIBLE' ? 'Disponible' : d.status === 'EN_COURSE' ? 'En course' : 'Hors ligne'}
-                              </span>
-                              {activeCourseCount > 0 && (
-                                <span className={`text-xs font-semibold ${
-                                  isAtLimit ? 'text-red-600 font-bold' : 'text-orange-600'
-                                }`}>
-                                  {activeCourseCount} course{activeCourseCount > 1 ? 's' : ''} active{activeCourseCount > 1 ? 's' : ''}
-                                  {isAtLimit && ' ⚠️ MAX'}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </button>
-                      )
-                    })}
-                  {drivers.filter(d => d.isActive).length === 0 && (
-                    <p className="text-sm text-gray-500 text-center py-4">Aucun chauffeur actif</p>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  💡 Les chauffeurs avec 3 courses actives sont désactivés pour éviter la surcharge.
+                <p className="text-xs text-gray-500 mt-1">
+                  {selectedReservation.pickupZone?.name || selectedReservation.pickupCustomAddress} → {selectedReservation.dropoffZone?.name || selectedReservation.dropoffCustomAddress}
                 </p>
               </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowAssignModal(false)}
-                  className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors"
-                >
-                  Annuler
-                </button>
-                <button
-                  onClick={handleAssignDriver}
-                  disabled={!selectedDriver}
-                  className="flex-1 py-2.5 bg-[var(--primary)] text-white rounded-lg text-sm font-semibold hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Confirmer
-                </button>
+              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <p className="text-sm text-emerald-800">
+                  <span className="font-semibold">🤝 Mode Partenaire</span><br/>
+                  Assignez un chauffeur externe en entrant ses informations manuellement.
+                </p>
               </div>
+
+              (
+                <div className="mb-6 space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
+                      Nom du chauffeur
+                    </label>
+                    <input
+                      type="text"
+                      value={externalDriver.name}
+                      onChange={(e) => setExternalDriver({ ...externalDriver, name: e.target.value })}
+                      placeholder="Ex: Mamadou Diallo"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
+                      Téléphone
+                    </label>
+                    <input
+                      type="tel"
+                      value={externalDriver.phone}
+                      onChange={(e) => setExternalDriver({ ...externalDriver, phone: e.target.value })}
+                      placeholder="Ex: +221 77 123 45 67"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
+                      Plaque d'immatriculation
+                    </label>
+                    <input
+                      type="text"
+                      value={externalDriver.plate}
+                      onChange={(e) => setExternalDriver({ ...externalDriver, plate: e.target.value })}
+                      placeholder="Ex: DK-1234-AB"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
+                      Marque et modèle du véhicule
+                    </label>
+                    <input
+                      type="text"
+                      value={externalDriver.vehicle}
+                      onChange={(e) => setExternalDriver({ ...externalDriver, vehicle: e.target.value })}
+                      placeholder="Ex: Toyota Corolla 2020"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      onClick={() => setShowAssignModal(false)}
+                      className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      onClick={handleAssignExternalDriver}
+                      disabled={!externalDriver.name || !externalDriver.phone || !externalDriver.plate || !externalDriver.vehicle}
+                      className="flex-1 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Assigner externe
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

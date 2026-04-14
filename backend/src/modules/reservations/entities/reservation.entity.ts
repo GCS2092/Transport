@@ -156,6 +156,19 @@ export class Reservation {
   @JoinColumn({ name: 'driverId' })
   driver: Driver;
 
+  // Chauffeur externe (partenaire) - infos manuelles sans compte
+  @Column({ nullable: true })
+  externalDriverName: string;
+
+  @Column({ nullable: true })
+  externalDriverPhone: string;
+
+  @Column({ nullable: true })
+  externalDriverPlate: string;
+
+  @Column({ nullable: true })
+  externalDriverVehicle: string;
+
   @Column({ nullable: true })
   cancelToken: string;
 
