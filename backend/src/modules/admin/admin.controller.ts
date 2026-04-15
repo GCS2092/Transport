@@ -1,6 +1,5 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-// Ligne 1 — ajoutez Delete dans les imports
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -14,8 +13,9 @@ import { Reservation } from '../reservations/entities/reservation.entity';
 import { ReservationStatus } from '../../common/enums/reservation-status.enum';
 import { DriverStatus } from '../../common/enums/driver-status.enum';
 import { IsEmail, IsString, IsNotEmpty, MinLength, Matches, IsOptional } from 'class-validator';
- import * as argon2 from 'argon2';
+import * as argon2 from 'argon2';
 import { MonthlyReportService } from '../reservations/monthly-report.service';
+
 class CreateDriverUserDto {
   @IsEmail()
   email: string;
@@ -44,19 +44,36 @@ class CreateDriverUserDto {
   vehiclePlate?: string;
 }
 
+class CreateAdminUserDto {
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @MinLength(8)
+  password: string;
+
+  @IsString()
+  @IsNotEmpty()
+  firstName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  lastName: string;
+}
+
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 export class AdminController {
   constructor(
-  private usersService: UsersService,
-  private driversService: DriversService,
-  private monthlyReportService: MonthlyReportService, // ← ajouté
-  @InjectRepository(EmailLog)
-  private emailLogRepository: Repository<EmailLog>,
-  @InjectRepository(Reservation)
-  private reservationRepository: Repository<Reservation>,
-) {}
+    private usersService: UsersService,
+    private driversService: DriversService,
+    private monthlyReportService: MonthlyReportService,
+    @InjectRepository(EmailLog)
+    private emailLogRepository: Repository<EmailLog>,
+    @InjectRepository(Reservation)
+    private reservationRepository: Repository<Reservation>,
+  ) {}
 
   @Get('stats')
   async getStats() {
@@ -100,7 +117,6 @@ export class AdminController {
       actifs: driverStats.filter(d => d.isActive).length,
     };
 
-    // Récupérer les courses actives pour chaque chauffeur
     const activeReservations = await this.reservationRepository.find({
       where: [
         { status: ReservationStatus.ASSIGNEE },
@@ -131,7 +147,6 @@ export class AdminController {
 
     const failedEmails = await this.emailLogRepository.count({ where: { status: 'ECHEC' } });
 
-    // Préparer activeDrivers pour la carte globale
     const activeDrivers = driverStats
       .filter(d => d.isActive && (d.status === 'DISPONIBLE' || d.status === 'EN_COURSE'))
       .map(driver => {
@@ -194,6 +209,18 @@ export class AdminController {
     return this.usersService.findAll(page, limit);
   }
 
+  @Post('users/admin')
+  async createAdminUser(@Body() dto: CreateAdminUserDto) {
+    const user = await this.usersService.create(
+      dto.email,
+      dto.password,
+      Role.ADMIN,
+      dto.firstName,
+      dto.lastName,
+    );
+    return { user };
+  }
+
   @Post('users/driver')
   async createDriverUser(@Body() dto: CreateDriverUserDto) {
     const user = await this.usersService.create(
@@ -225,24 +252,24 @@ export class AdminController {
     }
     return this.usersService.deactivate(id);
   }
-@Delete('users/:id')
-async deleteUser(
-  @Param('id') id: string,
-  @CurrentUser() currentUser: { id: string },
-) {
-  if (id === currentUser.id) {
-    throw new BadRequestException('You cannot delete your own account');
+
+  @Delete('users/:id')
+  async deleteUser(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: { id: string },
+  ) {
+    if (id === currentUser.id) {
+      throw new BadRequestException('You cannot delete your own account');
+    }
+    return this.usersService.delete(id);
   }
-  return this.usersService.delete(id);
-}
+
   @Put('users/:id/activate')
   activateUser(@Param('id') id: string) {
     return this.usersService.activate(id);
   }
 
   @Get('clients')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
   async getClients(@Query('page') page?: string, @Query('limit') limit?: string) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 50;
@@ -296,8 +323,6 @@ async deleteUser(
   }
 
   @Get('clients/:email/history')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
   async getClientHistory(@Param('email') email: string) {
     const reservations = await this.reservationRepository.find({
       where: { clientEmail: email },
@@ -327,8 +352,6 @@ async deleteUser(
   }
 
   @Get('financial-stats')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
   async getFinancialStats() {
     const allReservations = await this.reservationRepository.find({
       relations: ['driver'],
@@ -336,8 +359,7 @@ async deleteUser(
     });
 
     const completedReservations = allReservations.filter(r => r.status === ReservationStatus.TERMINEE);
-    
-    // Revenus par jour (30 derniers jours)
+
     const today = new Date();
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(today.getDate() - 30);
@@ -347,40 +369,31 @@ async deleteUser(
       const date = new Date(thirtyDaysAgo);
       date.setDate(date.getDate() + i);
       const dateStr = date.toISOString().split('T')[0];
-      
       const dayRevenue = completedReservations
         .filter(r => new Date(r.createdAt).toISOString().split('T')[0] === dateStr)
         .reduce((sum, r) => sum + Number(r.amount), 0);
-      
       dailyRevenue.push({ date: dateStr, revenue: dayRevenue });
     }
 
-    // Revenus par mois (12 derniers mois)
     const monthlyRevenue = [];
     for (let i = 11; i >= 0; i--) {
       const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
       const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      
       const monthRev = completedReservations
         .filter(r => {
           const rDate = new Date(r.createdAt);
           return rDate.getFullYear() === date.getFullYear() && rDate.getMonth() === date.getMonth();
         })
         .reduce((sum, r) => sum + Number(r.amount), 0);
-      
       monthlyRevenue.push({ month: monthStr, revenue: monthRev });
     }
 
-    // Top chauffeurs par revenu
     const driverRevenue = new Map<string, { name: string; revenue: number }>();
     completedReservations.forEach(r => {
       if (r.driver) {
         const key = r.driver.id;
         if (!driverRevenue.has(key)) {
-          driverRevenue.set(key, {
-            name: `${r.driver.firstName} ${r.driver.lastName}`,
-            revenue: 0,
-          });
+          driverRevenue.set(key, { name: `${r.driver.firstName} ${r.driver.lastName}`, revenue: 0 });
         }
         driverRevenue.get(key)!.revenue += Number(r.amount);
       }
@@ -390,7 +403,6 @@ async deleteUser(
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 10);
 
-    // Statistiques de paiement
     const paymentStats = {
       completed: completedReservations.filter(r => r.paymentStatus === 'PAIEMENT_COMPLET').length,
       pending: completedReservations.filter(r => r.paymentStatus === 'EN_ATTENTE').length,
@@ -409,21 +421,18 @@ async deleteUser(
       paymentStats,
       totalRevenue: completedReservations.reduce((sum, r) => sum + Number(r.amount), 0),
       totalRides: completedReservations.length,
-      averageRideValue: completedReservations.length > 0 
-        ? completedReservations.reduce((sum, r) => sum + Number(r.amount), 0) / completedReservations.length 
+      averageRideValue: completedReservations.length > 0
+        ? completedReservations.reduce((sum, r) => sum + Number(r.amount), 0) / completedReservations.length
         : 0,
     };
   }
 
   @Get('analytics')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
   async getAnalytics() {
     const reservations = await this.reservationRepository.find({
       relations: ['pickupZone', 'dropoffZone'],
     });
 
-    // Zones les plus populaires (départ)
     const pickupZoneCount = new Map<string, { name: string; count: number; revenue: number }>();
     reservations.forEach(r => {
       if (r.pickupZone) {
@@ -433,17 +442,13 @@ async deleteUser(
         }
         const zone = pickupZoneCount.get(key)!;
         zone.count++;
-        if (r.status === ReservationStatus.TERMINEE) {
-          zone.revenue += Number(r.amount);
-        }
+        if (r.status === ReservationStatus.TERMINEE) zone.revenue += Number(r.amount);
       }
     });
 
     const topPickupZones = Array.from(pickupZoneCount.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+      .sort((a, b) => b.count - a.count).slice(0, 10);
 
-    // Zones les plus populaires (arrivée)
     const dropoffZoneCount = new Map<string, { name: string; count: number; revenue: number }>();
     reservations.forEach(r => {
       if (r.dropoffZone) {
@@ -453,17 +458,13 @@ async deleteUser(
         }
         const zone = dropoffZoneCount.get(key)!;
         zone.count++;
-        if (r.status === ReservationStatus.TERMINEE) {
-          zone.revenue += Number(r.amount);
-        }
+        if (r.status === ReservationStatus.TERMINEE) zone.revenue += Number(r.amount);
       }
     });
 
     const topDropoffZones = Array.from(dropoffZoneCount.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+      .sort((a, b) => b.count - a.count).slice(0, 10);
 
-    // Heures de pointe
     const hourlyDistribution = new Array(24).fill(0);
     reservations.forEach(r => {
       const hour = new Date(r.pickupDateTime).getHours();
@@ -472,10 +473,8 @@ async deleteUser(
 
     const peakHours = hourlyDistribution
       .map((count, hour) => ({ hour, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
+      .sort((a, b) => b.count - a.count).slice(0, 5);
 
-    // Distribution par jour de la semaine
     const weekdayDistribution = new Array(7).fill(0);
     const weekdayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
     reservations.forEach(r => {
@@ -483,12 +482,8 @@ async deleteUser(
       weekdayDistribution[day]++;
     });
 
-    const weekdayStats = weekdayDistribution.map((count, idx) => ({
-      day: weekdayNames[idx],
-      count,
-    }));
+    const weekdayStats = weekdayDistribution.map((count, idx) => ({ day: weekdayNames[idx], count }));
 
-    // Taux de conversion par statut
     const statusDistribution = {
       total: reservations.length,
       completed: reservations.filter(r => r.status === ReservationStatus.TERMINEE).length,
@@ -498,33 +493,26 @@ async deleteUser(
       inProgress: reservations.filter(r => r.status === ReservationStatus.EN_COURS).length,
     };
 
-    return {
-      topPickupZones,
-      topDropoffZones,
-      peakHours,
-      hourlyDistribution,
-      weekdayStats,
-      statusDistribution,
-    };
+    return { topPickupZones, topDropoffZones, peakHours, hourlyDistribution, weekdayStats, statusDistribution };
   }
+
   @Post('reports/send-now')
-async sendReportsNow(
-  @Body('password') password: string,
-  @CurrentUser() currentUser: { id: string },
-) {
-  if (!password) throw new BadRequestException('Mot de passe requis');
+  async sendReportsNow(
+    @Body('password') password: string,
+    @CurrentUser() currentUser: { id: string },
+  ) {
+    if (!password) throw new BadRequestException('Mot de passe requis');
 
-  const user = await this.usersService.findById(currentUser.id);
-  if (!user) throw new BadRequestException('Utilisateur introuvable');
+    const user = await this.usersService.findById(currentUser.id);
+    if (!user) throw new BadRequestException('Utilisateur introuvable');
 
-  const valid = await argon2.verify(user.password, password);
-  if (!valid) throw new BadRequestException('Mot de passe incorrect');
+    const valid = await argon2.verify(user.password, password);
+    if (!valid) throw new BadRequestException('Mot de passe incorrect');
 
-  // referenceDate = 1er du mois suivant → getPreviousMonthBounds retourne le mois courant
-  const now = new Date();
-  const referenceDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const now = new Date();
+    const referenceDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-  const result = await this.monthlyReportService.generateAndSendMonthlyReports(referenceDate);
-  return result;
-}
+    const result = await this.monthlyReportService.generateAndSendMonthlyReports(referenceDate);
+    return result;
+  }
 }

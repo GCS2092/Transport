@@ -197,15 +197,55 @@ export class NotificationsService {
     const lang = reservation.language;
     const pickup = this.getPickupAddress(reservation);
     const dropoff = this.getDropoffAddress(reservation);
+    const displayAmount = this.formatClientAmount(reservation);
     const msg =
       lang === Language.EN
-        ? `Hello! My booking ${reservation.code} is confirmed for ${reservation.amount} FCFA. From: ${pickup} To: ${dropoff}`
-        : `Bonjour ! Ma réservation ${reservation.code} est confirmée pour ${reservation.amount} FCFA. Départ: ${pickup} → Destination: ${dropoff}`;
+        ? `Hello! My booking ${reservation.code} is confirmed for ${displayAmount}. From: ${pickup} To: ${dropoff}`
+        : `Bonjour ! Ma réservation ${reservation.code} est confirmée pour ${displayAmount}. Départ: ${pickup} → Destination: ${dropoff}`;
     return `https://wa.me/${number}?text=${encodeURIComponent(msg)}`;
   }
 
   private t(lang: Language, fr: string, en: string): string {
     return lang === Language.EN ? en : fr;
+  }
+
+  private readonly RATES: Record<string, number> = {
+    EUR: 0.001525,
+    USD: 0.001667,
+  };
+
+  private formatClientAmount(reservation: Reservation): string {
+    const amount = Number(reservation.amount);
+    const currency = reservation.currency;
+    if (currency && this.RATES[currency]) {
+      const converted = Math.round(amount * this.RATES[currency]);
+      return currency === 'EUR' ? `€${converted}` : `$${converted}`;
+    }
+    return `${amount.toLocaleString()} FCFA`;
+  }
+
+  private getDriverDisplayInfo(reservation: Reservation): { name: string; phone: string; vehicle: string; plate: string } {
+    if (reservation.externalDriverName) {
+      return {
+        name: reservation.externalDriverName,
+        phone: reservation.externalDriverPhone || 'N/A',
+        vehicle: reservation.externalDriverVehicle || 'N/A',
+        plate: reservation.externalDriverPlate || 'N/A',
+      };
+    }
+    if (reservation.driver) {
+      return {
+        name: `${reservation.driver.firstName} ${reservation.driver.lastName}`,
+        phone: reservation.driver.phone || 'N/A',
+        vehicle: reservation.driver.vehicleType || 'N/A',
+        plate: reservation.driver.vehiclePlate || 'N/A',
+      };
+    }
+    return { name: 'N/A', phone: 'N/A', vehicle: 'N/A', plate: 'N/A' };
+  }
+
+  private hasDriver(reservation: Reservation): boolean {
+    return !!(reservation.driver || reservation.externalDriverName);
   }
 
   private buildEmailHtml(reservation: Reservation, title: string, body: string, whatsappLink?: string): string {
@@ -260,7 +300,7 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Date', 'Date')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${new Date(reservation.pickupDateTime).toLocaleString(lang === Language.EN ? 'en-GB' : 'fr-FR')}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Départ', 'From')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Destination', 'To')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${dropoff}</td></tr>
-        <tr><td style="padding:8px;color:#666;font-weight:bold;">${this.t(lang, 'Montant', 'Amount')}</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">${this.t(lang, 'Montant', 'Amount')}</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${this.formatClientAmount(reservation)}</td></tr>
       </table>
       ${reservation.cancelToken ? `
       <div style="margin:20px 0;padding:16px;background:#fff8e1;border:2px dashed #f59e0b;border-radius:8px;text-align:center;">
@@ -344,19 +384,20 @@ export class NotificationsService {
   async sendDriverAssigned(reservation: Reservation): Promise<void> {
     const lang = reservation.language;
     const waLink = this.buildWhatsAppLink(reservation);
-    const driver = reservation.driver;
+    const driverInfo = this.getDriverDisplayInfo(reservation);
 
     const title = this.t(lang, 'Chauffeur assigné', 'Driver Assigned');
     const body = `
       <p>${this.t(lang, `Bonjour <strong>${reservation.clientFirstName}</strong>,`, `Hello <strong>${reservation.clientFirstName}</strong>,`)}</p>
       <p>${this.t(lang, 'Votre chauffeur a été assigné.', 'Your driver has been assigned.')}</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Chauffeur', 'Driver')}</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${driver?.firstName} ${driver?.lastName}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Téléphone', 'Phone')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${driver?.phone}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Véhicule', 'Vehicle')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${driver?.vehicleType}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Chauffeur', 'Driver')}</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${driverInfo.name}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Téléphone', 'Phone')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${driverInfo.phone}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Véhicule', 'Vehicle')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${driverInfo.vehicle}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Plaque', 'Plate')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${driverInfo.plate}</td></tr>
         <tr><td style="padding:8px;color:#666;">${this.t(lang, 'Heure de prise en charge', 'Pickup time')}</td><td style="padding:8px;">${new Date(reservation.pickupDateTime).toLocaleString(lang === Language.EN ? 'en-GB' : 'fr-FR')}</td></tr>
       </table>
-      <p><strong>${this.t(lang, 'Montant confirmé :', 'Confirmed amount:')} ${Number(reservation.amount).toLocaleString()} FCFA</strong></p>`;
+      <p><strong>${this.t(lang, 'Montant confirmé :', 'Confirmed amount:')} ${this.formatClientAmount(reservation)}</strong></p>`;
 
     await this.sendEmail(
       reservation.clientEmail,
@@ -388,8 +429,8 @@ export class NotificationsService {
       <p>${this.t(lang, 'Votre course est prévue demain.', 'Your ride is scheduled for tomorrow.')}</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Date & Heure', 'Date & Time')}</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString(lang === Language.EN ? 'en-GB' : 'fr-FR')}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Chauffeur', 'Driver')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.driver ? `${reservation.driver.firstName} ${reservation.driver.lastName}` : this.t(lang, 'À confirmer', 'To be confirmed')}</td></tr>
-        <tr><td style="padding:8px;color:#666;font-weight:bold;">${this.t(lang, 'Montant', 'Amount')}</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Chauffeur', 'Driver')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${this.hasDriver(reservation) ? this.getDriverDisplayInfo(reservation).name : this.t(lang, 'À confirmer', 'To be confirmed')}</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">${this.t(lang, 'Montant', 'Amount')}</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${this.formatClientAmount(reservation)}</td></tr>
       </table>`;
 
     await this.sendEmail(
@@ -588,8 +629,8 @@ export class NotificationsService {
       <p>${this.t(lang, 'Votre chauffeur a démarré la course.', 'Your driver has started the ride.')}</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Code', 'Code')}</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Chauffeur', 'Driver')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.driver?.firstName} ${reservation.driver?.lastName}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Véhicule', 'Vehicle')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.driver?.vehicleType} - ${reservation.driver?.vehiclePlate}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Chauffeur', 'Driver')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${this.getDriverDisplayInfo(reservation).name}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Véhicule', 'Vehicle')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${this.getDriverDisplayInfo(reservation).vehicle} - ${this.getDriverDisplayInfo(reservation).plate}</td></tr>
         <tr><td style="padding:8px;color:#666;">${this.t(lang, 'Trajet', 'Route')}</td><td style="padding:8px;">${pickup} → ${dropoff}</td></tr>
       </table>
       <p style="font-size:13px;color:#888;">${this.t(lang, 'Bon voyage !', 'Have a safe trip!')}</p>`;
@@ -625,7 +666,7 @@ export class NotificationsService {
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Code', 'Code')}</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Trajet', 'Route')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup} → ${dropoff}</td></tr>
-        <tr><td style="padding:8px;color:#666;font-weight:bold;">${this.t(lang, 'Montant', 'Amount')}</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">${this.t(lang, 'Montant', 'Amount')}</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${this.formatClientAmount(reservation)}</td></tr>
       </table>
       <p style="font-size:13px;color:#888;">${this.t(lang, 'À bientôt pour une prochaine course !', 'See you soon for your next ride!')}</p>`;
 
@@ -735,18 +776,20 @@ export class NotificationsService {
   }
 
   async sendAdminDriverAssigned(reservation: Reservation, adminEmails: string[]): Promise<void> {
-    if (!adminEmails.length || !reservation.driver) return;
+    if (!adminEmails.length || !this.hasDriver(reservation)) return;
 
     const pickup = this.getPickupAddress(reservation);
     const dropoff = this.getDropoffAddress(reservation);
+    const driverInfo = this.getDriverDisplayInfo(reservation);
 
     const title = '🚗 Chauffeur assigné';
     const body = `
       <p>Un chauffeur a été assigné à la course <strong>#${reservation.code}</strong>.</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Chauffeur</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.driver.firstName} ${reservation.driver.lastName}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Tél. chauffeur</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.driver.phone || 'N/A'}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Chauffeur</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${driverInfo.name}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Tél. chauffeur</td><td style="padding:8px;border-bottom:1px solid #eee;">${driverInfo.phone}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Véhicule</td><td style="padding:8px;border-bottom:1px solid #eee;">${driverInfo.vehicle} — ${driverInfo.plate}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Trajet</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup} → ${dropoff}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
@@ -768,7 +811,7 @@ export class NotificationsService {
     await this.sendPushNotification(
       adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
       title,
-      `${reservation.driver.firstName} ${reservation.driver.lastName} assigné à la course ${reservation.code}`,
+      `${driverInfo.name} assigné à la course ${reservation.code}`,
       { reservationCode: reservation.code },
     );
   }

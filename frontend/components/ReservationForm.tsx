@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { zonesApi, tariffsApi, reservationsApi, Zone } from '@/lib/api'
-import { formatCurrency } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n'
 import { saveClientInfo, getClientInfo, addToHistory } from '@/lib/clientStorage'
 import { geocodeAddress } from '@/lib/geocoding'
@@ -102,7 +101,6 @@ export function ReservationForm() {
   const [dropoffCoords, setDropoffCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [geocodingPickup, setGeocodingPickup] = useState(false)
   const [geocodingDropoff, setGeocodingDropoff] = useState(false)
-  const [autoAssign, setAutoAssign] = useState(true)
   const [clientGps, setClientGps] = useState<{ lat: number; lng: number } | null>(null)
   const [gpsState, setGpsState] = useState<'idle' | 'loading' | 'ok' | 'denied'>('idle')
   
@@ -512,7 +510,6 @@ export function ReservationForm() {
       } else {
         delete payload.promoCode
       }
-      payload.autoAssign = autoAssign
       payload.currency = currency  // Envoyer la préférence de devise au backend
       if (clientGps) {
         payload.clientLatitude = clientGps.lat
@@ -624,7 +621,7 @@ export function ReservationForm() {
             <p className="text-sm text-gray-600 mb-4">
               {pickupName} → {dropoffName}
               <span className="mx-2">•</span>
-              {estimatedPrice && formatCurrency(estimatedPrice)}
+              {estimatedPrice && formatPriceCurrency(estimatedPrice, currency)}
             </p>
             <p className="text-xs text-gray-500 mb-2">
               {f.successSubtitle} {formData.clientEmail}
@@ -728,8 +725,8 @@ export function ReservationForm() {
               {/* Toggle devise EUR/USD */}
               <div className="bg-gray-50 rounded-xl p-2">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold text-gray-500">Devise d'affichage</p>
-                  <p className="text-[10px] text-gray-400">Paiement en FCFA</p>
+                  <p className="text-xs font-semibold text-gray-500">Devise</p>
+                  <p className="text-[10px] text-gray-400">Choisissez votre devise</p>
                 </div>
                 <div className="flex gap-1 bg-white rounded-lg p-1 border border-gray-200">
                   <button
@@ -1245,22 +1242,6 @@ export function ReservationForm() {
                 {gpsState === 'denied' && (
                   <p className="text-xs text-gray-400 text-center py-1">Localisation refusée — le quartier de départ sera utilisé</p>
                 )}
-              </div>
-
-              <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <input
-                  type="checkbox"
-                  id="autoAssign"
-                  checked={autoAssign}
-                  onChange={e => setAutoAssign(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                />
-                <label htmlFor="autoAssign" className="flex-1 cursor-pointer">
-                  <p className="text-sm font-semibold text-gray-900">🤖 Assignation automatique</p>
-                  <p className="text-xs text-gray-600 mt-0.5">
-                    Assigner automatiquement le chauffeur disponible le plus proche (recommandé)
-                  </p>
-                </label>
               </div>
 
               <Field label={f.notes}>
