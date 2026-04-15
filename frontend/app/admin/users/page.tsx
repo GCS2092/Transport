@@ -93,10 +93,13 @@ export default function AdminUsers() {
     if (creating) return
     try {
       setCreating(true)
-      await adminApi.createUser({
-        email: formData.email, password: formData.password,
-        firstName: formData.firstName, lastName: formData.lastName,
-        phone: formData.phone, role: 'ADMIN'
+      // ✅ Appel vers la bonne route /admin/users/admin
+      await adminApi.createAdminUser({
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
       })
       setShowCreateModal(false)
       setFormData({ email: '', password: '', firstName: '', lastName: '', phone: '' })
