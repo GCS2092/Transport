@@ -396,7 +396,7 @@ export const reservationsApi = {
 
   autoAssignDriver: (id: string) => api.post(`/reservations/${id}/auto-assign`),
 
-  assignExternalDriver: (id: string, data: { name: string; phone: string; plate: string; vehicle: string }) =>
+  assignExternalDriver: (id: string, data: { name: string; phone: string; plate: string; vehicle: string; email?: string }) =>
     api.post<Reservation>(`/reservations/${id}/assign-external`, data),
 
   cancelByAdmin: (id: string) =>
@@ -407,6 +407,9 @@ export const reservationsApi = {
 
   archiveCompleted: (params: { olderThanDays?: number; createdBefore?: string }) =>
     api.delete<{ archived: number }>('/reservations/archive/completed', { params }),
+
+  downloadDriverBrief: (id: string) =>
+    api.get(`/reservations/${id}/driver-brief`, { responseType: 'blob' }),
 
   updateReservation: (id: string, updates: Partial<CreateReservationDto>) =>
     api.patch<Reservation>(`/reservations/${id}`, updates),

@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { adminApi, AdminStats, feedbackApi } from '@/lib/api'
+import { adminApi, AdminStats, reservationsApi, Reservation, feedbackApi } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
+import { format } from 'date-fns'
+import { fr } from 'date-fns/locale'
 
 const IconCar = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -36,9 +38,12 @@ export default function AdminDashboard() {
   const [reportError, setReportError] = useState('')
   const [sendingReport, setSendingReport] = useState(false)
   const [reportSuccess, setReportSuccess] = useState<string | null>(null)
+  const [assignedRides, setAssignedRides] = useState<Reservation[]>([])
+  const [completingId, setCompletingId] = useState<string | null>(null)
 
   useEffect(() => {
     loadStats()
+    loadAssignedRides()
   }, [])
 
   const loadStats = async () => {
@@ -53,6 +58,29 @@ export default function AdminDashboard() {
       console.error('Failed to load stats', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadAssignedRides = async () => {
+    try {
+      const { data } = await reservationsApi.getAll({ status: 'ASSIGNEE', limit: 20 })
+      setAssignedRides(data.data || [])
+    } catch (err) {
+      console.error('Failed to load assigned rides', err)
+    }
+  }
+
+  const handleMarkCompleted = async (id: string) => {
+    if (!confirm('Marquer cette course comme terminée ?')) return
+    try {
+      setCompletingId(id)
+      await reservationsApi.updateStatus(id, 'TERMINEE')
+      setAssignedRides(prev => prev.filter(r => r.id !== id))
+      loadStats()
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Erreur')
+    } finally {
+      setCompletingId(null)
     }
   }
 
@@ -208,6 +236,51 @@ export default function AdminDashboard() {
           </div>
 
         </div>
+
+        {/* Courses assignées — action rapide Terminer */}
+        {assignedRides.length > 0 && (
+          <div className="bg-white rounded-xl border border-blue-200 p-5 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">🚗 Courses assignées</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Marquez comme terminées dès que la course est effectuée</p>
+              </div>
+              <span className="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-bold">{assignedRides.length}</span>
+            </div>
+            <div className="space-y-3">
+              {assignedRides.map(res => (
+                <div key={res.id} className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="font-mono text-xs font-bold text-gray-900">{res.code}</span>
+                      {res.externalDriverName && (
+                        <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-semibold">
+                          🤝 {res.externalDriverName}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-700 font-medium truncate">
+                      {res.clientFirstName} {res.clientLastName} • {res.clientPhone}
+                    </p>
+                    <p className="text-[10px] text-gray-500 truncate">
+                      {res.pickupZone?.name || res.pickupCustomAddress || '—'} → {res.dropoffZone?.name || res.dropoffCustomAddress || '—'}
+                    </p>
+                    <p className="text-[10px] text-blue-600 font-semibold mt-0.5">
+                      {format(new Date(res.pickupDateTime), 'dd MMM à HH:mm', { locale: fr })} • {formatCurrency(res.amount)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleMarkCompleted(res.id)}
+                    disabled={completingId === res.id}
+                    className="flex-shrink-0 px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                  >
+                    {completingId === res.id ? '...' : '✓ Terminée'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Graphiques */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">

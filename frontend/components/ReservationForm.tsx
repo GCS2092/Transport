@@ -1185,13 +1185,17 @@ export function ReservationForm() {
                 <input type="text" value={formData.airlineCompany} onChange={e => set('airlineCompany', e.target.value)} className={inputCls} placeholder="Air France, Royal Air Maroc..." />
               </Field>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Heure de décollage">
-                  <input type="time" value={formData.departureTime} onChange={e => set('departureTime', e.target.value)} className={inputCls} />
-                </Field>
-                <Field label="Heure d'atterrissage">
-                  <input type="time" value={formData.landingTime} onChange={e => set('landingTime', e.target.value)} className={inputCls} />
-                </Field>
+              <div className={`grid gap-3 ${tripType === 'ALLER_RETOUR' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {(tripType === 'ALLER_SIMPLE' || tripType === 'ALLER_RETOUR') && (
+                  <Field label={lang === 'en' ? 'Departure time (flight)' : 'Heure de décollage'}>
+                    <input type="time" value={formData.departureTime} onChange={e => set('departureTime', e.target.value)} className={inputCls} />
+                  </Field>
+                )}
+                {(tripType === 'RETOUR_SIMPLE' || tripType === 'ALLER_RETOUR') && (
+                  <Field label={lang === 'en' ? 'Landing time' : "Heure d'atterrissage"}>
+                    <input type="time" value={formData.landingTime} onChange={e => set('landingTime', e.target.value)} className={inputCls} />
+                  </Field>
+                )}
               </div>
 
               <Field label="Détails du vol (terminal, porte, etc.)">

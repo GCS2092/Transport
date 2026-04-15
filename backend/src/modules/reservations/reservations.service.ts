@@ -355,11 +355,11 @@ export class ReservationsService {
 
   async assignExternalDriver(
     id: string,
-    data: { name: string; phone: string; plate: string; vehicle: string },
+    data: { name: string; phone: string; plate: string; vehicle: string; email?: string },
   ): Promise<Reservation> {
     const reservation = await this.findById(id);
-    if (reservation.status !== ReservationStatus.EN_ATTENTE) {
-      throw new BadRequestException('Can only assign driver to pending reservations');
+    if (![ReservationStatus.EN_ATTENTE, ReservationStatus.ASSIGNEE].includes(reservation.status)) {
+      throw new BadRequestException('Can only assign driver to pending or already-assigned reservations');
     }
 
     await this.reservationsRepository.update(id, {
@@ -393,6 +393,9 @@ export class ReservationsService {
         const admins = await this.usersService.findAdmins();
         const adminEmails = admins.map(a => a.email);
         await this.notificationsService.sendAdminDriverAssigned(updated, adminEmails);
+        if (data.email) {
+          await this.notificationsService.sendExternalDriverRide(updated, data.email);
+        }
       } catch (e) {
         this.logger.error('Failed to send external driver assigned emails', JSON.stringify(e));
       }
@@ -417,6 +420,10 @@ export class ReservationsService {
 
   async generateReceipt(reservation: Reservation): Promise<Buffer> {
     return this.pdfService.generateReceipt(reservation);
+  }
+
+  async generateDriverBrief(reservation: Reservation): Promise<Buffer> {
+    return this.pdfService.generateDriverBriefPdf(reservation);
   }
 
   async updateStatus(id: string, dto: UpdateReservationDto): Promise<Reservation> {

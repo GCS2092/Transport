@@ -59,6 +59,10 @@ class CreateAdminUserDto {
   @IsString()
   @IsNotEmpty()
   lastName: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
 }
 
 @Controller('admin')

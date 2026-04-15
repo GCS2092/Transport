@@ -76,6 +76,20 @@ export class ReservationsController {
     res.send(pdfBuffer);
   }
 
+  @Get(':id/driver-brief')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async downloadDriverBrief(@Param('id') id: string, @Res() res: Response) {
+    const reservation = await this.reservationsService.findById(id);
+    const pdfBuffer = await this.reservationsService.generateDriverBrief(reservation);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="fiche-chauffeur-${reservation.code}.pdf"`,
+      'Content-Length': pdfBuffer.length,
+    });
+    res.send(pdfBuffer);
+  }
+
   // ─── Renvoyer le code d'annulation par email ──────────────────────────────
   // Throttle strict : 3 tentatives max par heure pour éviter l'abus
   @Post('code/:code/resend-cancel-token')
@@ -154,7 +168,7 @@ export class ReservationsController {
   @Roles(Role.ADMIN)
   assignExternalDriver(
     @Param('id') id: string,
-    @Body() data: { name: string; phone: string; plate: string; vehicle: string },
+    @Body() data: { name: string; phone: string; plate: string; vehicle: string; email?: string },
   ) {
     return this.reservationsService.assignExternalDriver(id, data);
   }

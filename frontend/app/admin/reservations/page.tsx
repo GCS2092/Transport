@@ -45,10 +45,33 @@ export default function AdminReservations() {
     name: '',
     phone: '',
     plate: '',
-    vehicle: ''
+    vehicle: '',
+    email: ''
   })
   const [showReservationSheet, setShowReservationSheet] = useState(false)
   const [sheetReservation, setSheetReservation] = useState<Reservation | null>(null)
+  const [downloadingBriefId, setDownloadingBriefId] = useState<string | null>(null)
+
+  const handleDownloadDriverBrief = async (res: Reservation) => {
+    try {
+      setDownloadingBriefId(res.id)
+      const response = await reservationsApi.downloadDriverBrief(res.id)
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `fiche-chauffeur-${res.code}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to download driver brief', err)
+      alert('Erreur lors du téléchargement')
+    } finally {
+      setDownloadingBriefId(null)
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -71,18 +94,29 @@ export default function AdminReservations() {
   const handleAssignExternalDriver = async () => {
     if (!selectedReservation) return
     if (!externalDriver.name || !externalDriver.phone || !externalDriver.plate || !externalDriver.vehicle) {
-      alert('Veuillez remplir tous les champs du chauffeur externe')
+      alert('Veuillez remplir tous les champs obligatoires du chauffeur externe')
       return
     }
     try {
       await reservationsApi.assignExternalDriver(selectedReservation.id, externalDriver)
       setShowAssignModal(false)
       setSelectedReservation(null)
-      setExternalDriver({ name: '', phone: '', plate: '', vehicle: '' })
+      setExternalDriver({ name: '', phone: '', plate: '', vehicle: '', email: '' })
       loadData()
     } catch (err: any) {
       console.error('Failed to assign external driver', err)
       alert(err.response?.data?.message || 'Erreur lors de l\'assignation du chauffeur externe')
+    }
+  }
+
+  const handleMarkAsCompleted = async (id: string) => {
+    if (!confirm('Marquer cette course comme terminée ? Un email de reçu sera envoyé au client.')) return
+    try {
+      await reservationsApi.updateStatus(id, 'TERMINEE')
+      loadData()
+    } catch (err: any) {
+      console.error('Failed to mark as completed', err)
+      alert(err.response?.data?.message || 'Erreur lors de la mise à jour du statut')
     }
   }
 
@@ -510,30 +544,50 @@ export default function AdminReservations() {
                     <p className="text-xs text-gray-600">{res.externalDriverVehicle} • {res.externalDriverPlate}</p>
                     <p className="text-xs text-gray-500 mt-0.5">📞 {res.externalDriverPhone}</p>
 
-                    {/* Bouton WhatsApp */}
-                    <a
-                      href={`https://wa.me/${res.externalDriverPhone?.replace(/\D/g, '')}?text=${encodeURIComponent(
-                        `Bonjour ${res.externalDriverName},\n\n` +
-                        `Nouvelle course WEND'D Transport :\n` +
-                        `📋 Code: ${res.code}\n` +
-                        `👤 Client: ${res.clientFirstName} ${res.clientLastName}\n` +
-                        `📞 Client: ${res.clientPhone}\n` +
-                        `📍 Départ: ${res.pickupZone?.name || res.pickupCustomAddress}\n` +
-                        `🏁 Destination: ${res.dropoffZone?.name || res.dropoffCustomAddress}\n` +
-                        `🕐 Date: ${format(new Date(res.pickupDateTime), 'dd/MM HH:mm', { locale: fr })}\n` +
-                        `👥 Passagers: ${res.passengers}\n\n` +
-                        `Véhicule: ${res.externalDriverVehicle} (${res.externalDriverPlate})\n\n` +
-                        `Merci de confirmer la prise en charge.`
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-semibold hover:bg-green-600 transition-colors"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                      </svg>
-                      WhatsApp
-                    </a>
+                    {/* Boutons action chauffeur */}
+                    <div className="mt-2 flex gap-2 flex-wrap">
+                      <a
+                        href={`https://wa.me/${res.externalDriverPhone?.replace(/\D/g, '')}?text=${encodeURIComponent(
+                          [
+                            `🚗 *WEND'D Transport — Course #${res.code}*`,
+                            ``,
+                            `👤 *Client:* ${res.clientFirstName} ${res.clientLastName}`,
+                            `📞 *Tél:* ${res.clientPhone}`,
+                            ``,
+                            `📍 *Départ:* ${res.pickupZone?.name || res.pickupCustomAddress || 'N/A'}`,
+                            ...(res.pickupLatitude && res.pickupLongitude
+                              ? [`🗺️ Maps: https://maps.google.com/?q=${res.pickupLatitude},${res.pickupLongitude}`]
+                              : []),
+                            `🏁 *Destination:* ${res.dropoffZone?.name || res.dropoffCustomAddress || 'N/A'}`,
+                            `🕐 *Date:* ${format(new Date(res.pickupDateTime), 'dd/MM/yyyy à HH:mm', { locale: fr })}`,
+                            `👥 *Passagers:* ${res.passengers}`,
+                            `💰 *Montant:* ${Number(res.amount).toLocaleString('fr-FR')} FCFA`,
+                            ...(res.notes ? [`📝 *Note:* ${res.notes}`] : []),
+                            ``,
+                            `Merci de confirmer la prise en charge.`
+                          ].join('\n')
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-semibold hover:bg-green-600 transition-colors"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                        </svg>
+                        WhatsApp
+                      </a>
+                      <button
+                        onClick={() => handleDownloadDriverBrief(res)}
+                        disabled={downloadingBriefId === res.id}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-600 text-white rounded-lg text-xs font-semibold hover:bg-slate-700 transition-colors disabled:opacity-50"
+                        title="Télécharger la fiche chauffeur (PDF)"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/>
+                        </svg>
+                        {downloadingBriefId === res.id ? '...' : 'PDF fiche'}
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -567,6 +621,16 @@ export default function AdminReservations() {
                       className="flex-1 py-2 bg-[var(--primary)] text-white rounded-lg text-xs font-semibold hover:bg-[var(--primary-hover)] transition-colors"
                     >
                       {res.externalDriverName ? 'Changer chauffeur' : 'Assigner chauffeur'}
+                    </button>
+                  )}
+
+                  {res.status === 'ASSIGNEE' && (
+                    <button
+                      onClick={() => handleMarkAsCompleted(res.id)}
+                      className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors"
+                      title="Marquer comme terminée"
+                    >
+                      ✓ Terminer
                     </button>
                   )}
                   
@@ -702,6 +766,18 @@ export default function AdminReservations() {
                     value={externalDriver.vehicle}
                     onChange={(e) => setExternalDriver({ ...externalDriver, vehicle: e.target.value })}
                     placeholder="Ex: Toyota Corolla 2020"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
+                    Email du chauffeur <span className="text-gray-400 normal-case font-normal">(optionnel — pour envoi infos course)</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={externalDriver.email}
+                    onChange={(e) => setExternalDriver({ ...externalDriver, email: e.target.value })}
+                    placeholder="Ex: chauffeur@email.com"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>

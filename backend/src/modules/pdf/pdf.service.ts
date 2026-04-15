@@ -304,7 +304,82 @@ export class PdfService {
   }
 
   // =========================================================================
-  // 2. RAPPORT MENSUEL CHAUFFEUR
+  // 2. FICHE CHAUFFEUR (driver brief)
+  // =========================================================================
+  async generateDriverBriefPdf(reservation: Reservation): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'A4', margin: this.M });
+      const chunks: Buffer[] = [];
+      doc.on('data', (c) => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const driverName = reservation.externalDriverName ||
+        (reservation.driver ? `${reservation.driver.firstName} ${reservation.driver.lastName}` : 'Chauffeur');
+      const driverPhone = reservation.externalDriverPhone || reservation.driver?.phone || '—';
+      const driverVehicle = reservation.externalDriverVehicle || reservation.driver?.vehicleType || '—';
+      const driverPlate = reservation.externalDriverPlate || reservation.driver?.vehiclePlate || '—';
+
+      this.drawPageHeader(doc, 'FICHE DE COURSE', `#${reservation.code}`);
+
+      doc.fillColor(this.PRIMARY).fontSize(16).font('Helvetica-Bold')
+        .text('FICHE CHAUFFEUR', this.M, 88, { align: 'center', width: this.contentW });
+      doc.fillColor('#4a90e2').fontSize(11).font('Helvetica')
+        .text(`Course #${reservation.code}`, this.M, 108, { align: 'center', width: this.contentW });
+
+      const infoRows: string[][] = [
+        ['Chauffeur', driverName],
+        ['Tél. chauffeur', driverPhone],
+        ['Véhicule', driverVehicle],
+        ['Plaque', driverPlate],
+        ['', ''],
+        ['CLIENT', ''],
+        ['Nom client', `${reservation.clientFirstName} ${reservation.clientLastName}`],
+        ['Tél. client', reservation.clientPhone],
+        ['Email client', reservation.clientEmail],
+        ['', ''],
+        ['TRAJET', ''],
+        ['Date & Heure', new Date(reservation.pickupDateTime).toLocaleString('fr-FR')],
+        ['Départ', this.pickupLabel(reservation)],
+        ...(reservation.pickupLatitude && reservation.pickupLongitude
+          ? [['GPS départ', `${reservation.pickupLatitude}, ${reservation.pickupLongitude}`]]
+          : []),
+        ['Destination', this.dropoffLabel(reservation)],
+        ['Passagers', String(reservation.passengers)],
+        ['Type de trajet', reservation.tripType?.replace(/_/g, ' ') || '—'],
+        ...(reservation.flightNumber ? [['N° vol', `${reservation.flightNumber}${reservation.airlineCompany ? ' — ' + reservation.airlineCompany : ''}`]] : []),
+        ...(reservation.notes ? [['Note', reservation.notes]] : []),
+        ['', ''],
+        ['Montant', `${Number(reservation.amount).toLocaleString('fr-FR')} FCFA`],
+      ];
+
+      const cols = [
+        { label: 'Champ', width: 150 },
+        { label: 'Valeur', width: this.contentW - 150 },
+      ];
+
+      let y = this.drawTable(doc, 130, cols, infoRows, {
+        headerBg: this.ACCENT,
+        rowHeight: 20,
+        headerHeight: 20,
+      });
+
+      y += 12;
+      doc.rect(this.M, y, this.contentW, 38).fill(this.PRIMARY);
+      doc.fillColor('#ffffff').fontSize(9).font('Helvetica')
+        .text('MONTANT À ENCAISSER', this.M + 10, y + 8);
+      doc.fillColor('#7fffb0').fontSize(14).font('Helvetica-Bold')
+        .text(`${Number(reservation.amount).toLocaleString('fr-FR')} FCFA`, this.M + 10, y + 20, {
+          width: this.contentW - 20, align: 'right',
+        });
+
+      this.drawFooter(doc, Language.FR);
+      doc.end();
+    });
+  }
+
+  // =========================================================================
+  // 3. RAPPORT MENSUEL CHAUFFEUR
   // =========================================================================
   async generateDriverMonthlyReportPdf(opts: {
     driver: Driver;

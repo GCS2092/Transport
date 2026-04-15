@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { reservationsApi, Reservation } from '@/lib/api'
-import { formatCurrency } from '@/lib/utils'
+import { formatReservationAmount } from '@/lib/utils'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import {
@@ -217,7 +217,7 @@ export default function PaymentConfirmationPage() {
           <p className="text-sm text-gray-600 text-center">
             {reservation.pickupZone?.name || 'Adresse personnalisée'} → {reservation.dropoffZone?.name || 'Adresse personnalisée'}
             <span className="mx-2">•</span>
-            {formatCurrency(reservation.amount)}
+            {formatReservationAmount(reservation.amount, reservation.currency)}
             <span className="mx-2">•</span>
             {format(new Date(reservation.pickupDateTime), 'dd/MM/yyyy', { locale: fr })}
           </p>

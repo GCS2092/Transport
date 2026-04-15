@@ -13,6 +13,23 @@ export function formatCurrency(amount: number): string {
   }).format(amount) + ' FCFA'
 }
 
+const CLIENT_RATES: Record<string, number> = {
+  EUR: 0.001525,
+  USD: 0.001667,
+}
+
+export function formatReservationAmount(amount: number, currency?: string | null): string {
+  if (currency && CLIENT_RATES[currency]) {
+    const converted = Math.round(amount * CLIENT_RATES[currency])
+    return currency === 'EUR' ? `€${converted}` : `$${converted}`
+  }
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'decimal',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount) + ' FCFA'
+}
+
 export function formatDate(date: string | Date): string {
   return new Intl.DateTimeFormat('fr-FR', {
     day: 'numeric',

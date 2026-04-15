@@ -518,11 +518,22 @@ export class NotificationsService {
     );
   }
 
+  private buildMapsLink(reservation: Reservation): string {
+    const lat = Number(reservation.pickupLatitude);
+    const lng = Number(reservation.pickupLongitude);
+    if (lat && lng) {
+      return `https://www.google.com/maps?q=${lat},${lng}`;
+    }
+    const addr = this.getPickupAddress(reservation);
+    return `https://www.google.com/maps/search/${encodeURIComponent(addr)}`;
+  }
+
   async sendDriverNewRide(reservation: Reservation): Promise<void> {
     if (!reservation.driver?.email) return;
 
     const pickup = this.getPickupAddress(reservation);
     const dropoff = this.getDropoffAddress(reservation);
+    const mapsLink = this.buildMapsLink(reservation);
 
     const title = 'Nouvelle course assignée';
     const body = `
@@ -531,8 +542,8 @@ export class NotificationsService {
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Tél. client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientPhone}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Départ</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Tél. client</td><td style="padding:8px;border-bottom:1px solid #eee;"><a href="tel:${reservation.clientPhone}" style="color:#1a1a2e;font-weight:bold;">${reservation.clientPhone}</a></td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Départ</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup}<br><a href="${mapsLink}" style="font-size:11px;color:#2563eb;">📍 Voir sur Google Maps</a></td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Destination</td><td style="padding:8px;border-bottom:1px solid #eee;">${dropoff}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
         <tr><td style="padding:8px;color:#666;font-weight:bold;">Montant</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
@@ -553,6 +564,38 @@ export class NotificationsService {
       'Nouvelle course assignée',
       `Course ${reservation.code} — ${pickup} → ${dropoff}`,
       { reservationCode: reservation.code },
+    );
+  }
+
+  async sendExternalDriverRide(reservation: Reservation, driverEmail: string): Promise<void> {
+    const pickup = this.getPickupAddress(reservation);
+    const dropoff = this.getDropoffAddress(reservation);
+    const mapsLink = this.buildMapsLink(reservation);
+    const driverName = reservation.externalDriverName || 'Chauffeur';
+
+    const title = '🚗 Nouvelle course — WEND\'D Transport';
+    const body = `
+      <p>Bonjour <strong>${driverName}</strong>,</p>
+      <p>Une course vous a été assignée par WEND'D Transport.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;border:2px solid #1a1a2e;border-radius:8px;">
+        <tr style="background:#1a1a2e;"><td colspan="2" style="padding:12px;font-weight:bold;color:#fff;">📋 Détails de la course</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Tél. client</td><td style="padding:8px;border-bottom:1px solid #eee;"><a href="tel:${reservation.clientPhone}" style="color:#1a1a2e;font-weight:bold;font-size:16px;">${reservation.clientPhone}</a></td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">📍 Prise en charge</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup}<br><a href="${mapsLink}" style="display:inline-block;margin-top:4px;padding:4px 10px;background:#2563eb;color:#fff;text-decoration:none;border-radius:4px;font-size:11px;">📍 Ouvrir dans Google Maps</a></td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">🏁 Destination</td><td style="padding:8px;border-bottom:1px solid #eee;">${dropoff}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;font-size:15px;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">Montant</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;font-size:16px;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+      </table>
+      ${reservation.notes ? `<p style="background:#fefce8;padding:8px;border-radius:4px;border-left:4px solid #eab308;"><strong>Note :</strong> ${reservation.notes}</p>` : ''}
+      <p style="font-size:12px;color:#888;margin-top:16px;">WEND'D Transport — Pour toute question, contactez l'administration.</p>`;
+
+    await this.sendEmail(
+      driverEmail,
+      `${title} — #${reservation.code}`,
+      `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">${body}</body></html>`,
+      NotificationType.DRIVER_NEW_RIDE,
+      reservation.id,
     );
   }
 
