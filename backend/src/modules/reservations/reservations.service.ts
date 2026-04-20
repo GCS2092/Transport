@@ -856,14 +856,18 @@ export class ReservationsService {
 </body>
 </html>`;
 
-    await this.notificationsService.sendAdminArchiveReport(
-      adminEmails,
-      `Archivage ${opts.reason} — ${rows.length} réservations — ${dateSlug}`,
-      emailHtml,
-      xlsxFilename,
-      xlsxBuffer,
-      pdfFilename && pdfBuffer ? { filename: pdfFilename, buffer: pdfBuffer } : null,
-    );
+    try {
+      await this.notificationsService.sendAdminArchiveReport(
+        adminEmails,
+        `Archivage ${opts.reason} — ${rows.length} réservations — ${dateSlug}`,
+        emailHtml,
+        xlsxFilename,
+        xlsxBuffer,
+        pdfFilename && pdfBuffer ? { filename: pdfFilename, buffer: pdfBuffer } : null,
+      );
+    } catch (emailErr) {
+      this.logger.error(`Archive email failed (archiving still completed): ${emailErr?.message}`);
+    }
 
     // ── 5. Suppression des réservations du dashboard ─────────────────────────
     await this.reservationsRepository.delete(rows.map(r => r.id));
