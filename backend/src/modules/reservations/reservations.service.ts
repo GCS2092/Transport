@@ -27,7 +27,7 @@ import { DriverStatus } from '../../common/enums/driver-status.enum';
 import { PaymentStatus } from '../../common/enums/payment-status.enum';
 import { Language } from '../../common/enums/language.enum';
 import { createHash } from 'crypto';
-import ExcelJS from 'exceljs';
+import * as ExcelJS from 'exceljs';
 
 export interface FindAllFilters {
   page?: number;
