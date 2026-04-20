@@ -20,6 +20,7 @@ export default function PaymentSupervisionPage() {
   const [filters, setFilters] = useState<PaymentSupervisionFilters>({ paymentStatus: 'IMPAYE' })
   const [searchQuery, setSearchQuery] = useState('')
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
     const savedToken = sessionStorage.getItem('supervision_token')
@@ -131,6 +132,45 @@ export default function PaymentSupervisionPage() {
 
   const impayes = reservations.filter(r => r.paymentStatus === 'IMPAYE')
   const montantImpaye = impayes.reduce((sum, r) => sum + (r.amount || 0), 0)
+
+  const renderDriver = (r: Reservation) => {
+    if (r.driver) return (
+      <span className="text-xs font-medium text-gray-700">
+        👤 {r.driver.firstName} {r.driver.lastName}
+        <span className="text-gray-400 font-normal"> · {r.driver.phone}</span>
+      </span>
+    )
+    if (r.externalDriverName) return (
+      <span className="text-xs font-medium text-emerald-700">
+        🤝 {r.externalDriverName}
+        <span className="text-gray-400 font-normal"> · {r.externalDriverPhone}</span>
+      </span>
+    )
+    return <span className="text-xs text-gray-400 italic">Non assigné</span>
+  }
+
+  const renderPaymentActions = (r: Reservation) => (
+    <div className="flex gap-1.5 flex-wrap">
+      {r.paymentStatus !== 'PAIEMENT_COMPLET' && (
+        <button onClick={() => handleUpdatePaymentStatus(r.id, 'PAIEMENT_COMPLET')} disabled={updatingId === r.id}
+          className="px-2.5 py-1 bg-emerald-500 text-white text-xs font-semibold rounded-lg hover:bg-emerald-600 disabled:opacity-50 transition-colors">
+          {updatingId === r.id ? '...' : '✓ Payé'}
+        </button>
+      )}
+      {r.paymentStatus !== 'ACOMPTE_VERSE' && (
+        <button onClick={() => handleUpdatePaymentStatus(r.id, 'ACOMPTE_VERSE')} disabled={updatingId === r.id}
+          className="px-2.5 py-1 bg-amber-100 text-amber-700 text-xs font-semibold rounded-lg hover:bg-amber-200 disabled:opacity-50 transition-colors">
+          {updatingId === r.id ? '...' : '💰 Acompte'}
+        </button>
+      )}
+      {r.paymentStatus !== 'IMPAYE' && (
+        <button onClick={() => handleUpdatePaymentStatus(r.id, 'IMPAYE')} disabled={updatingId === r.id}
+          className="px-2.5 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-lg hover:bg-red-200 disabled:opacity-50 transition-colors">
+          {updatingId === r.id ? '...' : '✗ Impayé'}
+        </button>
+      )}
+    </div>
+  )
 
   // Filtrage par recherche
   const filteredReservations = reservations.filter(r => {
@@ -345,203 +385,88 @@ export default function PaymentSupervisionPage() {
           </div>
         </div>
 
-        {/* ─── VUE MOBILE : cartes ──────────────────────────────────────────── */}
-        <div className="block sm:hidden space-y-3">
-          {loading && reservations.length === 0 ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">
-              Chargement...
-            </div>
-          ) : filteredReservations.length === 0 ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">
-              Aucune course trouvée
-            </div>
-          ) : (
-            filteredReservations.map((reservation) => (
-              <div
-                key={reservation.id}
-                className="bg-white rounded-xl border border-gray-200 p-4 space-y-3"
-              >
-                {/* Ligne 1 : code + badge statut */}
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-sm font-bold text-gray-900">
-                    #{reservation.code}
-                  </span>
-                  <span className={`px-2 py-1 text-xs font-semibold rounded-full border ${getPaymentStatusBadge(reservation.paymentStatus)}`}>
-                    {getPaymentStatusLabel(reservation.paymentStatus)}
-                  </span>
-                </div>
+        {/* ─── Liste accordion ───────────────────────────────────────────── */}
+        {loading && reservations.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">Chargement...</div>
+        ) : filteredReservations.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">Aucune course trouvée</div>
+        ) : (
+          <div className="space-y-2">
+            {filteredReservations.map((r) => {
+              const isExpanded = expandedId === r.id
+              return (
+                <div key={r.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
 
-                {/* Ligne 2 : client */}
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">
-                    {reservation.clientFirstName} {reservation.clientLastName}
-                  </p>
-                  <p className="text-xs text-gray-500">{reservation.clientPhone}</p>
-                </div>
-
-                {/* Ligne 3 : chauffeur */}
-                {reservation.driver ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">
-                      {reservation.driver.firstName?.[0]}
+                  {/* Ligne compacte */}
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : r.id)}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="font-mono text-sm font-bold text-gray-900 shrink-0">#{r.code}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0 ${getPaymentStatusBadge(r.paymentStatus)}`}>
+                          {getPaymentStatusLabel(r.paymentStatus)}
+                        </span>
+                        <span className="text-sm text-gray-700 font-semibold truncate hidden sm:block">
+                          {r.clientFirstName} {r.clientLastName}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-gray-900">{formatCurrency(r.amount)}</p>
+                          <p className="text-[10px] text-gray-500">{format(new Date(r.pickupDateTime), 'dd MMM HH:mm', { locale: fr })}</p>
+                        </div>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                          className={`text-gray-400 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}>
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-medium text-gray-700">
-                        {reservation.driver.firstName} {reservation.driver.lastName}
-                      </p>
-                      <p className="text-xs text-gray-400">{reservation.driver.phone}</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-400 shrink-0">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                      </svg>
+                      <span className="text-xs text-gray-500 truncate">
+                        {r.pickupZone?.name || 'Adresse perso'} → {r.dropoffZone?.name || 'Adresse perso'}
+                      </span>
+                      <span className="text-sm font-semibold text-gray-700 sm:hidden ml-auto shrink-0">{r.clientFirstName} {r.clientLastName}</span>
                     </div>
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-400 italic">Aucun chauffeur assigné</p>
-                )}
+                  </button>
 
-                {/* Ligne 4 : trajet */}
-                <div className="bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-600 space-y-0.5">
-                  <p>📍 {reservation.pickupZone?.name || 'Adresse personnalisée'}</p>
-                  <p>🏁 {reservation.dropoffZone?.name || 'Adresse personnalisée'}</p>
-                  <p className="text-gray-400">
-                    {format(new Date(reservation.pickupDateTime), 'dd/MM/yyyy à HH:mm', { locale: fr })}
-                  </p>
-                </div>
+                  {/* Détails (expandés) */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-3">
 
-                {/* Ligne 5 : montant + qui a mis à jour + action */}
-                <div className="flex items-center justify-between pt-1">
-                  <div>
-                    <span className="text-base font-bold text-gray-900">
-                      {formatCurrency(reservation.amount)}
-                    </span>
-                    {reservation.paymentUpdatedBy && (
-                      <p className="text-[10px] text-gray-500 mt-0.5">
-                        {reservation.paymentUpdatedBy === 'DRIVER' ? '👤 Chauffeur' : '🛡️ Admin'}: {reservation.paymentUpdatedByName}
-                      </p>
-                    )}
-                  </div>
-                  {reservation.paymentStatus === 'IMPAYE' ? (
-                    <button
-                      onClick={() => handleUpdatePaymentStatus(reservation.id, 'PAIEMENT_COMPLET')}
-                      disabled={updatingId === reservation.id}
-                      className="px-4 py-2 bg-emerald-500 text-white text-xs font-semibold rounded-lg hover:bg-emerald-600 disabled:opacity-50 transition-colors"
-                    >
-                      {updatingId === reservation.id ? '...' : '✓ Marquer payé'}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleUpdatePaymentStatus(reservation.id, 'IMPAYE')}
-                      disabled={updatingId === reservation.id}
-                      className="px-4 py-2 bg-red-100 text-red-700 text-xs font-semibold rounded-lg hover:bg-red-200 disabled:opacity-50 transition-colors"
-                    >
-                      {updatingId === reservation.id ? '...' : 'Marquer impayé'}
-                    </button>
+                      {/* Client + chauffeur */}
+                      <div className="flex flex-wrap gap-x-6 gap-y-1.5 text-xs">
+                        <div>
+                          <span className="text-gray-400">Client · </span>
+                          <span className="font-semibold text-gray-800">{r.clientFirstName} {r.clientLastName}</span>
+                          <span className="text-gray-500"> · {r.clientPhone}</span>
+                        </div>
+                        <div>{renderDriver(r)}</div>
+                      </div>
+
+                      {/* Paiement mis à jour par */}
+                      {r.paymentUpdatedBy && (
+                        <p className="text-[10px] text-gray-400">
+                          Mis à jour par {r.paymentUpdatedBy === 'DRIVER' ? '👤 Chauffeur' : '🛡️ Admin'} {r.paymentUpdatedByName}
+                          {r.paymentUpdatedAt && ` · ${format(new Date(r.paymentUpdatedAt), 'dd/MM HH:mm', { locale: fr })}`}
+                        </p>
+                      )}
+
+                      {/* Actions paiement */}
+                      <div className="pt-2 border-t border-gray-100">
+                        {renderPaymentActions(r)}
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* ─── VUE DESKTOP : tableau ───────────────────────────────────────── */}
-        <div className="hidden sm:block bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  {['Code', 'Client', 'Date', 'Chauffeur', 'Trajet', 'Montant', 'Statut', 'Action'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {loading && reservations.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-gray-400 text-sm">
-                      Chargement...
-                    </td>
-                  </tr>
-                ) : filteredReservations.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-gray-400 text-sm">
-                      Aucune course trouvée
-                    </td>
-                  </tr>
-                ) : (
-                  filteredReservations.map((reservation) => (
-                    <tr key={reservation.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3">
-                        <span className="font-mono text-sm font-bold text-gray-900">
-                          #{reservation.code}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="text-sm font-medium text-gray-900">
-                          {reservation.clientFirstName} {reservation.clientLastName}
-                        </p>
-                        <p className="text-xs text-gray-500">{reservation.clientPhone}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-sm text-gray-700">
-                          {format(new Date(reservation.pickupDateTime), 'dd/MM/yy HH:mm', { locale: fr })}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {reservation.driver ? (
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">
-                              {reservation.driver.firstName} {reservation.driver.lastName}
-                            </p>
-                            <p className="text-xs text-gray-500">{reservation.driver.phone}</p>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400 italic">Non assigné</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="text-xs text-gray-700">{reservation.pickupZone?.name || 'Adresse pers.'}</p>
-                        <p className="text-xs text-gray-400">→ {reservation.dropoffZone?.name || 'Adresse pers.'}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-sm font-bold text-gray-900">
-                          {formatCurrency(reservation.amount)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getPaymentStatusBadge(reservation.paymentStatus)}`}>
-                          {getPaymentStatusLabel(reservation.paymentStatus)}
-                        </span>
-                        {reservation.paymentUpdatedBy && (
-                          <p className="text-[10px] text-gray-500 mt-1">
-                            {reservation.paymentUpdatedBy === 'DRIVER' ? '👤' : '🛡️'} {reservation.paymentUpdatedByName}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {reservation.paymentStatus === 'IMPAYE' ? (
-                          <button
-                            onClick={() => handleUpdatePaymentStatus(reservation.id, 'PAIEMENT_COMPLET')}
-                            disabled={updatingId === reservation.id}
-                            className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-semibold rounded-lg hover:bg-emerald-600 disabled:opacity-50 transition-colors"
-                          >
-                            {updatingId === reservation.id ? '...' : '✓ Marquer payé'}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleUpdatePaymentStatus(reservation.id, 'IMPAYE')}
-                            disabled={updatingId === reservation.id}
-                            className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-semibold rounded-lg hover:bg-red-200 disabled:opacity-50 transition-colors"
-                          >
-                            {updatingId === reservation.id ? '...' : 'Impayé'}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+              )
+            })}
           </div>
-        </div>
+        )}
 
         {/* Pagination */}
         {total > 20 && (
