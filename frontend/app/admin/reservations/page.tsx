@@ -51,6 +51,9 @@ export default function AdminReservations() {
   const [showReservationSheet, setShowReservationSheet] = useState(false)
   const [sheetReservation, setSheetReservation] = useState<Reservation | null>(null)
   const [downloadingBriefId, setDownloadingBriefId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [showArchivePanel, setShowArchivePanel] = useState(false)
 
   const handleDownloadDriverBrief = async (res: Reservation) => {
     try {
@@ -76,6 +79,8 @@ export default function AdminReservations() {
   useEffect(() => {
     loadData()
   }, [filter])
+
+  useEffect(() => { setCurrentPage(1) }, [filter, searchQuery])
 
   const loadData = async () => {
     try {
@@ -305,6 +310,13 @@ export default function AdminReservations() {
     )
   })
 
+  const PAGE_SIZE = 20
+  const totalPages = Math.ceil(filteredReservations.length / PAGE_SIZE)
+  const paginatedReservations = filteredReservations.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  )
+
   return (
     <div className="bg-gray-50 pb-6">
       <div className="max-w-6xl mx-auto px-4 pt-6">
@@ -390,53 +402,20 @@ export default function AdminReservations() {
                 {exporting ? 'Export...' : 'Export CSV'}
               </button>
 
-              {/* ✅ MODIFIÉ : sélecteur de période + bouton archivage */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <select
-                    value={archivePeriod}
-                    onChange={(e) => setArchivePeriod(Number(e.target.value))}
-                    disabled={archiving}
-                    className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-50"
-                  >
-                    <option value={30}>30 jours</option>
-                    <option value={60}>60 jours</option>
-                    <option value={90}>90 jours</option>
-                    <option value={180}>6 mois</option>
-                    <option value={365}>1 an</option>
-                  </select>
-                  <button
-                    type="button"
-                    onClick={handleArchiveCompleted}
-                    disabled={archiving}
-                    className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-all disabled:opacity-50 flex items-center gap-1"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="3 6 5 6 21 6"/>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                    </svg>
-                    {archiving ? 'Archivage...' : `Archiver (>${archivePeriod}j)`}
-                  </button>
-                </div>
-                <div className="flex items-center gap-1 flex-wrap">
-                  <span className="text-[10px] text-gray-500 uppercase font-semibold">ou avant</span>
-                  <input
-                    type="datetime-local"
-                    value={archiveBeforeLocal}
-                    onChange={(e) => setArchiveBeforeLocal(e.target.value)}
-                    disabled={archiving}
-                    className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-800 disabled:opacity-50"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleArchiveBeforeDate}
-                    disabled={archiving}
-                    className="px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-semibold hover:bg-red-100 transition-all disabled:opacity-50"
-                  >
-                    Archiver par date
-                  </button>
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowArchivePanel(v => !v)}
+                className={`px-3 py-1.5 border rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${showArchivePanel ? 'bg-red-600 text-white border-red-600' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+                Archivage
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform ${showArchivePanel ? 'rotate-180' : ''}`}>
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -456,6 +435,64 @@ export default function AdminReservations() {
           </div>
         </div>
 
+        {/* Panneau archivage collapsible */}
+        {showArchivePanel && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+            <p className="text-xs font-semibold text-red-700 uppercase mb-3">Options d'archivage — TERMINÉES &amp; ANNULÉES</p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex items-center gap-2">
+                <select
+                  value={archivePeriod}
+                  onChange={(e) => setArchivePeriod(Number(e.target.value))}
+                  disabled={archiving}
+                  className="px-2 py-1.5 border border-red-300 rounded-lg text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-50"
+                >
+                  <option value={30}>30 jours</option>
+                  <option value={60}>60 jours</option>
+                  <option value={90}>90 jours</option>
+                  <option value={180}>6 mois</option>
+                  <option value={365}>1 an</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={handleArchiveCompleted}
+                  disabled={archiving}
+                  className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-all disabled:opacity-50"
+                >
+                  {archiving ? 'Archivage...' : `Archiver (>${archivePeriod}j)`}
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-red-500 uppercase font-semibold shrink-0">ou avant</span>
+                <input
+                  type="datetime-local"
+                  value={archiveBeforeLocal}
+                  onChange={(e) => setArchiveBeforeLocal(e.target.value)}
+                  disabled={archiving}
+                  className="px-2 py-1.5 border border-red-300 rounded-lg text-xs text-gray-800 bg-white disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  onClick={handleArchiveBeforeDate}
+                  disabled={archiving}
+                  className="px-3 py-1.5 bg-white text-red-700 border border-red-300 rounded-lg text-xs font-semibold hover:bg-red-100 transition-all disabled:opacity-50 shrink-0"
+                >
+                  Archiver par date
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Compteur */}
+        {!loading && filteredReservations.length > 0 && (
+          <p className="text-xs text-gray-500 mb-2 px-1">
+            {filteredReservations.length} réservation{filteredReservations.length > 1 ? 's' : ''}
+            {searchQuery && ` · "${searchQuery}"`}
+            {totalPages > 1 && ` · page ${currentPage}/${totalPages}`}
+          </p>
+        )}
+
         {/* Liste */}
         {loading ? (
           <div className="flex justify-center py-12">
@@ -466,231 +503,197 @@ export default function AdminReservations() {
             <p className="text-gray-500">Aucune réservation trouvée</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {filteredReservations.map(res => (
-              <div key={res.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-mono text-sm font-bold text-gray-900">{res.code}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${statusColors[res.status]}`}>
-                        {statusLabels[res.status]}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-700 font-semibold">
-                      {res.clientFirstName} {res.clientLastName}
-                    </p>
-                    <p className="text-xs text-gray-500">{res.clientPhone}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-gray-900">{formatCurrency(res.amount)}</p>
-                    {res.currency && (
-                      <p className="text-[10px] text-blue-600 font-semibold">Affiché en {res.currency}</p>
-                    )}
-                    <p className="text-xs text-gray-500">
-                      {format(new Date(res.pickupDateTime), 'dd MMM HH:mm', { locale: fr })}
-                    </p>
-                  </div>
-                </div>
+          <>
+            <div className="space-y-2">
+              {paginatedReservations.map(res => {
+                const isExpanded = expandedId === res.id
+                return (
+                  <div key={res.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
 
-                <div className="flex items-center gap-2 text-xs text-gray-600 mb-2">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                    <circle cx="12" cy="7" r="4"/>
-                  </svg>
-                  <span>{res.passengers} passager{res.passengers > 1 ? 's' : ''}</span>
-                  {res.vehicleCount && res.vehicleCount > 1 && (
-                    <span className="text-amber-600 font-semibold">({res.vehicleCount} véhicules)</span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 text-xs text-gray-600 mb-3">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                    <circle cx="12" cy="10" r="3"/>
-                  </svg>
-                  <span className="truncate">
-                    {res.pickupZone?.name || res.pickupCustomAddress || 'Adresse personnalisée'} → {res.dropoffZone?.name || res.dropoffCustomAddress || 'Adresse personnalisée'}
-                  </span>
-                </div>
-
-                {(res.flightNumber || res.airlineCompany) && (
-                  <div className="bg-blue-50 rounded-lg p-2 mb-3">
-                    <p className="text-[10px] text-blue-600 font-semibold uppercase mb-1">✈️ Infos vol</p>
-                    <p className="text-xs text-gray-700">
-                      {res.airlineCompany && <span className="font-semibold">{res.airlineCompany}</span>}
-                      {res.flightNumber && <span className="font-mono"> • {res.flightNumber}</span>}
-                    </p>
-                    {(res.departureTime || res.landingTime) && (
-                      <p className="text-xs text-gray-600 mt-0.5">
-                        {res.departureTime && <span>Décollage: {res.departureTime}</span>}
-                        {res.departureTime && res.landingTime && ' • '}
-                        {res.landingTime && <span>Atterrissage: {res.landingTime}</span>}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-
-                {/* Chauffeur externe (partenaire) */}
-                {res.externalDriverName && (
-                  <div className="bg-emerald-50 rounded-lg p-2 mb-3 border border-emerald-100">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <p className="text-xs text-emerald-600 font-medium">🤝 Chauffeur partenaire</p>
-                    </div>
-                    <p className="text-sm font-semibold text-gray-900">
-                      {res.externalDriverName}
-                    </p>
-                    <p className="text-xs text-gray-600">{res.externalDriverVehicle} • {res.externalDriverPlate}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">📞 {res.externalDriverPhone}</p>
-
-                    {/* Boutons action chauffeur */}
-                    <div className="mt-2 flex gap-2 flex-wrap">
-                      <a
-                        href={`https://wa.me/${res.externalDriverPhone?.replace(/\D/g, '')}?text=${encodeURIComponent(
-                          [
-                            `🚗 *WEND'D Transport — Course #${res.code}*`,
-                            ``,
-                            `👤 *Client:* ${res.clientFirstName} ${res.clientLastName}`,
-                            `📞 *Tél:* ${res.clientPhone}`,
-                            ``,
-                            `📍 *Départ:* ${res.pickupZone?.name || res.pickupCustomAddress || 'N/A'}`,
-                            ...(res.pickupLatitude && res.pickupLongitude
-                              ? [`🗺️ Maps: https://maps.google.com/?q=${res.pickupLatitude},${res.pickupLongitude}`]
-                              : []),
-                            `🏁 *Destination:* ${res.dropoffZone?.name || res.dropoffCustomAddress || 'N/A'}`,
-                            `🕐 *Date:* ${format(new Date(res.pickupDateTime), 'dd/MM/yyyy à HH:mm', { locale: fr })}`,
-                            `👥 *Passagers:* ${res.passengers}`,
-                            `💰 *Montant:* ${Number(res.amount).toLocaleString('fr-FR')} FCFA`,
-                            ...(res.notes ? [`📝 *Note:* ${res.notes}`] : []),
-                            ``,
-                            `Merci de confirmer la prise en charge.`
-                          ].join('\n')
-                        )}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-semibold hover:bg-green-600 transition-colors"
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                    {/* ── Ligne compacte (toujours visible) ── */}
+                    <button
+                      onClick={() => setExpandedId(isExpanded ? null : res.id)}
+                      className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="font-mono text-sm font-bold text-gray-900 shrink-0">{res.code}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${statusColors[res.status]}`}>
+                            {statusLabels[res.status]}
+                          </span>
+                          <span className="text-sm text-gray-700 font-semibold truncate hidden sm:block">
+                            {res.clientFirstName} {res.clientLastName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-gray-900">{formatCurrency(res.amount)}</p>
+                            <p className="text-[10px] text-gray-500">{format(new Date(res.pickupDateTime), 'dd MMM HH:mm', { locale: fr })}</p>
+                          </div>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                            className={`text-gray-400 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}>
+                            <polyline points="6 9 12 15 18 9"/>
+                          </svg>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-400 shrink-0">
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
                         </svg>
-                        WhatsApp
-                      </a>
-                      <button
-                        onClick={() => handleDownloadDriverBrief(res)}
-                        disabled={downloadingBriefId === res.id}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-600 text-white rounded-lg text-xs font-semibold hover:bg-slate-700 transition-colors disabled:opacity-50"
-                        title="Télécharger la fiche chauffeur (PDF)"
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/>
-                        </svg>
-                        {downloadingBriefId === res.id ? '...' : 'PDF fiche'}
-                      </button>
-                    </div>
-                  </div>
-                )}
+                        <span className="text-xs text-gray-500 truncate">
+                          {res.pickupZone?.name || res.pickupCustomAddress || 'Adresse perso'} → {res.dropoffZone?.name || res.dropoffCustomAddress || 'Adresse perso'}
+                        </span>
+                        <span className="text-sm font-semibold text-gray-700 sm:hidden ml-auto shrink-0">{res.clientFirstName} {res.clientLastName}</span>
+                      </div>
+                    </button>
 
-                {/* Statut de paiement avec badge */}
-                {res.status === 'TERMINEE' && (
-                  <div className="bg-gray-50 rounded-lg p-2 mb-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs text-gray-500">Paiement</p>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${paymentStatusColors[res.paymentStatus] || 'bg-gray-100 text-gray-600'}`}>
-                        {paymentStatusLabels[res.paymentStatus] || res.paymentStatus}
-                      </span>
-                    </div>
-                    {res.paymentUpdatedBy && (
-                      <p className="text-[10px] text-gray-500">
-                        {res.paymentUpdatedBy === 'DRIVER' ? '👤 Chauffeur' : '🛡️ Admin'}: {res.paymentUpdatedByName}
-                        {res.paymentUpdatedAt && (
-                          <span className="text-gray-400"> • {format(new Date(res.paymentUpdatedAt), 'dd/MM HH:mm', { locale: fr })}</span>
+                    {/* ── Détails (expandés) ── */}
+                    {isExpanded && (
+                      <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-3">
+
+                        {/* Infos client */}
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                          <span>📞 {res.clientPhone}</span>
+                          <span className="truncate max-w-[200px]">✉ {res.clientEmail}</span>
+                          <span>👥 {res.passengers} passager{res.passengers > 1 ? 's' : ''}{res.vehicleCount && res.vehicleCount > 1 ? ` · ${res.vehicleCount} véhicules` : ''}</span>
+                          {res.currency && <span className="text-blue-600 font-semibold">Devise: {res.currency}</span>}
+                        </div>
+
+                        {/* Infos vol */}
+                        {(res.flightNumber || res.airlineCompany) && (
+                          <div className="bg-blue-50 rounded-lg px-3 py-2 text-xs">
+                            <span className="text-blue-600 font-semibold">✈️ </span>
+                            {res.airlineCompany && <span className="font-semibold text-gray-800">{res.airlineCompany}</span>}
+                            {res.flightNumber && <span className="font-mono text-gray-600"> {res.flightNumber}</span>}
+                            {res.departureTime && <span className="text-gray-500"> · ↑{res.departureTime}</span>}
+                            {res.landingTime && <span className="text-gray-500"> · ↓{res.landingTime}</span>}
+                          </div>
                         )}
-                      </p>
+
+                        {/* Chauffeur partenaire */}
+                        {res.externalDriverName && (
+                          <div className="bg-emerald-50 rounded-lg px-3 py-2 border border-emerald-100">
+                            <div className="flex items-start justify-between gap-2 flex-wrap">
+                              <div className="text-xs">
+                                <span className="text-emerald-600 font-semibold">🤝 </span>
+                                <span className="font-semibold text-gray-900">{res.externalDriverName}</span>
+                                <span className="text-gray-500"> · {res.externalDriverVehicle} · {res.externalDriverPlate} · 📞{res.externalDriverPhone}</span>
+                              </div>
+                              <div className="flex gap-1.5 shrink-0">
+                                <a
+                                  href={`https://wa.me/${res.externalDriverPhone?.replace(/\D/g, '')}?text=${encodeURIComponent([`🚗 *WEND'D Transport — Course #${res.code}*`,``,`👤 *Client:* ${res.clientFirstName} ${res.clientLastName}`,`📞 *Tél:* ${res.clientPhone}`,``,`📍 *Départ:* ${res.pickupZone?.name || res.pickupCustomAddress || 'N/A'}`,...(res.pickupLatitude && res.pickupLongitude?[`🗺️ Maps: https://maps.google.com/?q=${res.pickupLatitude},${res.pickupLongitude}`]:[]),`🏁 *Destination:* ${res.dropoffZone?.name || res.dropoffCustomAddress || 'N/A'}`,`🕐 *Date:* ${format(new Date(res.pickupDateTime),'dd/MM/yyyy à HH:mm',{locale:fr})}`,`👥 *Passagers:* ${res.passengers}`,`💰 *Montant:* ${Number(res.amount).toLocaleString('fr-FR')} FCFA`,...(res.notes?[`📝 *Note:* ${res.notes}`]:[]),``,`Merci de confirmer la prise en charge.`].join('\n'))}`}
+                                  target="_blank" rel="noopener noreferrer"
+                                  className="px-2.5 py-1 bg-green-500 text-white rounded-lg text-xs font-semibold hover:bg-green-600 transition-colors"
+                                >WhatsApp</a>
+                                <button
+                                  onClick={() => handleDownloadDriverBrief(res)}
+                                  disabled={downloadingBriefId === res.id}
+                                  className="px-2.5 py-1 bg-slate-600 text-white rounded-lg text-xs font-semibold hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                                >{downloadingBriefId === res.id ? '...' : 'PDF'}</button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Paiement */}
+                        {res.status === 'TERMINEE' && (
+                          <div className="flex items-center gap-2 flex-wrap text-xs">
+                            <span className="text-gray-500">Paiement :</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${paymentStatusColors[res.paymentStatus] || 'bg-gray-100 text-gray-600'}`}>
+                              {paymentStatusLabels[res.paymentStatus] || res.paymentStatus}
+                            </span>
+                            {res.paymentUpdatedBy && (
+                              <span className="text-[10px] text-gray-400">
+                                {res.paymentUpdatedBy === 'DRIVER' ? '👤' : '🛡️'} {res.paymentUpdatedByName}
+                                {res.paymentUpdatedAt && ` · ${format(new Date(res.paymentUpdatedAt), 'dd/MM HH:mm', { locale: fr })}`}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                          {['EN_ATTENTE', 'ASSIGNEE'].includes(res.status) && (
+                            <button
+                              onClick={() => { setSelectedReservation(res); setShowAssignModal(true) }}
+                              className="px-3 py-1.5 bg-[var(--primary)] text-white rounded-lg text-xs font-semibold hover:bg-[var(--primary-hover)] transition-colors"
+                            >{res.externalDriverName ? 'Changer chauffeur' : 'Assigner chauffeur'}</button>
+                          )}
+                          {res.status === 'ASSIGNEE' && (
+                            <button
+                              onClick={() => handleMarkAsCompleted(res.id)}
+                              className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors"
+                            >✓ Terminer</button>
+                          )}
+                          {res.status === 'TERMINEE' && (<>
+                            <button
+                              onClick={() => handleUpdatePaymentStatus(res.id, 'PAIEMENT_COMPLET')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${res.paymentStatus === 'PAIEMENT_COMPLET' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
+                            >✓ Payé</button>
+                            <button
+                              onClick={() => handleUpdatePaymentStatus(res.id, 'IMPAYE')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${res.paymentStatus === 'IMPAYE' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
+                            >✗ Impayé</button>
+                            <button
+                              onClick={() => handleUpdatePaymentStatus(res.id, 'ACOMPTE_VERSE')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${res.paymentStatus === 'ACOMPTE_VERSE' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
+                            >💰 Acompte</button>
+                          </>)}
+                          <button
+                            onClick={() => handleEditReservation(res)}
+                            className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100 transition-colors"
+                          >Modifier</button>
+                          {['EN_ATTENTE', 'ASSIGNEE'].includes(res.status) && (
+                            <button
+                              onClick={() => handleCancelReservation(res.id)}
+                              className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-semibold hover:bg-red-100 transition-colors"
+                            >Annuler</button>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
-                )}
+                )
+              })}
+            </div>
 
-                <div className="flex gap-2 flex-wrap">
-                  {['EN_ATTENTE', 'ASSIGNEE'].includes(res.status) && (
-                    <button
-                      onClick={() => {
-                        setSelectedReservation(res)
-                        setShowAssignModal(true)
-                      }}
-                      className="flex-1 py-2 bg-[var(--primary)] text-white rounded-lg text-xs font-semibold hover:bg-[var(--primary-hover)] transition-colors"
-                    >
-                      {res.externalDriverName ? 'Changer chauffeur' : 'Assigner chauffeur'}
-                    </button>
-                  )}
-
-                  {res.status === 'ASSIGNEE' && (
-                    <button
-                      onClick={() => handleMarkAsCompleted(res.id)}
-                      className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors"
-                      title="Marquer comme terminée"
-                    >
-                      ✓ Terminer
-                    </button>
-                  )}
-                  
-                  {/* Boutons de paiement pour courses terminées */}
-                  {res.status === 'TERMINEE' && (
-                    <>
-                      <button
-                        onClick={() => handleUpdatePaymentStatus(res.id, 'PAIEMENT_COMPLET')}
-                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                          res.paymentStatus === 'PAIEMENT_COMPLET'
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
-                        }`}
-                        title="Marquer comme payé"
-                      >
-                        ✓ Payé
-                      </button>
-                      <button
-                        onClick={() => handleUpdatePaymentStatus(res.id, 'IMPAYE')}
-                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                          res.paymentStatus === 'IMPAYE'
-                            ? 'bg-red-600 text-white'
-                            : 'bg-red-50 text-red-600 hover:bg-red-100'
-                        }`}
-                        title="Marquer comme impayé"
-                      >
-                        ✗ Impayé
-                      </button>
-                      <button
-                        onClick={() => handleUpdatePaymentStatus(res.id, 'ACOMPTE_VERSE')}
-                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                          res.paymentStatus === 'ACOMPTE_VERSE'
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                        }`}
-                        title="Marquer avec acompte"
-                      >
-                        💰 Acompte
-                      </button>
-                    </>
-                  )}
-                  
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 bg-white rounded-xl border border-gray-200 px-4 py-3">
+                <p className="text-xs text-gray-500">
+                  {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredReservations.length)} sur {filteredReservations.length}
+                </p>
+                <div className="flex items-center gap-1.5">
                   <button
-                    onClick={() => handleEditReservation(res)}
-                    className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100 transition-colors"
-                  >
-                    Modifier
-                  </button>
-                  {['EN_ATTENTE', 'ASSIGNEE'].includes(res.status) && (
-                    <button
-                      onClick={() => handleCancelReservation(res.id)}
-                      className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-semibold hover:bg-red-100 transition-colors"
-                    >
-                      Annuler
-                    </button>
-                  )}
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >← Préc.</button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                    .reduce<(number | string)[]>((acc, p, i, arr) => {
+                      if (i > 0 && typeof arr[i - 1] === 'number' && p - (arr[i - 1] as number) > 1) acc.push('…')
+                      acc.push(p)
+                      return acc
+                    }, [])
+                    .map((p, i) => typeof p === 'string' ? (
+                      <span key={`d${i}`} className="text-xs text-gray-400 px-1">…</span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => setCurrentPage(p)}
+                        className={`w-7 h-7 rounded-lg text-xs font-semibold transition-colors ${currentPage === p ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      >{p}</button>
+                    ))}
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >Suiv. →</button>
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
 
         {/* Modal assignation */}
