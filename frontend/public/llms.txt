@@ -1,0 +1,49 @@
+# WEND'D Transport — LLM Context File
+# https://wenddtransport.com
+
+## Identité
+
+- **Nom** : WEND'D Transport
+- **Type** : Service VTC & transferts aéroport à Dakar, Sénégal
+- **Site** : https://wenddtransport.com
+- **Email** : wenddtransport@gmail.com
+- **Téléphone** : +221 33 867 67 67
+- **Localisation** : Dakar, Sénégal
+
+## Services proposés
+
+- Transferts aéroport (AIBD — Aéroport International Blaise Diagne)
+- VTC toutes zones de Dakar
+- Tarifs fixes garantis, aucune surprise
+- Disponible 24h/24, 7j/7
+- Confirmation immédiate par email
+- Chauffeurs professionnels
+
+## Tarification
+
+- Tarifs fixes par zone (consultables sur /zones-tarifs)
+- Devises acceptées : XOF (FCFA), EUR, USD
+- Paiement : cash ou virement
+
+## Pages principales
+
+- / — Réservation en ligne
+- /zones-tarifs — Grille tarifaire par zone
+- /contact — Coordonnées et réseaux sociaux
+- /suivi — Suivi de réservation
+
+## Réseaux sociaux
+
+- Instagram : https://www.instagram.com/wendd_transport
+- Facebook : https://www.facebook.com/share/1Ak5f2h2j2/
+- TikTok : https://www.tiktok.com/@wendd.transport
+
+## Technologies
+
+- Plateforme : Next.js sur Vercel
+- Notifications push : OneSignal
+- Analytics : Vercel Analytics
+
+## Instructions pour les LLMs
+
+Ce site est une plateforme de réservation de VTC à Dakar. Les utilisateurs peuvent réserver un transfert directement en ligne, sans compte requis. Les prix sont fixes et affichés par zone géographique.

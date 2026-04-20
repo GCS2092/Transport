@@ -2,7 +2,8 @@ import { HomeClient } from '@/components/HomeClient'
 
 export const metadata = {
   title: "WEND'D Transport - Transferts Aéroport & VTC à Dakar",
-  description: "Réservez votre transfert aéroport à Dakar en 2 minutes. Tarifs fixes, chauffeurs professionnels disponibles 24h/24. Service VTC premium pour AIBD et toutes zones de Dakar.",
+  description: "Transferts aéroport à Dakar, tarifs fixes, chauffeurs professionnels 24h/24. VTC premium AIBD et toutes zones.",
+  alternates: { canonical: "https://wenddtransport.com" },
 }
 
 export default function Home() {

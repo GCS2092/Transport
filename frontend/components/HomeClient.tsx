@@ -8,7 +8,10 @@ import { ClientOnboarding } from '@/components/ClientOnboarding'
 import { PlatformRatingBlock } from '@/components/PlatformRatingBlock'
 
 export function HomeClient() {
-  const [visited, setVisited] = useState<boolean | null>(null)
+  // Default: show LandingPage (SSR-friendly — bots always see the landing content)
+  // After hydration, switch to app if user has already visited
+  const [visited, setVisited] = useState<boolean>(false)
+  const [hydrated, setHydrated] = useState(false)
 
   const safeGet = (key: string) => {
     try {
@@ -19,15 +22,16 @@ export function HomeClient() {
   }
 
   useEffect(() => {
-    setVisited(!!safeGet('vtc_visited'))
+    const isVisited = !!safeGet('vtc_visited')
+    setVisited(isVisited)
+    setHydrated(true)
+
     const handler = () => setVisited(false)
     window.addEventListener('vtc_go_home', handler)
     return () => window.removeEventListener('vtc_go_home', handler)
   }, [])
 
-  if (visited === null) return null /* évite le flash SSR */
-
-  if (!visited) {
+  if (!visited || !hydrated) {
     return <LandingPage onEnter={() => {
       try {
         localStorage.setItem('vtc_visited', '1')

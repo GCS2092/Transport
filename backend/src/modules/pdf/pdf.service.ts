@@ -20,9 +20,29 @@ export class PdfService {
 
   private get contentW() { return this.PAGE_W - this.M * 2; }
 
+  // ─── Taux de conversion ─────────────────────────────────────────────────
+  private readonly RATES: Record<string, number> = {
+    EUR: 0.001525,  // 1 FCFA = 0.001525€
+    USD: 0.001667,  // 1 FCFA = 0.001667$
+  };
+
   // ─── i18n minimaliste ────────────────────────────────────────────────────
   private t(lang: Language, fr: string, en: string): string {
     return lang === Language.EN ? en : fr;
+  }
+
+  // ─── Format montant client (EUR/USD selon préférence) ─────────────────────
+  private formatClientAmount(amount: number, currency?: string | null): string {
+    if (currency && this.RATES[currency]) {
+      const converted = Math.round(amount * this.RATES[currency]);
+      return currency === 'EUR' ? `€${converted.toLocaleString('fr-FR')}` : `$${converted.toLocaleString('en-US')}`;
+    }
+    return `${amount.toLocaleString('fr-FR')} FCFA`;
+  }
+
+  // ─── Format montant admin (FCFA pour admin) ───────────────────────────────
+  private formatAdminAmount(amount: number): string {
+    return `${Number(amount).toLocaleString('fr-FR')} FCFA`;
   }
 
   // =========================================================================
@@ -288,15 +308,18 @@ export class PdfService {
           this.M + 10, y + 10,
         );
 
-      let amountText = `${Number(reservation.amount).toLocaleString('fr-FR')} FCFA`;
+      // Montant en devise client (EUR/USD) ou FCFA par défaut
+      const amountText = this.formatClientAmount(Number(reservation.amount), reservation.currency);
+      let amountLine = amountText;
       if (reservation.originalAmount && reservation.discount) {
-        amountText += `  (remise : -${Number(reservation.discount).toLocaleString('fr-FR')} FCFA)`;
+        const discountText = this.formatClientAmount(Number(reservation.discount), reservation.currency);
+        amountLine += `  (${this.t(lang, 'remise', 'discount')} : -${discountText})`;
       }
       doc
         .fillColor('#7fffb0')
         .fontSize(13)
         .font('Helvetica-Bold')
-        .text(amountText, this.M + 170, y + 8, { width: this.contentW - 180, align: 'right' });
+        .text(amountLine, this.M + 170, y + 8, { width: this.contentW - 180, align: 'right' });
 
       this.drawFooter(doc, lang);
       doc.end();
@@ -350,7 +373,7 @@ export class PdfService {
         ...(reservation.flightNumber ? [['N° vol', `${reservation.flightNumber}${reservation.airlineCompany ? ' — ' + reservation.airlineCompany : ''}`]] : []),
         ...(reservation.notes ? [['Note', reservation.notes]] : []),
         ['', ''],
-        ['Montant', `${Number(reservation.amount).toLocaleString('fr-FR')} FCFA`],
+        ['Montant', this.formatClientAmount(Number(reservation.amount), reservation.currency)],
       ];
 
       const cols = [
@@ -369,7 +392,7 @@ export class PdfService {
       doc.fillColor('#ffffff').fontSize(9).font('Helvetica')
         .text('MONTANT À ENCAISSER', this.M + 10, y + 8);
       doc.fillColor('#7fffb0').fontSize(14).font('Helvetica-Bold')
-        .text(`${Number(reservation.amount).toLocaleString('fr-FR')} FCFA`, this.M + 10, y + 20, {
+        .text(this.formatClientAmount(Number(reservation.amount), reservation.currency), this.M + 10, y + 20, {
           width: this.contentW - 20, align: 'right',
         });
 
@@ -516,25 +539,39 @@ export class PdfService {
     periodLabel: string;
     start: Date;
     end: Date;
-    reservations: Reservation[];
+    completedReservations: Reservation[];
+    assignedReservations: Reservation[];
     allDrivers: Driver[];
   }): Promise<Buffer> {
-    const { periodLabel, reservations, allDrivers } = opts;
+    const { periodLabel, completedReservations, assignedReservations, allDrivers } = opts;
+    const allReservations = [...completedReservations, ...assignedReservations];
 
+    // ─── Index chauffeurs internes ─────────────────────────────────────────
     const byDriverId = new Map<string, Reservation[]>();
-    for (const r of reservations) {
+    for (const r of completedReservations) {
       if (!r.driverId) continue;
       const arr = byDriverId.get(r.driverId) || [];
       arr.push(r);
       byDriverId.set(r.driverId, arr);
     }
+
+    // ─── Index chauffeurs externes (par nom) ────────────────────────────────
+    const byExternalDriver = new Map<string, Reservation[]>();
+    for (const r of allReservations) {
+      if (r.externalDriverName) {
+        const arr = byExternalDriver.get(r.externalDriverName) || [];
+        arr.push(r);
+        byExternalDriver.set(r.externalDriverName, arr);
+      }
+    }
+
     const driverName = (id: string) => {
       const d = allDrivers.find(x => x.id === id);
       return d ? `${d.firstName} ${d.lastName}` : id;
     };
 
-    const unpaidAll    = reservations.filter(r => r.paymentStatus === PaymentStatus.IMPAYE);
-    const totalRevenue = reservations
+    const unpaidAll    = completedReservations.filter(r => r.paymentStatus === PaymentStatus.IMPAYE);
+    const totalRevenue = completedReservations
       .filter(r => r.paymentStatus === PaymentStatus.PAIEMENT_COMPLET)
       .reduce((s, r) => s + Number(r.amount), 0);
     const totalUnpaid  = unpaidAll.reduce((s, r) => s + Number(r.amount), 0);
@@ -556,14 +593,15 @@ export class PdfService {
         { label: 'Indicateur',        width: 240 },
         { label: 'Valeur / Montant',  width: this.contentW - 240, align: 'right' },
       ], [
-        ['Courses terminées (période)',  String(reservations.length)],
-        ["Chiffre d'affaires (payées)",  `${totalRevenue.toLocaleString('fr-FR')} FCFA`],
-        ['Montant total impayé',         `${totalUnpaid.toLocaleString('fr-FR')} FCFA`],
+        ['Courses terminées (période)',  String(completedReservations.length)],
+        ['Courses assignées/en cours',   String(assignedReservations.length)],
+        ["Chiffre d'affaires (payées)",  `${this.formatAdminAmount(totalRevenue)}`],
+        ['Montant total impayé',         `${this.formatAdminAmount(totalUnpaid)}`],
       ]);
 
-      // ── Synthèse par chauffeur ───────────────────────────────────────────
+      // ── Synthèse par chauffeur (internes) ─────────────────────────────────
       y += 14;
-      y = this.drawSectionTitle(doc, y, 'Synthèse par chauffeur');
+      y = this.drawSectionTitle(doc, y, 'Synthèse par chauffeur (internes)');
 
       const driverRows: string[][] = [];
       byDriverId.forEach((list, id) => {
@@ -574,23 +612,56 @@ export class PdfService {
         driverRows.push([
           driverName(id),
           String(list.length),
-          `${enc.toLocaleString('fr-FR')} FCFA`,
-          imp > 0 ? `${imp.toLocaleString('fr-FR')} FCFA` : '—',
+          this.formatAdminAmount(enc),
+          imp > 0 ? this.formatAdminAmount(imp) : '—',
         ]);
       });
-      // Tri par CA décroissant
       driverRows.sort((a, b) => {
-        const numA = parseInt(a[2].replace(/\D/g, ''), 10) || 0;
-        const numB = parseInt(b[2].replace(/\D/g, ''), 10) || 0;
+        const numA = parseInt(a[2].replace(/[^0-9]/g, ''), 10) || 0;
+        const numB = parseInt(b[2].replace(/[^0-9]/g, ''), 10) || 0;
         return numB - numA;
       });
 
-      y = this.drawTable(doc, y, [
-        { label: 'Chauffeur',          width: 160 },
-        { label: 'Courses',            width: 60,  align: 'right' },
-        { label: 'CA encaissé (FCFA)', width: 140, align: 'right' },
-        { label: 'Impayé (FCFA)',      width: this.contentW - 360, align: 'right' },
-      ], driverRows);
+      if (driverRows.length === 0) {
+        doc.fillColor('#888').font('Helvetica').fontSize(9).text('Aucune course avec chauffeur interne.', this.M, y);
+        y += 16;
+      } else {
+        y = this.drawTable(doc, y, [
+          { label: 'Chauffeur',          width: 160 },
+          { label: 'Courses',            width: 60,  align: 'right' },
+          { label: 'CA encaissé',        width: 120, align: 'right' },
+          { label: 'Impayé',             width: this.contentW - 340, align: 'right' },
+        ], driverRows);
+      }
+
+      // ── Chauffeurs externes (partenaires) ────────────────────────────────
+      if (byExternalDriver.size > 0) {
+        if (y > doc.page.height - 200) { doc.addPage(); y = this.M; }
+        y += 14;
+        y = this.drawSectionTitle(doc, y, 'Chauffeurs externes (partenaires)');
+
+        const externalRows: string[][] = [];
+        byExternalDriver.forEach((list, name) => {
+          const completed = list.filter(r => r.status === ReservationStatus.TERMINEE).length;
+          const assigned = list.filter(r => r.status !== ReservationStatus.TERMINEE).length;
+          const ca = list
+            .filter(r => r.status === ReservationStatus.TERMINEE && r.paymentStatus === PaymentStatus.PAIEMENT_COMPLET)
+            .reduce((s, r) => s + Number(r.amount), 0);
+          externalRows.push([
+            name,
+            String(completed),
+            String(assigned),
+            this.formatAdminAmount(ca),
+          ]);
+        });
+
+        y = this.drawTable(doc, y, [
+          { label: 'Chauffeur',          width: 160 },
+          { label: 'Terminées',          width: 70,  align: 'right' },
+          { label: 'En cours',           width: 70,  align: 'right' },
+          { label: 'CA encaissé',        width: this.contentW - 300, align: 'right' },
+        ], externalRows);
+      }
 
       // ── Détail courses impayées ──────────────────────────────────────────
       if (y > doc.page.height - 200) { doc.addPage(); y = this.M; }
@@ -613,16 +684,18 @@ export class PdfService {
           { label: 'Email',     width: 120 },
           { label: 'Montant',   width: this.contentW - 495, align: 'right' },
         ], unpaidAll.map(r => {
-          const d = r.driver
-            ? `${r.driver.firstName} ${r.driver.lastName}`
-            : driverName(r.driverId);
+          const driver = r.externalDriverName
+            ? `${r.externalDriverName} (externe)`
+            : r.driver
+              ? `${r.driver.firstName} ${r.driver.lastName}`
+              : driverName(r.driverId);
           return [
             r.code,
             new Date(r.pickupDateTime).toLocaleString('fr-FR'),
             `${r.clientFirstName} ${r.clientLastName}`,
             r.clientPhone || '—',
             r.clientEmail || '—',
-            `${Number(r.amount).toLocaleString('fr-FR')} FCFA`,
+            this.formatAdminAmount(r.amount),
           ];
         }), { headerBg: this.RED, fontSize: 7.5 });
       }

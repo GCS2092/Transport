@@ -107,6 +107,38 @@ export function LandingPage({ onEnter }: Props) {
           {fr ? 'Sans compte requis · Annulation gratuite 24h avant' : 'No account required · Free cancellation 24h before'}
         </p>
       </div>
+
+      {/* Contenu SEO structuré — visible aux moteurs de recherche */}
+      <section className="relative z-10 px-6 pb-8 max-w-lg mx-auto w-full">
+        <h2 className="text-white/70 text-sm font-bold mb-2">
+          {fr ? 'VTC & Transferts Aéroport à Dakar' : 'VTC & Airport Transfers in Dakar'}
+        </h2>
+        <p className="text-white/40 text-xs leading-relaxed mb-4">
+          {fr
+            ? 'WEND\'D Transport assure vos transferts vers et depuis l\'Aéroport International Blaise Diagne (AIBD), l\'Aéroport Léopold Sédar Senghor et toutes les zones de Dakar. Tarifs fixes, pas de compteur.'
+            : 'WEND\'D Transport handles your transfers to and from Blaise Diagne International Airport (AIBD), Léopold Sédar Senghor Airport and all Dakar zones. Fixed rates, no meter.'}
+        </p>
+
+        <h3 className="text-white/60 text-xs font-bold mb-1">
+          {fr ? 'Zones desservies' : 'Areas served'}
+        </h3>
+        <p className="text-white/35 text-xs leading-relaxed mb-4">
+          {fr
+            ? 'Plateau, Almadies, Ngor, Yoff, Mermoz, Sacré-Cœur, Liberté, Parcelles Assainies, Guédiawaye, Pikine, Rufisque, Saly, Mbour et toutes zones périphériques.'
+            : 'Plateau, Almadies, Ngor, Yoff, Mermoz, Sacré-Cœur, Liberté, Parcelles Assainies, Guédiawaye, Pikine, Rufisque, Saly, Mbour and surrounding areas.'}
+        </p>
+
+        <h4 className="text-white/60 text-xs font-bold mb-1">
+          {fr ? 'Pourquoi choisir WEND\'D Transport ?' : 'Why choose WEND\'D Transport?'}
+        </h4>
+        <ul className="text-white/35 text-xs leading-relaxed space-y-0.5">
+          <li>{fr ? '✓ Tarif fixe garanti dès la réservation' : '✓ Fixed rate guaranteed at booking'}</li>
+          <li>{fr ? '✓ Confirmation immédiate par email' : '✓ Immediate email confirmation'}</li>
+          <li>{fr ? '✓ Chauffeurs professionnels et ponctuels' : '✓ Professional and punctual drivers'}</li>
+          <li>{fr ? '✓ Disponible 24h/24, 7j/7 y compris les jours fériés' : '✓ Available 24/7 including holidays'}</li>
+          <li>{fr ? '✓ Paiement en FCFA, EUR ou USD' : '✓ Payment in XOF, EUR or USD'}</li>
+        </ul>
+      </section>
     </div>
   )
 }

@@ -11,7 +11,10 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://wenddtransport.com"),
   title: "WEND'D Transport - Transferts Aéroport & VTC à Dakar",
   description:
-    "Réservez votre transfert aéroport à Dakar en 2 minutes. Tarifs fixes, chauffeurs professionnels disponibles 24h/24. Service VTC premium pour AIBD et toutes zones de Dakar.",
+    "Transferts aéroport à Dakar, tarifs fixes, chauffeurs professionnels 24h/24. VTC premium AIBD et toutes zones.",
+  alternates: {
+    canonical: "https://wenddtransport.com",
+  },
   manifest: "/manifest-client.json",
   robots: { index: true, follow: true },
   openGraph: {
@@ -58,6 +61,57 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': ['LocalBusiness', 'TaxiService'],
+      '@id': 'https://wenddtransport.com/#business',
+      name: "WEND'D Transport",
+      description: 'Service VTC & transferts aéroport à Dakar. Tarifs fixes, chauffeurs professionnels disponibles 24h/24.',
+      url: 'https://wenddtransport.com',
+      telephone: '+221338676767',
+      email: 'wenddtransport@gmail.com',
+      priceRange: '$$',
+      currenciesAccepted: 'XOF, EUR, USD',
+      paymentAccepted: 'Cash, Bank transfer',
+      openingHours: 'Mo-Su 00:00-23:59',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: 'Dakar',
+        addressLocality: 'Dakar',
+        addressCountry: 'SN',
+      },
+      geo: {
+        '@type': 'GeoCoordinates',
+        latitude: 14.6937,
+        longitude: -17.4441,
+      },
+      areaServed: [
+        { '@type': 'City', name: 'Dakar' },
+        { '@type': 'Airport', name: 'Aéroport International Blaise Diagne', iataCode: 'DSS' },
+      ],
+      sameAs: [
+        'https://www.instagram.com/wendd_transport',
+        'https://www.facebook.com/share/1Ak5f2h2j2/',
+        'https://www.tiktok.com/@wendd.transport',
+      ],
+    },
+    {
+      '@type': 'WebSite',
+      '@id': 'https://wenddtransport.com/#website',
+      url: 'https://wenddtransport.com',
+      name: "WEND'D Transport",
+      inLanguage: ['fr', 'en'],
+      potentialAction: {
+        '@type': 'ReserveAction',
+        target: 'https://wenddtransport.com',
+        name: 'Réserver un transfert',
+      },
+    },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -66,6 +120,10 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
         {onesignalAppId && (
           <script
             src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"

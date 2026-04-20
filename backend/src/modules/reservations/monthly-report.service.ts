@@ -50,6 +50,17 @@ export class MonthlyReportService {
       .getMany();
   }
 
+  private async loadAssignedReservationsForPeriod(start: Date, end: Date): Promise<Reservation[]> {
+    return this.reservationsRepository
+      .createQueryBuilder('r')
+      .leftJoinAndSelect('r.pickupZone', 'pickupZone')
+      .leftJoinAndSelect('r.dropoffZone', 'dropoffZone')
+      .leftJoinAndSelect('r.driver', 'driver')
+      .where('r.status IN (:...statuses)', { statuses: [ReservationStatus.ASSIGNEE, ReservationStatus.EN_COURS] })
+      .andWhere('r.pickupDateTime BETWEEN :start AND :end', { start, end })
+      .getMany();
+  }
+
   async generateAndSendMonthlyReports(referenceDate: Date = new Date()): Promise<{
     driversNotified: number;
     adminsNotified: number;
@@ -64,7 +75,9 @@ export class MonthlyReportService {
     const { start, end, labelFr } = getPreviousMonthBounds(referenceDate);
     this.logger.log(`Monthly report for period ${labelFr} (${start.toISOString()} – ${end.toISOString()})`);
 
-    const reservations = await this.loadCompletedReservationsForPeriod(start, end);
+    const completedReservations = await this.loadCompletedReservationsForPeriod(start, end);
+    const assignedReservations = await this.loadAssignedReservationsForPeriod(start, end);
+    const allReservationsForPeriod = [...completedReservations, ...assignedReservations];
     const admins = await this.usersService.findAdmins();
     const adminEmails = admins.map(a => a.email).filter(Boolean);
 
@@ -88,7 +101,7 @@ export class MonthlyReportService {
 
     // Rattacher chaque course au chauffeur ACTIF qui partage le même email
     const byDriver = new Map<string, Reservation[]>();
-    for (const r of reservations) {
+    for (const r of completedReservations) {
       if (!r.driverId) continue;
 
       const courseDriverEmail = driverIdToEmail.get(r.driverId);
@@ -137,7 +150,8 @@ export class MonthlyReportService {
       periodLabel: labelFr,
       start,
       end,
-      reservations,
+      completedReservations,
+      assignedReservations,
       allDrivers: activeDrivers,
     });
 
