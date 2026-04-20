@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @import 'leaflet/dist/leaflet.css';
 
 @tailwind base;
@@ -51,7 +50,7 @@
 html { scroll-behavior: smooth; }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
   background: var(--bg);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
@@ -68,7 +67,7 @@ body {
 h1, h2, h3, h4 { font-weight: 700; color: var(--ink); }
 
 code, .font-mono {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono), monospace;
 }
 
 /* Remove iOS blue highlight */

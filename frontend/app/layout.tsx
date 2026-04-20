@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { RouteGuard } from "@/components/RouteGuard";
@@ -6,6 +7,20 @@ import { LanguageProvider } from "@/lib/i18n";
 import { AuthProvider } from "@/lib/auth";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+  variable: "--font-inter",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  display: "swap",
+  variable: "--font-mono",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://wenddtransport.com"),
@@ -57,8 +72,8 @@ export const viewport: Viewport = {
   themeColor: "#0D3B2E",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  maximumScale: 5,
+  userScalable: true,
 };
 
 const jsonLd = {
@@ -118,18 +133,20 @@ export default function RootLayout({
   const onesignalAppId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
 
   return (
-    <html lang="fr">
+    <html lang="fr" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <head>
+        {/* Preload image LCP — évite la détection tardive */}
+        <link
+          rel="preload"
+          as="image"
+          href="/images/FOND.jpeg"
+          // @ts-ignore
+          fetchPriority="high"
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-        {onesignalAppId && (
-          <script
-            src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
-            defer
-          />
-        )}
       </head>
       <body className="min-h-screen flex flex-col">
         <LanguageProvider>
@@ -148,50 +165,55 @@ export default function RootLayout({
           <script
             dangerouslySetInnerHTML={{
               __html: `
-                window.OneSignalDeferred = window.OneSignalDeferred || [];
-                OneSignalDeferred.push(async function(OneSignal) {
-                  await OneSignal.init({
-                    appId: ${JSON.stringify(onesignalAppId)},
-                    safari_web_id: "web.onesignal.auto.0818a4e7-118f-4fc1-b0e2-07892e811a2a",
-                    notifyButton: { enable: true },
-                  });
-
-                  try {
-                    const raw = localStorage.getItem("vtc_user");
-                    const user = raw ? JSON.parse(raw) : null;
-                    if (user?.email) {
-                      const email = user.email.trim().toLowerCase();
-                      try {
-                        await OneSignal.login(email);
-                      } catch(e) {
-                        if (!String(e).includes("409")) {
-                          console.warn("[OneSignal] login error", e);
-                        }
-                      }
-                      const roleMap = { driver: "chauffeur", admin: "admin" };
-                      const rawRole = (user.role || "").toLowerCase();
-                      const role = roleMap[rawRole] || "client";
-                      OneSignal.User.addTags({ role });
-                    }
-                  } catch (e) {
-                    console.warn("[OneSignal] error", e);
-                  }
-
-                  try {
-                    const requestPermission = async () => {
-                      try {
-                        if (OneSignal.Slidedown?.promptPush) {
-                          await OneSignal.Slidedown.promptPush();
-                        } else if (OneSignal.Notifications?.requestPermission) {
-                          await OneSignal.Notifications.requestPermission();
-                        }
-                      } catch (e) {}
+                (function() {
+                  var appId = ${JSON.stringify(onesignalAppId)};
+                  var loaded = false;
+                  function loadOneSignal() {
+                    if (loaded) return;
+                    loaded = true;
+                    var s = document.createElement('script');
+                    s.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
+                    s.async = true;
+                    s.onload = function() {
+                      window.OneSignalDeferred = window.OneSignalDeferred || [];
+                      OneSignalDeferred.push(async function(OneSignal) {
+                        await OneSignal.init({
+                          appId: appId,
+                          safari_web_id: "web.onesignal.auto.0818a4e7-118f-4fc1-b0e2-07892e811a2a",
+                          notifyButton: { enable: true },
+                        });
+                        try {
+                          var raw = localStorage.getItem("vtc_user");
+                          var user = raw ? JSON.parse(raw) : null;
+                          if (user && user.email) {
+                            var email = user.email.trim().toLowerCase();
+                            try { await OneSignal.login(email); } catch(e) {
+                              if (!String(e).includes("409")) console.warn("[OneSignal] login error", e);
+                            }
+                            var roleMap = { driver: "chauffeur", admin: "admin" };
+                            var role = roleMap[(user.role || "").toLowerCase()] || "client";
+                            OneSignal.User.addTags({ role: role });
+                          }
+                        } catch(e) { console.warn("[OneSignal] error", e); }
+                        try {
+                          var reqPerm = async function() {
+                            try {
+                              if (OneSignal.Slidedown && OneSignal.Slidedown.promptPush) await OneSignal.Slidedown.promptPush();
+                              else if (OneSignal.Notifications && OneSignal.Notifications.requestPermission) await OneSignal.Notifications.requestPermission();
+                            } catch(e) {}
+                          };
+                          document.addEventListener("click", reqPerm, { once: true, passive: true });
+                          document.addEventListener("touchstart", reqPerm, { once: true, passive: true });
+                        } catch(e) {}
+                      });
                     };
-                    document.addEventListener("click", requestPermission, { once: true, passive: true });
-                    document.addEventListener("touchstart", requestPermission, { once: true, passive: true });
-                    setTimeout(requestPermission, 3000);
-                  } catch (e) {}
-                });
+                    document.head.appendChild(s);
+                  }
+                  document.addEventListener("click", loadOneSignal, { once: true, passive: true });
+                  document.addEventListener("touchstart", loadOneSignal, { once: true, passive: true });
+                  document.addEventListener("scroll", loadOneSignal, { once: true, passive: true });
+                  setTimeout(loadOneSignal, 4000);
+                })();
               `,
             }}
           />

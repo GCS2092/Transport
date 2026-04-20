@@ -162,7 +162,7 @@ export function Navbar() {
                 <circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
               </svg>
               <span className="text-sm font-bold text-white tracking-tight">
-                WEND'D <span className="text-[var(--accent)]">Transport</span>
+                WEND'D <span className="text-green-300">Transport</span>
               </span>
             </Link>
 
@@ -174,9 +174,9 @@ export function Navbar() {
               className="flex items-center gap-0.5 bg-white/10 hover:bg-white/20 px-2 py-1 rounded-full text-[11px] font-bold text-white transition-colors flex-shrink-0"
               aria-label="Changer de langue"
             >
-              <span className={lang === 'fr' ? 'text-[var(--accent)]' : 'text-white/50'}>FR</span>
-              <span className="text-white/30 mx-0.5">|</span>
-              <span className={lang === 'en' ? 'text-[var(--accent)]' : 'text-white/50'}>EN</span>
+              <span className={lang === 'fr' ? 'text-green-300' : 'text-white/70'}>FR</span>
+              <span className="text-white/50 mx-0.5">|</span>
+              <span className={lang === 'en' ? 'text-green-300' : 'text-white/70'}>EN</span>
             </button>
 
             {/* Notifications */}
@@ -260,7 +260,7 @@ export function Navbar() {
                   href={link.href}
                   className={cn(
                     'flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold tracking-wide transition-colors',
-                    active ? 'text-[var(--accent)]' : 'text-white/50 hover:text-white/80'
+                    active ? 'text-green-300' : 'text-white/70 hover:text-white/90'
                   )}
                 >
                   <span className={cn('transition-transform', active && 'scale-110')}>
@@ -286,7 +286,7 @@ export function Navbar() {
                   href={link.href}
                   className={cn(
                     'flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold tracking-wide transition-colors',
-                    active ? 'text-[var(--accent)]' : 'text-white/50 hover:text-white/80'
+                    active ? 'text-green-300' : 'text-white/70 hover:text-white/90'
                   )}
                 >
                   <span className={cn('transition-transform', active && 'scale-110')}>
