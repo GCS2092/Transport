@@ -547,7 +547,7 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Départ</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup}<br><a href="${mapsLink}" style="font-size:11px;color:#2563eb;">📍 Voir sur Google Maps</a></td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Destination</td><td style="padding:8px;border-bottom:1px solid #eee;">${dropoff}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
-        <tr><td style="padding:8px;color:#666;font-weight:bold;">Montant</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">Montant</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${this.formatClientAmount(reservation)}</td></tr>
       </table>
       ${reservation.notes ? `<p><em>Note client :</em> ${reservation.notes}</p>` : ''}
       <p style="font-size:12px;background:#fffbe6;padding:8px;border-radius:4px;">Langue client : <strong>${reservation.language === Language.EN ? '🇬🇧 EN' : '🇫🇷 FR'}</strong></p>`;
@@ -586,7 +586,7 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">📍 Prise en charge</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup}<br><a href="${mapsLink}" style="display:inline-block;margin-top:4px;padding:4px 10px;background:#2563eb;color:#fff;text-decoration:none;border-radius:4px;font-size:11px;">📍 Ouvrir dans Google Maps</a></td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">🏁 Destination</td><td style="padding:8px;border-bottom:1px solid #eee;">${dropoff}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;font-size:15px;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
-        <tr><td style="padding:8px;color:#666;font-weight:bold;">Montant</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;font-size:16px;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">Montant</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;font-size:16px;">${this.formatClientAmount(reservation)}</td></tr>
       </table>
       ${reservation.notes ? `<p style="background:#fefce8;padding:8px;border-radius:4px;border-left:4px solid #eab308;"><strong>Note :</strong> ${reservation.notes}</p>` : ''}
       <p style="font-size:12px;color:#888;margin-top:16px;">WEND'D Transport — Pour toute question, contactez l'administration.</p>`;
@@ -756,7 +756,7 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Tél. client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientPhone}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Trajet</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup} → ${dropoff}</td></tr>
-        <tr><td style="padding:8px;color:#666;font-weight:bold;">Montant</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">Montant</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${this.formatClientAmount(reservation)}</td></tr>
       </table>
       ${reservation.notes ? `<p><em>Note client :</em> ${reservation.notes}</p>` : ''}`;
 
@@ -795,7 +795,7 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Trajet</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup} → ${dropoff}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Type</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.tripType}</td></tr>
-        <tr><td style="padding:8px;color:#666;font-weight:bold;">Montant</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">Montant</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${this.formatClientAmount(reservation)}</td></tr>
       </table>
       <p style="font-size:12px;color:#888;">Connectez-vous au tableau de bord admin pour assigner un chauffeur.</p>`;
 
@@ -837,7 +837,7 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Trajet</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup} → ${dropoff}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
-        <tr><td style="padding:8px;color:#666;font-weight:bold;">Montant</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">Montant</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${this.formatClientAmount(reservation)}</td></tr>
       </table>`;
 
     const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;">${body}</body></html>`;
@@ -887,7 +887,7 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Destination</td><td style="padding:8px;border-bottom:1px solid #eee;">${dropoff}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Distance depuis vous</td><td style="padding:8px;border-bottom:1px solid #eee;">${proposal.distance.toFixed(1)} km</td></tr>
-        <tr><td style="padding:8px;color:#666;font-weight:bold;">💰 Montant</td><td style="padding:8px;font-weight:bold;color:#16a34a;font-size:18px;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">💰 Montant</td><td style="padding:8px;font-weight:bold;color:#16a34a;font-size:18px;">${this.formatClientAmount(reservation)}</td></tr>
       </table>
       ${reservation.notes ? `<p style="background:#fefce8;padding:8px;border-radius:4px;border-left:4px solid #eab308;"><strong>Note client :</strong> ${reservation.notes}</p>` : ''}
       <div style="margin:24px 0;text-align:center;">
@@ -1030,7 +1030,7 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Véhicule</td><td style="padding:8px;border-bottom:1px solid #eee;">${this.hasDriver(reservation) ? `${driverInfo.vehicle} — ${driverInfo.plate}` : 'N/A'}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Trajet</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup} → ${dropoff}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure course</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
-        <tr><td style="padding:8px;color:#666;font-weight:bold;">💰 Montant dû</td><td style="padding:8px;font-weight:bold;color:#dc2626;font-size:18px;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">💰 Montant dû</td><td style="padding:8px;font-weight:bold;color:#dc2626;font-size:18px;">${this.formatClientAmount(reservation)}</td></tr>
       </table>
       <div style="background:#fef2f2;padding:12px;border-radius:8px;border-left:4px solid #dc2626;margin:16px 0;">
         <p style="margin:0;font-weight:bold;color:#991b1b;">⏰ Signalé comme impayé à : ${markedAt.toLocaleString('fr-FR')}</p>
@@ -1045,7 +1045,7 @@ export class NotificationsService {
     for (const email of adminEmails) {
       await this.sendEmail(
         email,
-        `${title} — #${reservation.code} — ${Number(reservation.amount).toLocaleString()} FCFA`,
+        `${title} — #${reservation.code} — ${this.formatClientAmount(reservation)}`,
         html,
         NotificationType.ADMIN_UNPAID_RIDE,
         reservation.id,
@@ -1055,7 +1055,7 @@ export class NotificationsService {
     await this.sendPushNotification(
       adminEmails.map(e => this.normalizeExternalId(e)).filter(Boolean),
       '🚨 Course impayée',
-      `Course ${reservation.code} signalée impayée — ${Number(reservation.amount).toLocaleString()} FCFA`,
+      `Course ${reservation.code} signalée impayée — ${this.formatClientAmount(reservation)}`,
       { reservationCode: reservation.code },
     );
   }
@@ -1131,7 +1131,7 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Téléphone</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientPhone}</td></tr>
-        <tr><td style="padding:8px;color:#666;font-weight:bold;">💰 Montant</td><td style="padding:8px;font-weight:bold;color:#16a34a;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
+        <tr><td style="padding:8px;color:#666;font-weight:bold;">💰 Montant</td><td style="padding:8px;font-weight:bold;color:#16a34a;">${this.formatClientAmount(reservation)}</td></tr>
       </table>
       <p style="font-size:12px;color:#888;">Merci pour votre vigilance. Le dossier est maintenant clos.</p>`;
 

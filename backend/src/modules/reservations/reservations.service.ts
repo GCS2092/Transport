@@ -12,7 +12,6 @@ import { ReservationArchive } from './entities/reservation-archive.entity';
 import { DriverProposal, ProposalStatus } from './entities/driver-proposal.entity';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
-import { TariffsService } from '../tariffs/tariffs.service';
 import { SettingsService } from '../settings/settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
@@ -26,6 +25,7 @@ import { ReservationStatus } from '../../common/enums/reservation-status.enum';
 import { DriverStatus } from '../../common/enums/driver-status.enum';
 import { PaymentStatus } from '../../common/enums/payment-status.enum';
 import { Language } from '../../common/enums/language.enum';
+import { TripType } from '../../common/enums/trip-type.enum';
 import { createHash } from 'crypto';
 import * as ExcelJS from 'exceljs';
 
@@ -59,7 +59,6 @@ export class ReservationsService {
     private driverLocationRepository: Repository<DriverLocation>,
     @InjectRepository(DriverProposal)
     private driverProposalRepository: Repository<DriverProposal>,
-    private tariffsService: TariffsService,
     private settingsService: SettingsService,
     private notificationsService: NotificationsService,
     private pdfService: PdfService,
@@ -91,6 +90,15 @@ export class ReservationsService {
     return passengers >= 5 ? 2 : 1;
   }
 
+  private getFixedBasePriceForTripType(tripType: TripType): number {
+    const fixedPrices: Record<TripType, number> = {
+      [TripType.ALLER_SIMPLE]: 30000,
+      [TripType.RETOUR_SIMPLE]: 30000,
+      [TripType.ALLER_RETOUR]: 40000,
+    };
+    return fixedPrices[tripType] ?? 30000;
+  }
+
   async create(dto: CreateReservationDto): Promise<Reservation> {
     if (!dto.pickupZoneId && !dto.pickupCustomAddress) {
       throw new BadRequestException('Pickup zone or custom address is required');
@@ -99,7 +107,7 @@ export class ReservationsService {
       throw new BadRequestException('Dropoff zone or custom address is required');
     }
 
-    const basePrice = await this.settingsService.getPriceForTripType(dto.tripType);
+    const basePrice = this.getFixedBasePriceForTripType(dto.tripType);
     
     // A partir de 5 passagers, la course est facturee avec 2 vehicules
     const passengers = dto.passengers || 1;
@@ -513,14 +521,14 @@ export class ReservationsService {
 
     if (updates.tripType || updates.pickupZoneId || updates.dropoffZoneId) {
       const tripType = updates.tripType || reservation.tripType;
-      updateData.amount = await this.settingsService.getPriceForTripType(tripType);
+      updateData.amount = this.getFixedBasePriceForTripType(tripType as TripType);
     }
 
     if (updates.passengers) {
       const passengerCount = Number(updates.passengers) || reservation.passengers || 1;
       const vehicleCount = this.getVehicleCountByPassengers(passengerCount);
-      const tripType = updates.tripType || reservation.tripType;
-      const basePrice = await this.settingsService.getPriceForTripType(tripType);
+      const tripType = (updates.tripType || reservation.tripType) as TripType;
+      const basePrice = this.getFixedBasePriceForTripType(tripType);
       updateData.vehicleCount = vehicleCount;
       updateData.amount = basePrice * vehicleCount;
     }
@@ -896,18 +904,17 @@ export class ReservationsService {
     const reservation = await this.findById(id);
     const updateData: any = { ...updates };
 
-    if (updates.pickupZoneId && updates.dropoffZoneId) {
-      const tariff = await this.tariffsService.findByZones(updates.pickupZoneId, updates.dropoffZoneId);
-      if (tariff) {
-        const passengerCount = Number(updates.passengers ?? reservation.passengers) || 1;
-        const vehicleCount = this.getVehicleCountByPassengers(passengerCount);
-        updateData.vehicleCount = vehicleCount;
-        updateData.amount = tariff.price * vehicleCount;
-      }
-    } else if (updates.passengers !== undefined) {
-      const passengerCount = Number(updates.passengers) || 1;
+    const shouldRecomputeAmount =
+      updates.tripType !== undefined ||
+      updates.passengers !== undefined ||
+      updates.pickupZoneId !== undefined ||
+      updates.dropoffZoneId !== undefined;
+
+    if (shouldRecomputeAmount) {
+      const passengerCount = Number(updates.passengers) || reservation.passengers || 1;
       const vehicleCount = this.getVehicleCountByPassengers(passengerCount);
-      const basePrice = await this.settingsService.getPriceForTripType(reservation.tripType);
+      const tripType = (updates.tripType || reservation.tripType) as TripType;
+      const basePrice = this.getFixedBasePriceForTripType(tripType);
       updateData.vehicleCount = vehicleCount;
       updateData.amount = basePrice * vehicleCount;
     }
