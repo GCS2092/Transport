@@ -87,6 +87,10 @@ export class ReservationsService {
     return token;
   }
 
+  private getVehicleCountByPassengers(passengers: number): number {
+    return passengers >= 5 ? 2 : 1;
+  }
+
   async create(dto: CreateReservationDto): Promise<Reservation> {
     if (!dto.pickupZoneId && !dto.pickupCustomAddress) {
       throw new BadRequestException('Pickup zone or custom address is required');
@@ -97,14 +101,14 @@ export class ReservationsService {
 
     const basePrice = await this.settingsService.getPriceForTripType(dto.tripType);
     
-    // Calcul du nombre de véhicules nécessaires (4 passagers max par véhicule)
+    // A partir de 5 passagers, la course est facturee avec 2 vehicules
     const passengers = dto.passengers || 1;
-    const calculatedVehicleCount = Math.ceil(passengers / 4);
+    const calculatedVehicleCount = this.getVehicleCountByPassengers(passengers);
     const vehicleCount = dto.vehicleCount || calculatedVehicleCount;
     
     // Prix final = prix de base × nombre de véhicules
     const finalPrice = basePrice * vehicleCount;
-    this.logger.log(`Using fixed price for ${dto.tripType}: ${basePrice} FCFA × ${vehicleCount} vehicle(s) = ${finalPrice} FCFA`);
+    this.logger.log(`Using fixed price for ${dto.tripType}: ${basePrice} FCFA x ${vehicleCount} vehicle(s) = ${finalPrice} FCFA`);
 
     await this.checkDailyLimit(dto.clientEmail);
 
@@ -512,6 +516,15 @@ export class ReservationsService {
       updateData.amount = await this.settingsService.getPriceForTripType(tripType);
     }
 
+    if (updates.passengers) {
+      const passengerCount = Number(updates.passengers) || reservation.passengers || 1;
+      const vehicleCount = this.getVehicleCountByPassengers(passengerCount);
+      const tripType = updates.tripType || reservation.tripType;
+      const basePrice = await this.settingsService.getPriceForTripType(tripType);
+      updateData.vehicleCount = vehicleCount;
+      updateData.amount = basePrice * vehicleCount;
+    }
+
     await this.reservationsRepository.update(reservation.id, updateData);
     return this.findById(reservation.id);
   }
@@ -665,7 +678,10 @@ export class ReservationsService {
       r.code, new Date(r.createdAt).toLocaleString('fr-FR'), new Date(r.pickupDateTime).toLocaleString('fr-FR'),
       r.status, `${r.clientFirstName} ${r.clientLastName}`, r.clientEmail, r.clientPhone,
       r.pickupZone?.name || '', r.dropoffZone?.name || '', r.amount.toString(), r.passengers.toString(),
-      r.driver ? `${r.driver.firstName} ${r.driver.lastName}` : '', r.driver?.vehicleType || '',
+      r.driver
+        ? `${r.driver.firstName} ${r.driver.lastName}`
+        : (r.externalDriverName ? `${r.externalDriverName} (externe)` : ''),
+      r.driver?.vehicleType || r.externalDriverVehicle || '',
       r.paymentStatus, r.notes || '',
     ]);
     return [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
@@ -882,7 +898,18 @@ export class ReservationsService {
 
     if (updates.pickupZoneId && updates.dropoffZoneId) {
       const tariff = await this.tariffsService.findByZones(updates.pickupZoneId, updates.dropoffZoneId);
-      if (tariff) updateData.amount = tariff.price;
+      if (tariff) {
+        const passengerCount = Number(updates.passengers ?? reservation.passengers) || 1;
+        const vehicleCount = this.getVehicleCountByPassengers(passengerCount);
+        updateData.vehicleCount = vehicleCount;
+        updateData.amount = tariff.price * vehicleCount;
+      }
+    } else if (updates.passengers !== undefined) {
+      const passengerCount = Number(updates.passengers) || 1;
+      const vehicleCount = this.getVehicleCountByPassengers(passengerCount);
+      const basePrice = await this.settingsService.getPriceForTripType(reservation.tripType);
+      updateData.vehicleCount = vehicleCount;
+      updateData.amount = basePrice * vehicleCount;
     }
 
     await this.reservationsRepository.update(id, updateData);

@@ -128,9 +128,15 @@ export default function ClientDetailPage() {
                       <p className="text-xs text-gray-600 mb-1">
                         {res.pickupZone?.name} → {res.dropoffZone?.name}
                       </p>
-                      {res.driver && (
+                      {(res.driver || res.externalDriverName) && (
                         <p className="text-xs text-gray-500">
-                          Chauffeur: {res.driver.firstName} {res.driver.lastName}
+                          Chauffeur:{' '}
+                          {res.driver
+                            ? `${res.driver.firstName} ${res.driver.lastName}`
+                            : `${res.externalDriverName} (externe)`}
+                          {res.externalDriverPhone ? ` · ${res.externalDriverPhone}` : ''}
+                          {res.externalDriverVehicle ? ` · ${res.externalDriverVehicle}` : ''}
+                          {res.externalDriverPlate ? ` · ${res.externalDriverPlate}` : ''}
                         </p>
                       )}
                     </div>

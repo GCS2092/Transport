@@ -32,6 +32,10 @@ function formatPriceDetail(amount: number, currency: Currency): string {
   return `$${Math.round(converted)}`
 }
 
+function getVehicleCount(passengers: number): number {
+  return passengers >= 5 ? 2 : 1
+}
+
 /* ── Icônes SVG inline (lucide-like) ────────────────────────────── */
 const IconArrowDown = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
@@ -315,8 +319,8 @@ export function ReservationForm() {
       'ALLER_RETOUR': 40000,
     }
     
-    // Calcul du nombre de véhicules nécessaires (4 passagers max par véhicule)
-    const vehicleCount = Math.ceil(formData.passengers / 4)
+    // A partir de 5 passagers, le prix est doublé (2 véhicules)
+    const vehicleCount = getVehicleCount(formData.passengers)
     
     // Afficher le prix dès qu'on a au moins une destination valide
     if ((formData.pickupZoneId || (pickupType === 'custom' && customPickupAddress)) &&
@@ -326,7 +330,7 @@ export function ReservationForm() {
     } else {
       setEstimatedPrice(null)
     }
-  }, [formData.pickupZoneId, formData.dropoffZoneId, pickupType, dropoffType, customPickupAddress, customDropoffAddress, tripType])
+  }, [formData.pickupZoneId, formData.dropoffZoneId, formData.passengers, pickupType, dropoffType, customPickupAddress, customDropoffAddress, tripType])
 
   const loadZones = async () => {
   try {
@@ -456,7 +460,7 @@ export function ReservationForm() {
   clientPhone: countryCode + formData.clientPhone.replace(/\s/g, ''),
   tripType,
   passengers: Number(formData.passengers),
-  vehicleCount: Math.ceil(formData.passengers / 4),
+  vehicleCount: getVehicleCount(formData.passengers),
   language: lang,
   // ✅ FIX: Convertir les dates en ISO 8601 valide
   pickupDateTime: formData.pickupDateTime 
@@ -963,7 +967,7 @@ export function ReservationForm() {
                 {formData.passengers > 4 && (
                   <p className="text-xs text-amber-600 mt-1.5 flex items-start gap-1">
                     <span>⚠️</span>
-                    <span>Un 2ème véhicule sera nécessaire. Le prix sera doublé.</span>
+                    <span>A partir de 5 passagers, un 2eme vehicule est requis. Le prix est double.</span>
                   </p>
                 )}
               </Field>
@@ -975,7 +979,7 @@ export function ReservationForm() {
                   <p className="text-xs text-gray-500 font-medium">{f.fixedRate}</p>
                   {formData.passengers > 4 && (
                     <p className="text-xs text-amber-600 mt-0.5">
-                      ⚠️ {Math.ceil(formData.passengers / 4)} véhicules nécessaires
+                      ⚠️ {getVehicleCount(formData.passengers)} vehicules necessaires
                     </p>
                   )}
                   {pickupName && dropoffName && (
@@ -990,7 +994,7 @@ export function ReservationForm() {
                   <p className="text-xl font-bold text-gray-900">{formatPriceCurrency(estimatedPrice, currency)}</p>
                   <p className="text-xs text-gray-400">{formatPriceDetail(estimatedPrice, currency)}</p>
                   {formData.passengers > 4 && (
-                    <p className="text-xs text-amber-600">Prix doublé (2 véhicules)</p>
+                    <p className="text-xs text-amber-600">Prix double (2 vehicules)</p>
                   )}
                 </div>
               </div>

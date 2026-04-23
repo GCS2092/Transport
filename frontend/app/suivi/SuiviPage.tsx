@@ -209,6 +209,16 @@ function SuiviContent() {
 
   const statusConf = reservation ? (STATUS_CONFIG[reservation.status] || STATUS_CONFIG.EN_ATTENTE) : null
   const currentStepIdx = reservation ? STATUS_ORDER.indexOf(reservation.status) : -1
+  const hasAssignedDriver = Boolean(reservation?.driver || reservation?.externalDriverName)
+  const assignedDriverName = reservation?.driver
+    ? `${reservation.driver.firstName} ${reservation.driver.lastName}`
+    : (reservation?.externalDriverName || '')
+  const assignedDriverPhone = reservation?.driver?.phone || reservation?.externalDriverPhone || ''
+  const assignedVehicleType = reservation?.driver?.vehicleType || reservation?.externalDriverVehicle || ''
+  const assignedVehiclePlate = reservation?.driver?.vehiclePlate || reservation?.externalDriverPlate || ''
+  const assignedDriverInitials = reservation?.driver
+    ? `${reservation.driver.firstName[0]}${reservation.driver.lastName[0]}`
+    : (reservation?.externalDriverName ? reservation.externalDriverName.slice(0, 2).toUpperCase() : 'CH')
 
   return (
     <div className="min-h-[calc(100dvh-7rem)] bg-[var(--bg)] pb-10">
@@ -385,23 +395,25 @@ function SuiviContent() {
               </div>
             )}
 
-            {reservation.driver && (
+            {hasAssignedDriver && (
               <div className="bg-white rounded-2xl border border-[var(--border)] p-5">
                 <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide mb-3">{tr.driver}</p>
                 <div className="flex items-center gap-4 mb-3">
                   <div className="w-12 h-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold text-lg flex-shrink-0">
-                    {reservation.driver.firstName[0]}{reservation.driver.lastName[0]}
+                    {assignedDriverInitials}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[var(--ink)] truncate">{reservation.driver.firstName} {reservation.driver.lastName}</p>
-                    <p className="text-sm text-[var(--muted)] truncate">{reservation.driver.vehicleType}</p>
+                    <p className="font-bold text-[var(--ink)] truncate">{assignedDriverName}</p>
+                    <p className="text-sm text-[var(--muted)] truncate">{assignedVehicleType}</p>
                   </div>
-                  <a
-                    href={`tel:${reservation.driver.phone || ''}`}
-                    className="px-4 py-2 bg-[var(--accent)] text-white rounded-xl text-xs font-bold flex-shrink-0"
-                  >
-                    {tr.call}
-                  </a>
+                  {assignedDriverPhone && (
+                    <a
+                      href={`tel:${assignedDriverPhone}`}
+                      className="px-4 py-2 bg-[var(--accent)] text-white rounded-xl text-xs font-bold flex-shrink-0"
+                    >
+                      {tr.call}
+                    </a>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-200">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--primary)] flex-shrink-0">
@@ -410,7 +422,7 @@ function SuiviContent() {
                   </svg>
                   <div className="flex-1">
                     <p className="text-xs text-[var(--muted)] font-medium">Plaque d'immatriculation</p>
-                    <p className="text-sm font-bold text-[var(--ink)] tracking-wide">{reservation.driver.vehiclePlate}</p>
+                    <p className="text-sm font-bold text-[var(--ink)] tracking-wide">{assignedVehiclePlate || 'N/A'}</p>
                   </div>
                 </div>
               </div>

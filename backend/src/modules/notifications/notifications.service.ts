@@ -221,7 +221,8 @@ export class NotificationsService {
       const converted = Math.round(amount * this.RATES[currency]);
       return currency === 'EUR' ? `€${converted}` : `$${converted}`;
     }
-    return `${amount.toLocaleString()} FCFA`;
+    const converted = Math.round(amount * this.RATES.EUR);
+    return `€${converted}`;
   }
 
   private getDriverDisplayInfo(reservation: Reservation): { name: string; phone: string; vehicle: string; plate: string } {
@@ -1013,6 +1014,7 @@ export class NotificationsService {
 
     const pickup = this.getPickupAddress(reservation);
     const dropoff = this.getDropoffAddress(reservation);
+    const driverInfo = this.getDriverDisplayInfo(reservation);
 
     const title = '⚠️ Course marquée IMPAYÉE par le chauffeur';
     const body = `
@@ -1023,15 +1025,16 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;font-size:16px;">${reservation.code}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Téléphone client</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;color:#dc2626;">${reservation.clientPhone}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Chauffeur</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.driver?.firstName} ${reservation.driver?.lastName || 'Non assigné'}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Téléphone chauffeur</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.driver?.phone || 'N/A'}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Chauffeur</td><td style="padding:8px;border-bottom:1px solid #eee;">${this.hasDriver(reservation) ? driverInfo.name : 'Non assigne'}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Téléphone chauffeur</td><td style="padding:8px;border-bottom:1px solid #eee;">${this.hasDriver(reservation) ? driverInfo.phone : 'N/A'}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Véhicule</td><td style="padding:8px;border-bottom:1px solid #eee;">${this.hasDriver(reservation) ? `${driverInfo.vehicle} — ${driverInfo.plate}` : 'N/A'}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Trajet</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup} → ${dropoff}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure course</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
         <tr><td style="padding:8px;color:#666;font-weight:bold;">💰 Montant dû</td><td style="padding:8px;font-weight:bold;color:#dc2626;font-size:18px;">${Number(reservation.amount).toLocaleString()} FCFA</td></tr>
       </table>
       <div style="background:#fef2f2;padding:12px;border-radius:8px;border-left:4px solid #dc2626;margin:16px 0;">
         <p style="margin:0;font-weight:bold;color:#991b1b;">⏰ Signalé comme impayé à : ${markedAt.toLocaleString('fr-FR')}</p>
-        <p style="margin:8px 0 0 0;font-size:14px;">Par : ${reservation.driver?.firstName} ${reservation.driver?.lastName || 'Chauffeur'}</p>
+        <p style="margin:8px 0 0 0;font-size:14px;">Par : ${this.hasDriver(reservation) ? driverInfo.name : 'Chauffeur'}</p>
       </div>
       <p style="background:#fff7ed;padding:12px;border-radius:4px;border-left:4px solid #ea580c;">
         <strong>Action requise :</strong> Contactez immédiatement le client et/ou le chauffeur pour régulariser la situation.

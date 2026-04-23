@@ -306,6 +306,10 @@ export default function AdminReservations() {
       res.dropoffZone?.name.toLowerCase().includes(query) ||
       res.driver?.firstName.toLowerCase().includes(query) ||
       res.driver?.lastName.toLowerCase().includes(query) ||
+      res.externalDriverName?.toLowerCase().includes(query) ||
+      res.externalDriverPhone?.includes(query) ||
+      res.externalDriverPlate?.toLowerCase().includes(query) ||
+      res.externalDriverVehicle?.toLowerCase().includes(query) ||
       res.amount.toString().includes(query)
     )
   })

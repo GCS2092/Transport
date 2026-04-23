@@ -5,6 +5,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+const CLIENT_RATES: Record<string, number> = {
+  EUR: 0.001525,
+  USD: 0.001667,
+}
+
+function convertFromXof(amount: number, currency?: string | null): { currency: string; converted: number } {
+  const target = currency && CLIENT_RATES[currency] ? currency : 'EUR'
+  return {
+    currency: target,
+    converted: Math.round(amount * CLIENT_RATES[target]),
+  }
+}
+
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('fr-FR', {
     style: 'decimal',
@@ -13,31 +26,14 @@ export function formatCurrency(amount: number): string {
   }).format(amount) + ' FCFA'
 }
 
-const CLIENT_RATES: Record<string, number> = {
-  EUR: 0.001525,
-  USD: 0.001667,
-}
-
 export function formatReservationAmount(amount: number, currency?: string | null): string {
-  if (currency && CLIENT_RATES[currency]) {
-    const converted = Math.round(amount * CLIENT_RATES[currency])
-    return currency === 'EUR' ? `€${converted}` : `$${converted}`
-  }
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'decimal',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount) + ' FCFA'
+  const { currency: target, converted } = convertFromXof(amount, currency)
+  return target === 'EUR' ? `€${converted}` : `$${converted}`
 }
 
 export function formatClientAmount(amount: number, currency?: string | null): string {
-  if (currency && CLIENT_RATES[currency]) {
-    const converted = Math.round(amount * CLIENT_RATES[currency])
-    return currency === 'EUR' ? `€${converted}` : `$${converted}`
-  }
-  // Fallback EUR si aucune devise n'est précisée pour le client
-  const converted = Math.round(amount * CLIENT_RATES['EUR'])
-  return `€${converted}`
+  const { currency: target, converted } = convertFromXof(amount, currency)
+  return target === 'EUR' ? `€${converted}` : `$${converted}`
 }
 
 export function formatDate(date: string | Date): string {

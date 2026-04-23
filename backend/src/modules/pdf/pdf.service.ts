@@ -280,9 +280,9 @@ export class PdfService {
           this.t(lang, 'Chauffeur', 'Driver'),
           reservation.driver
             ? `${reservation.driver.firstName} ${reservation.driver.lastName}`
-            : '-',
+            : (reservation.externalDriverName || '-'),
         ],
-        [this.t(lang, 'Véhicule', 'Vehicle'),         reservation.driver?.vehicleType || '-'],
+        [this.t(lang, 'Véhicule', 'Vehicle'),         reservation.driver?.vehicleType || reservation.externalDriverVehicle || '-'],
         [this.t(lang, 'Passagers', 'Passengers'),     String(reservation.passengers)],
         [this.t(lang, 'Véhicules', 'Vehicles'),       String(reservation.vehicleCount ?? 1)],
       ];

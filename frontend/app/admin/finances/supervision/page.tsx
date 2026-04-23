@@ -184,7 +184,11 @@ export default function PaymentSupervisionPage() {
       r.pickupZone?.name?.toLowerCase().includes(query) ||
       r.dropoffZone?.name?.toLowerCase().includes(query) ||
       r.driver?.firstName?.toLowerCase().includes(query) ||
-      r.driver?.lastName?.toLowerCase().includes(query)
+      r.driver?.lastName?.toLowerCase().includes(query) ||
+      r.externalDriverName?.toLowerCase().includes(query) ||
+      r.externalDriverPhone?.includes(query) ||
+      r.externalDriverPlate?.toLowerCase().includes(query) ||
+      r.externalDriverVehicle?.toLowerCase().includes(query)
     )
   })
 
