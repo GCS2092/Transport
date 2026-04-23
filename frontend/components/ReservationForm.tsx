@@ -8,32 +8,28 @@ import { geocodeAddress } from '@/lib/geocoding'
 
 // Taux de conversion fixes
 const RATES = {
-  EUR: 0.001525,  // 1 FCFA = 0.001525€ (1€ = 655.957 FCFA)
-  USD: 0.001667,  // 1 FCFA = 0.001667$ (1$ = 600 FCFA)
+  EUR: 0.001525,
+  USD: 0.001667,
 }
 
 type Currency = 'EUR' | 'USD'
 
-function formatPriceCurrency(fcfa: number, currency: Currency): string {
+function formatPriceCurrency(amount: number, currency: Currency): string {
   const rate = RATES[currency]
-  const converted = fcfa * rate
+  const converted = amount * rate
   if (currency === 'EUR') {
     return `€${Math.round(converted)}`
   }
   return `$${Math.round(converted)}`
 }
 
-function formatPriceDetail(fcfa: number, currency: Currency): string {
+function formatPriceDetail(amount: number, currency: Currency): string {
   const rate = RATES[currency]
-  const converted = fcfa * rate
-  const otherCurrency = currency === 'EUR' ? 'USD' : 'EUR'
-  const otherRate = RATES[otherCurrency]
-  const otherConverted = fcfa * otherRate
-
+  const converted = amount * rate
   if (currency === 'EUR') {
-    return `€${Math.round(converted)} / $${Math.round(otherConverted)}`
+    return `€${Math.round(converted)}`
   }
-  return `$${Math.round(converted)} / €${Math.round(otherConverted)}`
+  return `$${Math.round(converted)}`
 }
 
 /* ── Icônes SVG inline (lucide-like) ────────────────────────────── */
@@ -312,7 +308,7 @@ export function ReservationForm() {
   }, [])
 
   useEffect(() => {
-    // Prix fixes selon le type de trajet (nouveaux tarifs 30000/40000 FCFA)
+    // Prix fixes selon le type de trajet (30000 / 40000)
     const fixedPrices = {
       'ALLER_SIMPLE': 30000,
       'RETOUR_SIMPLE': 30000,
@@ -548,6 +544,7 @@ export function ReservationForm() {
         dropoffZone: dropoffZoneName,
         amount: data.amount,
         status: data.status,
+        currency: data.currency || currency,
       })
 
       // Associer OneSignal au client (external user id = email) pour recevoir les notifs

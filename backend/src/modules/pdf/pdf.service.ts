@@ -37,7 +37,9 @@ export class PdfService {
       const converted = Math.round(amount * this.RATES[currency]);
       return currency === 'EUR' ? `€${converted.toLocaleString('fr-FR')}` : `$${converted.toLocaleString('en-US')}`;
     }
-    return `${amount.toLocaleString('fr-FR')} FCFA`;
+    // Fallback EUR pour les PDF client (ne jamais afficher FCFA au client)
+    const converted = Math.round(amount * this.RATES['EUR']);
+    return `€${converted.toLocaleString('fr-FR')}`;
   }
 
   // ─── Format montant admin (FCFA pour admin) ───────────────────────────────

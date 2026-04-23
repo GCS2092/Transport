@@ -30,6 +30,16 @@ export function formatReservationAmount(amount: number, currency?: string | null
   }).format(amount) + ' FCFA'
 }
 
+export function formatClientAmount(amount: number, currency?: string | null): string {
+  if (currency && CLIENT_RATES[currency]) {
+    const converted = Math.round(amount * CLIENT_RATES[currency])
+    return currency === 'EUR' ? `€${converted}` : `$${converted}`
+  }
+  // Fallback EUR si aucune devise n'est précisée pour le client
+  const converted = Math.round(amount * CLIENT_RATES['EUR'])
+  return `€${converted}`
+}
+
 export function formatDate(date: string | Date): string {
   return new Intl.DateTimeFormat('fr-FR', {
     day: 'numeric',

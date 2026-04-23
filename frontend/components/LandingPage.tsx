@@ -136,7 +136,7 @@ export function LandingPage({ onEnter }: Props) {
           <li>{fr ? '✓ Confirmation immédiate par email' : '✓ Immediate email confirmation'}</li>
           <li>{fr ? '✓ Chauffeurs professionnels et ponctuels' : '✓ Professional and punctual drivers'}</li>
           <li>{fr ? '✓ Disponible 24h/24, 7j/7 y compris les jours fériés' : '✓ Available 24/7 including holidays'}</li>
-          <li>{fr ? '✓ Paiement en FCFA, EUR ou USD' : '✓ Payment in XOF, EUR or USD'}</li>
+          <li>{fr ? '✓ Paiement en EUR, USD ou XOF' : '✓ Payment in EUR, USD or XOF'}</li>
         </ul>
       </section>
     </div>

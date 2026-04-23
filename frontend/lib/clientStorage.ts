@@ -17,6 +17,7 @@ export interface ReservationHistory {
   dropoffZone: string
   amount: number
   status: string
+  currency?: string
 }
 
 const CLIENT_INFO_KEY = 'vtc_client_info'

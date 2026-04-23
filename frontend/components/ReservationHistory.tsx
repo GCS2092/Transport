@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getHistory, clearHistory, type ReservationHistory as ReservationHistoryType } from '@/lib/clientStorage'
-import { formatCurrency } from '@/lib/utils'
+import { formatClientAmount } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 
 const IconClock = () => (
@@ -116,7 +116,7 @@ export function ReservationHistory() {
                   {date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                 </span>
                 <span className="font-semibold text-gray-900">
-                  {formatCurrency(reservation.amount)}
+                  {formatClientAmount(reservation.amount, reservation.currency)}
                 </span>
               </div>
             </button>

@@ -7,8 +7,8 @@ import Link from 'next/link'
 
 // Taux de conversion fixes
 const RATES = {
-  EUR: 0.001525,  // 1 FCFA = 0.001525€ (1€ = 655.957 FCFA)
-  USD: 0.001667,  // 1 FCFA = 0.001667$ (1$ = 600 FCFA)
+  EUR: 0.001525,
+  USD: 0.001667,
 }
 
 type Currency = 'EUR' | 'USD'
@@ -18,7 +18,7 @@ const FIXED_PRICES = [
     type: 'ALLER_SIMPLE',
     label: 'Aller simple',
     labelEn: 'One way',
-    priceFCFA: 30000,
+    price: 30000,
     icon: '🚗',
     description: 'Trajet unique vers votre destination',
     descriptionEn: 'Single trip to your destination',
@@ -27,7 +27,7 @@ const FIXED_PRICES = [
     type: 'RETOUR_SIMPLE',
     label: 'Retour simple',
     labelEn: 'Return only',
-    priceFCFA: 30000,
+    price: 30000,
     icon: '🔙',
     description: 'Trajet retour depuis votre destination',
     descriptionEn: 'Return trip from your destination',
@@ -36,33 +36,29 @@ const FIXED_PRICES = [
     type: 'ALLER_RETOUR',
     label: 'Aller-retour',
     labelEn: 'Round trip',
-    priceFCFA: 40000,
+    price: 40000,
     icon: '🔄',
     description: 'Trajet aller + retour inclus',
     descriptionEn: 'Both ways included',
   },
 ]
 
-function formatPrice(fcfa: number, currency: Currency): string {
+function formatPrice(amount: number, currency: Currency): string {
   const rate = RATES[currency]
-  const converted = fcfa * rate
+  const converted = amount * rate
   if (currency === 'EUR') {
     return `€${Math.round(converted)}`
   }
   return `$${Math.round(converted)}`
 }
 
-function formatPriceDetail(fcfa: number, currency: Currency): string {
+function formatPriceDetail(amount: number, currency: Currency): string {
   const rate = RATES[currency]
-  const converted = fcfa * rate
-  const otherCurrency = currency === 'EUR' ? 'USD' : 'EUR'
-  const otherRate = RATES[otherCurrency]
-  const otherConverted = fcfa * otherRate
-  
+  const converted = amount * rate
   if (currency === 'EUR') {
-    return `€${Math.round(converted)} / $${Math.round(otherConverted)}`
+    return `€${Math.round(converted)}`
   }
-  return `$${Math.round(converted)} / €${Math.round(otherConverted)}`
+  return `$${Math.round(converted)}`
 }
 
 export default function ZonesTarifsPage() {
@@ -136,11 +132,11 @@ export default function ZonesTarifsPage() {
                     {lang === 'fr' ? item.description : item.descriptionEn}
                   </p>
                   <p className="text-xs text-emerald-600 mt-1">
-                    {formatPriceDetail(item.priceFCFA, currency)}
+                    {formatPriceDetail(item.price, currency)}
                   </p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-lg font-bold text-[var(--accent)]">{formatPrice(item.priceFCFA, currency)}</p>
+                  <p className="text-lg font-bold text-[var(--accent)]">{formatPrice(item.price, currency)}</p>
                   <p className="text-xs text-[var(--muted)]">{lang === 'fr' ? 'Tarif fixe' : 'Fixed rate'}</p>
                 </div>
               </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { reservationsApi, Reservation, DriverLocation } from '@/lib/api'
-import { formatReservationAmount } from '@/lib/utils'
+import { formatClientAmount } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n'
 import { updateReservationStatus } from '@/lib/clientStorage'
 import { calculateRoute, formatDuration, formatDistance } from '@/lib/geocoding'
@@ -307,7 +307,7 @@ function SuiviContent() {
               </div>
               <div className="mt-3 pt-3 border-t border-[var(--border)] flex justify-between items-center">
                 <span className="text-sm text-[var(--muted)]">{tr.fixedRate}</span>
-                <span className="text-xl font-bold text-[var(--accent)]">{formatReservationAmount(reservation.amount, reservation.currency)}</span>
+                <span className="text-xl font-bold text-[var(--accent)]">{formatClientAmount(reservation.amount, reservation.currency)}</span>
               </div>
             </div>
 
