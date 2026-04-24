@@ -36,9 +36,9 @@ export class SettingsService {
 
   private async initializeDefaultSettings() {
     const defaults = [
-      { key: 'PRICE_ALLER_SIMPLE', value: '25000', description: 'Prix fixe pour aller simple (FCFA)' },
-      { key: 'PRICE_RETOUR_SIMPLE', value: '25000', description: 'Prix fixe pour retour simple (FCFA)' },
-      { key: 'PRICE_ALLER_RETOUR', value: '30000', description: 'Prix fixe pour aller-retour (FCFA)' },
+      { key: 'PRICE_ALLER_SIMPLE', value: '30000', description: 'Prix fixe pour aller simple (FCFA)' },
+      { key: 'PRICE_RETOUR_SIMPLE', value: '30000', description: 'Prix fixe pour retour simple (FCFA)' },
+      { key: 'PRICE_ALLER_RETOUR', value: '40000', description: 'Prix fixe pour aller-retour (FCFA)' },
     ];
 
     for (const def of defaults) {
@@ -46,6 +46,10 @@ export class SettingsService {
       if (!existing) {
         await this.settingsRepository.save(def);
         this.logger.log(`Initialized setting: ${def.key} = ${def.value}`);
+      } else if (existing.value !== def.value) {
+        existing.value = def.value;
+        await this.settingsRepository.save(existing);
+        this.logger.log(`Updated setting: ${def.key} = ${def.value}`);
       }
     }
   }
