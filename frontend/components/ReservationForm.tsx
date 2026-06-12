@@ -11,6 +11,7 @@ import {
   TripPrices,
   LocationInputType,
 } from '@/lib/tripPricing'
+import { AddressSearchInput, AddressSelection } from '@/components/AddressSearchInput'
 
 // Taux de conversion fixes
 const RATES = {
@@ -51,9 +52,6 @@ const IconArrowRight = () => (
 )
 const IconCheck = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-)
-const IconMapPin = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
 )
 const IconCalendar = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -231,6 +229,38 @@ export function ReservationForm() {
   }
 
   const currentCountry = countryOptions.find(c => c.code === countryCode) || countryOptions[0]
+
+  const handlePickupChange = (selection: AddressSelection) => {
+    if (selection.type === 'zone' && selection.zoneId) {
+      setPickupType('zone')
+      set('pickupZoneId', selection.zoneId)
+      setCustomPickupAddress(selection.text)
+      setPickupCoords(null)
+      setGpsPickupState('idle')
+    } else {
+      setPickupType('custom')
+      set('pickupZoneId', '')
+      setCustomPickupAddress(selection.text)
+      if (!selection.text.trim()) setPickupCoords(null)
+      setGpsPickupState('idle')
+    }
+  }
+
+  const handleDropoffChange = (selection: AddressSelection) => {
+    if (selection.type === 'zone' && selection.zoneId) {
+      setDropoffType('zone')
+      set('dropoffZoneId', selection.zoneId)
+      setCustomDropoffAddress(selection.text)
+      setDropoffCoords(null)
+      setGpsDropoffState('idle')
+    } else {
+      setDropoffType('custom')
+      set('dropoffZoneId', '')
+      setCustomDropoffAddress(selection.text)
+      if (!selection.text.trim()) setDropoffCoords(null)
+      setGpsDropoffState('idle')
+    }
+  }
 
   const captureLocationGps = (target: 'pickup' | 'dropoff') => {
     if (!navigator.geolocation) {
@@ -434,19 +464,25 @@ export function ReservationForm() {
   }
 
   const validateStep1 = () => {
+    if (gpsPickupState === 'loading' || gpsDropoffState === 'loading') {
+      return f.gpsLoading
+    }
+
     const hasPickup = hasPickupLocation()
     const hasDropoff = hasDropoffLocation()
 
-    if (!hasPickup || !hasDropoff) return f.selectZones
-    
-    // Vérifier que les zones sont différentes seulement si les deux sont des zones prédéfinies
+    if (!hasPickup && !hasDropoff) return f.selectZones
+    if (!hasPickup) return f.selectPickupLocation
+    if (!hasDropoff) return f.selectDropoffLocation
+
+    const pickupLabel = getPickupLabel().trim().toLowerCase()
+    const dropoffLabel = getDropoffLabel().trim().toLowerCase()
+
     if (pickupType === 'zone' && dropoffType === 'zone' && formData.pickupZoneId === formData.dropoffZoneId) {
       return f.differentZones
     }
-    
-    // Vérifier que les adresses personnalisées/GPS ne sont pas identiques
-    if (pickupType !== 'zone' && dropoffType !== 'zone' && 
-        customPickupAddress.trim().toLowerCase() === customDropoffAddress.trim().toLowerCase()) {
+
+    if (pickupLabel && dropoffLabel && pickupLabel === dropoffLabel) {
       return f.differentZones
     }
     
@@ -840,81 +876,19 @@ export function ReservationForm() {
                 </div>
               </div>
 
-              <Field label={f.departure}>
-                <div className="mb-2 grid grid-cols-3 gap-2">
-                  {([
-                    { value: 'zone' as LocationInputType, label: 'Zone' },
-                    { value: 'custom' as LocationInputType, label: 'Adresse' },
-                    { value: 'gps' as LocationInputType, label: 'GPS' },
-                  ]).map(opt => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => {
-                        setPickupType(opt.value)
-                        if (opt.value === 'gps') captureLocationGps('pickup')
-                      }}
-                      className={`py-2 px-2 rounded-lg border text-xs font-semibold transition-all ${
-                        pickupType === opt.value
-                          ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
-                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-                
-                {pickupType === 'zone' ? (
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><IconMapPin /></div>
-                    <select value={formData.pickupZoneId} onChange={e => set('pickupZoneId', e.target.value)} className={selectCls + ' pl-9'}>
-                      <option value="">{f.selectDeparture}</option>
-                      {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
-                    </select>
-                  </div>
-                ) : pickupType === 'custom' ? (
-                  <div>
-                    <input
-                      type="text"
-                      value={customPickupAddress}
-                      onChange={e => setCustomPickupAddress(e.target.value)}
-                      placeholder="Ex: Rue 10, Sicap Liberté, Dakar — ou Thiès, Saint-Louis..."
-                      className={inputCls}
-                    />
-                    {geocodingPickup && (
-                      <p className="text-xs text-blue-600 mt-1">🔍 Recherche de l'adresse...</p>
-                    )}
-                    {!geocodingPickup && pickupCoords && (
-                      <p className="text-xs text-emerald-600 mt-1">✓ Adresse localisée</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-dashed border-emerald-300 bg-emerald-50/50 p-3">
-                    {gpsPickupState === 'loading' && (
-                      <p className="text-xs text-blue-600 text-center">🔄 Localisation en cours…</p>
-                    )}
-                    {gpsPickupState === 'ok' && pickupCoords && (
-                      <div>
-                        <p className="text-xs text-emerald-700 font-semibold">✓ Position GPS enregistrée</p>
-                        <p className="text-xs text-gray-600 mt-1">{customPickupAddress}</p>
-                      </div>
-                    )}
-                    {gpsPickupState === 'denied' && (
-                      <p className="text-xs text-red-600 text-center">Localisation refusée — autorisez le GPS ou saisissez une adresse</p>
-                    )}
-                    {gpsPickupState === 'idle' && (
-                      <button type="button" onClick={() => captureLocationGps('pickup')} className="w-full text-xs font-semibold text-emerald-700">
-                        📍 Utiliser ma position actuelle
-                      </button>
-                    )}
-                    {(gpsPickupState === 'ok' || gpsPickupState === 'denied') && (
-                      <button type="button" onClick={() => captureLocationGps('pickup')} className="w-full mt-2 text-xs text-gray-500 underline">
-                        Actualiser la position
-                      </button>
-                    )}
-                  </div>
-                )}
+              <Field label={f.departure} hint={f.searchAddress}>
+                <AddressSearchInput
+                  zones={zones}
+                  value={pickupType === 'zone' ? (zones.find(z => z.id === formData.pickupZoneId)?.name || customPickupAddress) : customPickupAddress}
+                  selectedZoneId={pickupType === 'zone' ? formData.pickupZoneId : undefined}
+                  gpsState={gpsPickupState}
+                  geocoding={geocodingPickup}
+                  geocoded={!!pickupCoords && pickupType !== 'zone'}
+                  placeholder={f.searchAddress}
+                  inputCls={inputCls}
+                  onChange={handlePickupChange}
+                  onGpsCapture={() => captureLocationGps('pickup')}
+                />
               </Field>
 
               <div className="flex items-center gap-2">
@@ -923,81 +897,19 @@ export function ReservationForm() {
                 <div className="flex-1 h-px bg-gray-100" />
               </div>
 
-              <Field label={f.arrival}>
-                <div className="mb-2 grid grid-cols-3 gap-2">
-                  {([
-                    { value: 'zone' as LocationInputType, label: 'Zone' },
-                    { value: 'custom' as LocationInputType, label: 'Adresse' },
-                    { value: 'gps' as LocationInputType, label: 'GPS' },
-                  ]).map(opt => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => {
-                        setDropoffType(opt.value)
-                        if (opt.value === 'gps') captureLocationGps('dropoff')
-                      }}
-                      className={`py-2 px-2 rounded-lg border text-xs font-semibold transition-all ${
-                        dropoffType === opt.value
-                          ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
-                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-                
-                {dropoffType === 'zone' ? (
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><IconMapPin /></div>
-                    <select value={formData.dropoffZoneId} onChange={e => set('dropoffZoneId', e.target.value)} className={selectCls + ' pl-9'}>
-                      <option value="">{f.selectArrival}</option>
-                      {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
-                    </select>
-                  </div>
-                ) : dropoffType === 'custom' ? (
-                  <div>
-                    <input
-                      type="text"
-                      value={customDropoffAddress}
-                      onChange={e => setCustomDropoffAddress(e.target.value)}
-                      placeholder="Ex: Avenue Bourguiba, Plateau — ou Thiès, Touba..."
-                      className={inputCls}
-                    />
-                    {geocodingDropoff && (
-                      <p className="text-xs text-blue-600 mt-1">🔍 Recherche de l'adresse...</p>
-                    )}
-                    {!geocodingDropoff && dropoffCoords && (
-                      <p className="text-xs text-emerald-600 mt-1">✓ Adresse localisée</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-dashed border-emerald-300 bg-emerald-50/50 p-3">
-                    {gpsDropoffState === 'loading' && (
-                      <p className="text-xs text-blue-600 text-center">🔄 Localisation en cours…</p>
-                    )}
-                    {gpsDropoffState === 'ok' && dropoffCoords && (
-                      <div>
-                        <p className="text-xs text-emerald-700 font-semibold">✓ Position GPS enregistrée</p>
-                        <p className="text-xs text-gray-600 mt-1">{customDropoffAddress}</p>
-                      </div>
-                    )}
-                    {gpsDropoffState === 'denied' && (
-                      <p className="text-xs text-red-600 text-center">Localisation refusée — autorisez le GPS ou saisissez une adresse</p>
-                    )}
-                    {gpsDropoffState === 'idle' && (
-                      <button type="button" onClick={() => captureLocationGps('dropoff')} className="w-full text-xs font-semibold text-emerald-700">
-                        📍 Utiliser ma position actuelle
-                      </button>
-                    )}
-                    {(gpsDropoffState === 'ok' || gpsDropoffState === 'denied') && (
-                      <button type="button" onClick={() => captureLocationGps('dropoff')} className="w-full mt-2 text-xs text-gray-500 underline">
-                        Actualiser la position
-                      </button>
-                    )}
-                  </div>
-                )}
+              <Field label={f.arrival} hint={f.searchAddress}>
+                <AddressSearchInput
+                  zones={zones}
+                  value={dropoffType === 'zone' ? (zones.find(z => z.id === formData.dropoffZoneId)?.name || customDropoffAddress) : customDropoffAddress}
+                  selectedZoneId={dropoffType === 'zone' ? formData.dropoffZoneId : undefined}
+                  gpsState={gpsDropoffState}
+                  geocoding={geocodingDropoff}
+                  geocoded={!!dropoffCoords && dropoffType !== 'zone'}
+                  placeholder={f.searchAddress}
+                  inputCls={inputCls}
+                  onChange={handleDropoffChange}
+                  onGpsCapture={() => captureLocationGps('dropoff')}
+                />
               </Field>
             </div>
 

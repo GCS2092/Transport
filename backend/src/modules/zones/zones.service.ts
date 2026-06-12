@@ -15,10 +15,22 @@ export class ZonesService {
 
   // Géocode automatiquement un nom de zone via Nominatim (OpenStreetMap)
   // Appelé à la création ET à la mise à jour si pas de coordonnées fournies
-  private async geocodeZoneName(name: string): Promise<{ latitude: number; longitude: number } | null> {
+  private buildGeocodeQuery(name: string, category?: string | null): string {
+    if (category?.startsWith('Interurbain') || category === 'Aéroport') {
+      return `${name}, Sénégal`;
+    }
+    if (category === 'Banlieue Dakar') {
+      return `${name}, banlieue de Dakar, Sénégal`;
+    }
+    return `${name}, Dakar, Sénégal`;
+  }
+
+  private async geocodeZoneName(
+    name: string,
+    category?: string | null,
+  ): Promise<{ latitude: number; longitude: number } | null> {
     try {
-      // Ajoute "Dakar, Sénégal" pour améliorer la précision
-      const query = `${name}, Dakar, Sénégal`;
+      const query = this.buildGeocodeQuery(name, category);
       const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
 
       const response = await fetch(url, {
@@ -47,7 +59,10 @@ export class ZonesService {
   }
 
   async findActive(): Promise<Zone[]> {
-    return this.zonesRepository.find({ where: { isActive: true }, order: { name: 'ASC' } });
+    return this.zonesRepository.find({
+      where: { isActive: true },
+      order: { description: 'ASC', name: 'ASC' },
+    });
   }
 
   async findById(id: string): Promise<Zone> {
@@ -65,7 +80,7 @@ export class ZonesService {
 
     // Si pas de coordonnées fournies → géocoder automatiquement
     if (!latitude || !longitude) {
-      const coords = await this.geocodeZoneName(dto.name);
+      const coords = await this.geocodeZoneName(dto.name, dto.description);
       if (coords) {
         latitude = coords.latitude;
         longitude = coords.longitude;
@@ -83,8 +98,10 @@ export class ZonesService {
     let longitude = dto.longitude ?? existing.longitude;
 
     // Si le nom change et qu'il n'y a pas de nouvelles coordonnées → regéocoder
+    const category = dto.description ?? existing.description;
+
     if (dto.name && dto.name !== existing.name && !dto.latitude && !dto.longitude) {
-      const coords = await this.geocodeZoneName(dto.name);
+      const coords = await this.geocodeZoneName(dto.name, category);
       if (coords) {
         latitude = coords.latitude;
         longitude = coords.longitude;
@@ -94,7 +111,7 @@ export class ZonesService {
     // Si toujours pas de coordonnées → essayer de géocoder avec le nom actuel
     if (!latitude || !longitude) {
       const nameToGeocode = dto.name || existing.name;
-      const coords = await this.geocodeZoneName(nameToGeocode);
+      const coords = await this.geocodeZoneName(nameToGeocode, category);
       if (coords) {
         latitude = coords.latitude;
         longitude = coords.longitude;
@@ -138,7 +155,7 @@ export class ZonesService {
       // Respecter la limite Nominatim : 1 requête/seconde
       await new Promise(resolve => setTimeout(resolve, 1100));
 
-      const coords = await this.geocodeZoneName(zone.name);
+      const coords = await this.geocodeZoneName(zone.name, zone.description);
       if (coords) {
         await this.zonesRepository.update(zone.id, coords);
         updated++;
