@@ -193,7 +193,32 @@ export default function PaymentConfirmationPage() {
 
   const isExpired = timeLeft <= 0
   const isInternational = reservation.pickupZone?.name?.toLowerCase().includes('aéroport') ||
-                          reservation.dropoffZone?.name?.toLowerCase().includes('aéroport')
+                          reservation.dropoffZone?.name?.toLowerCase().includes('aéroport') ||
+                          reservation.dropoffCustomAddress?.toLowerCase().includes('aéroport') ||
+                          reservation.pickupCustomAddress?.toLowerCase().includes('aéroport')
+
+  if (reservation.pricePending) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 text-center max-w-md w-full">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-2xl">📬</span>
+          </div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Réservation enregistrée</h1>
+          <p className="text-3xl font-mono font-bold text-emerald-600 mb-3">{reservation.code}</p>
+          <p className="text-sm text-gray-600 mb-4">
+            Course interurbaine — le tarif vous sera communiqué prochainement dans votre <strong>inbox</strong> sur la page Suivi.
+          </p>
+          <button
+            onClick={() => router.push(`/suivi?code=${code}`)}
+            className="w-full py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors"
+          >
+            Voir mon inbox →
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

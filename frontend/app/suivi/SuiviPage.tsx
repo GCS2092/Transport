@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { reservationsApi, Reservation, DriverLocation } from '@/lib/api'
+import { reservationsApi, Reservation, DriverLocation, ClientInboxMessage } from '@/lib/api'
 import { formatClientAmount } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n'
 import { updateReservationStatus } from '@/lib/clientStorage'
@@ -38,6 +38,7 @@ function SuiviContent() {
   const [driverLocation, setDriverLocation] = useState<DriverLocation | null>(null)
   const [routeCoordinates, setRouteCoordinates] = useState<Array<[number, number]>>([])
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null)
+  const [inboxMessages, setInboxMessages] = useState<ClientInboxMessage[]>([])
 
   // ─── Renvoi du code d'annulation ───────────────────────────────────────────
   const [resendLoading, setResendLoading] = useState(false)
@@ -112,6 +113,15 @@ function SuiviContent() {
     try {
       const { data } = await reservationsApi.getByCode(c.trim())
       setReservation(data)
+
+      if (data.clientEmail) {
+        try {
+          const inboxRes = await reservationsApi.getInbox(data.code, data.clientEmail)
+          setInboxMessages(inboxRes.data)
+        } catch {
+          setInboxMessages([])
+        }
+      }
 
       // ✅ Nettoyer le code local si course terminée ou annulée
       if (data.status === 'TERMINEE' || data.status === 'ANNULEE') {
@@ -317,9 +327,52 @@ function SuiviContent() {
               </div>
               <div className="mt-3 pt-3 border-t border-[var(--border)] flex justify-between items-center">
                 <span className="text-sm text-[var(--muted)]">{tr.fixedRate}</span>
-                <span className="text-xl font-bold text-[var(--accent)]">{formatClientAmount(reservation.amount, reservation.currency)}</span>
+                <span className="text-xl font-bold text-[var(--accent)]">
+                  {formatClientAmount(reservation.amount, reservation.currency, reservation.pricePending)}
+                </span>
               </div>
+              {reservation.pricePending && (
+                <p className="text-xs text-blue-600 mt-2">
+                  Le tarif vous sera communiqué dans votre inbox ci-dessous.
+                </p>
+              )}
             </div>
+
+            {inboxMessages.length > 0 && (
+              <div className="bg-white rounded-2xl border border-[var(--border)] p-5">
+                <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide mb-3">📬 Inbox</p>
+                <div className="space-y-3">
+                  {inboxMessages.map(msg => (
+                    <div
+                      key={msg.id}
+                      className={`rounded-xl p-3 text-sm ${
+                        msg.messageType === 'PRICE_QUOTE'
+                          ? 'bg-emerald-50 border border-emerald-200'
+                          : 'bg-gray-50 border border-gray-100'
+                      }`}
+                    >
+                      <p className="text-[var(--ink)]">{msg.message}</p>
+                      {msg.quotedAmount != null && Number(msg.quotedAmount) > 0 && (
+                        <p className="text-emerald-700 font-bold mt-1">
+                          {Number(msg.quotedAmount).toLocaleString('fr-FR')} FCFA
+                        </p>
+                      )}
+                      <p className="text-[10px] text-[var(--muted)] mt-1">
+                        {new Date(msg.createdAt).toLocaleString('fr-FR')}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                {!reservation.pricePending && reservation.amount > 0 && (
+                  <a
+                    href={`/reservation/confirmation/${reservation.code}`}
+                    className="mt-4 block w-full py-3 bg-[var(--primary)] text-white rounded-xl text-sm font-bold text-center"
+                  >
+                    Procéder au paiement →
+                  </a>
+                )}
+              </div>
+            )}
 
             <div className="bg-white rounded-2xl border border-[var(--border)] divide-y divide-[var(--border)]">
               {[

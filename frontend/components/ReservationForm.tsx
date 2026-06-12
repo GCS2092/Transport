@@ -1,10 +1,16 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { zonesApi, tariffsApi, reservationsApi, Zone } from '@/lib/api'
+import { zonesApi, reservationsApi, Zone } from '@/lib/api'
 import { useTranslation } from '@/lib/i18n'
 import { saveClientInfo, getClientInfo, addToHistory } from '@/lib/clientStorage'
-import { geocodeAddress } from '@/lib/geocoding'
+import { geocodeAddress, reverseGeocode } from '@/lib/geocoding'
+import {
+  isAirportTrip,
+  DEFAULT_TRIP_PRICES,
+  TripPrices,
+  LocationInputType,
+} from '@/lib/tripPricing'
 
 // Taux de conversion fixes
 const RATES = {
@@ -93,14 +99,18 @@ export function ReservationForm() {
   const [promoCode, setPromoCode] = useState('')
   const [promoDiscount, setPromoDiscount] = useState(0)
   const [promoError, setPromoError] = useState('')
-  const [pickupType, setPickupType] = useState<'zone' | 'custom'>('zone')
-  const [dropoffType, setDropoffType] = useState<'zone' | 'custom'>('zone')
+  const [pickupType, setPickupType] = useState<LocationInputType>('zone')
+  const [dropoffType, setDropoffType] = useState<LocationInputType>('zone')
   const [customPickupAddress, setCustomPickupAddress] = useState('')
   const [customDropoffAddress, setCustomDropoffAddress] = useState('')
   const [pickupCoords, setPickupCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [dropoffCoords, setDropoffCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [geocodingPickup, setGeocodingPickup] = useState(false)
   const [geocodingDropoff, setGeocodingDropoff] = useState(false)
+  const [gpsPickupState, setGpsPickupState] = useState<'idle' | 'loading' | 'ok' | 'denied'>('idle')
+  const [gpsDropoffState, setGpsDropoffState] = useState<'idle' | 'loading' | 'ok' | 'denied'>('idle')
+  const [pricePendingBooking, setPricePendingBooking] = useState(false)
+  const [tripPrices, setTripPrices] = useState<TripPrices>(DEFAULT_TRIP_PRICES)
   const [clientGps, setClientGps] = useState<{ lat: number; lng: number } | null>(null)
   const [gpsState, setGpsState] = useState<'idle' | 'loading' | 'ok' | 'denied'>('idle')
   
@@ -222,6 +232,63 @@ export function ReservationForm() {
 
   const currentCountry = countryOptions.find(c => c.code === countryCode) || countryOptions[0]
 
+  const captureLocationGps = (target: 'pickup' | 'dropoff') => {
+    if (!navigator.geolocation) {
+      if (target === 'pickup') setGpsPickupState('denied')
+      else setGpsDropoffState('denied')
+      return
+    }
+    if (target === 'pickup') setGpsPickupState('loading')
+    else setGpsDropoffState('loading')
+
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        const result = await reverseGeocode(coords.lat, coords.lng)
+        const label = result?.displayName || `GPS (${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)})`
+
+        if (target === 'pickup') {
+          setPickupType('gps')
+          setPickupCoords(coords)
+          setCustomPickupAddress(label)
+          setGpsPickupState('ok')
+        } else {
+          setDropoffType('gps')
+          setDropoffCoords(coords)
+          setCustomDropoffAddress(label)
+          setGpsDropoffState('ok')
+        }
+      },
+      () => {
+        if (target === 'pickup') setGpsPickupState('denied')
+        else setGpsDropoffState('denied')
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    )
+  }
+
+  const hasPickupLocation = () => {
+    if (pickupType === 'zone') return !!formData.pickupZoneId
+    if (pickupType === 'custom') return customPickupAddress.trim().length > 5
+    return !!pickupCoords
+  }
+
+  const hasDropoffLocation = () => {
+    if (dropoffType === 'zone') return !!formData.dropoffZoneId
+    if (dropoffType === 'custom') return customDropoffAddress.trim().length > 5
+    return !!dropoffCoords
+  }
+
+  const getPickupLabel = () => {
+    if (pickupType === 'zone') return zones.find(z => z.id === formData.pickupZoneId)?.name || ''
+    return customPickupAddress
+  }
+
+  const getDropoffLabel = () => {
+    if (dropoffType === 'zone') return zones.find(z => z.id === formData.dropoffZoneId)?.name || ''
+    return customDropoffAddress
+  }
+
   const captureClientGps = () => {
     if (!navigator.geolocation) { setGpsState('denied'); return }
     setGpsState('loading')
@@ -256,26 +323,6 @@ export function ReservationForm() {
   const set = (key: string, val: string | number) =>
     setFormData(prev => ({ ...prev, [key]: val }))
 
-  // Auto-set AIBD for specific trip types
-  useEffect(() => {
-    const aibd = zones.find((z: Zone) => z.name.toLowerCase().includes('aibd'))
-    if (!aibd) return
-
-    if (tripType === 'ALLER_SIMPLE') {
-      // Aller simple: destination forcée à AIBD
-      setDropoffType('zone')
-      set('dropoffZoneId', aibd.id)
-      setCustomDropoffAddress('')
-      setDropoffCoords(null)
-    } else if (tripType === 'RETOUR_SIMPLE') {
-      // Retour simple: départ forcé à AIBD
-      setPickupType('zone')
-      set('pickupZoneId', aibd.id)
-      setCustomPickupAddress('')
-      setPickupCoords(null)
-    }
-  }, [tripType, zones])
-
   // Géocoder l'adresse de départ avec debounce
   useEffect(() => {
     if (pickupType === 'custom' && customPickupAddress.length > 10) {
@@ -309,28 +356,50 @@ export function ReservationForm() {
   useEffect(() => { 
     loadZones()
     loadSavedClientInfo()
+    loadTripPrices()
   }, [])
 
+  const loadTripPrices = async () => {
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1'
+      const res = await fetch(`${apiBase}/settings/prices`)
+      if (res.ok) {
+        const data = await res.json()
+        setTripPrices({ ...DEFAULT_TRIP_PRICES, ...data })
+      }
+    } catch {}
+  }
+
   useEffect(() => {
-    // Prix fixes selon le type de trajet (30000 / 40000)
-    const fixedPrices = {
-      'ALLER_SIMPLE': 30000,
-      'RETOUR_SIMPLE': 30000,
-      'ALLER_RETOUR': 40000,
-    }
-    
-    // A partir de 5 passagers, le prix est doublé (2 véhicules)
     const vehicleCount = getVehicleCount(formData.passengers)
-    
-    // Afficher le prix dès qu'on a au moins une destination valide
-    if ((formData.pickupZoneId || (pickupType === 'custom' && customPickupAddress)) &&
-        (formData.dropoffZoneId || (dropoffType === 'custom' && customDropoffAddress))) {
-      const basePrice = fixedPrices[tripType]
-      setEstimatedPrice(basePrice * vehicleCount)
-    } else {
+    const hasPickup = hasPickupLocation()
+    const hasDropoff = hasDropoffLocation()
+
+    if (!hasPickup || !hasDropoff) {
       setEstimatedPrice(null)
+      return
     }
-  }, [formData.pickupZoneId, formData.dropoffZoneId, formData.passengers, pickupType, dropoffType, customPickupAddress, customDropoffAddress, tripType])
+
+    const involvesAirport = isAirportTrip({
+      zones,
+      pickupZoneId: formData.pickupZoneId,
+      dropoffZoneId: formData.dropoffZoneId,
+      pickupCustomAddress: pickupType !== 'zone' ? customPickupAddress : undefined,
+      dropoffCustomAddress: dropoffType !== 'zone' ? customDropoffAddress : undefined,
+    })
+
+    if (!involvesAirport) {
+      setEstimatedPrice(null)
+      return
+    }
+
+    const basePrice = tripPrices[tripType]
+    setEstimatedPrice(basePrice * vehicleCount)
+  }, [
+    formData.pickupZoneId, formData.dropoffZoneId, formData.passengers,
+    pickupType, dropoffType, customPickupAddress, customDropoffAddress,
+    tripType, tripPrices, pickupCoords, dropoffCoords, zones,
+  ])
 
   const loadZones = async () => {
   try {
@@ -365,21 +434,8 @@ export function ReservationForm() {
   }
 
   const validateStep1 = () => {
-    // Vérifier que le départ est bien défini (zone OU adresse personnalisée)
-    // Pour RETOUR_SIMPLE, le départ est forcé à AIBD donc toujours valide
-    const hasPickup = tripType === 'RETOUR_SIMPLE'
-      ? true
-      : (pickupType === 'zone'
-        ? formData.pickupZoneId
-        : (customPickupAddress.trim().length > 5))
-
-    // Vérifier que l'arrivée est bien définie (zone OU adresse personnalisée)
-    // Pour ALLER_SIMPLE, l'arrivée est forcée à AIBD donc toujours valide
-    const hasDropoff = tripType === 'ALLER_SIMPLE'
-      ? true
-      : (dropoffType === 'zone'
-        ? formData.dropoffZoneId
-        : (customDropoffAddress.trim().length > 5))
+    const hasPickup = hasPickupLocation()
+    const hasDropoff = hasDropoffLocation()
 
     if (!hasPickup || !hasDropoff) return f.selectZones
     
@@ -388,8 +444,8 @@ export function ReservationForm() {
       return f.differentZones
     }
     
-    // Vérifier que les adresses personnalisées ne sont pas identiques
-    if (pickupType === 'custom' && dropoffType === 'custom' && 
+    // Vérifier que les adresses personnalisées/GPS ne sont pas identiques
+    if (pickupType !== 'zone' && dropoffType !== 'zone' && 
         customPickupAddress.trim().toLowerCase() === customDropoffAddress.trim().toLowerCase()) {
       return f.differentZones
     }
@@ -471,31 +527,31 @@ export function ReservationForm() {
     : undefined,
 }
       
-      // Gérer les adresses personnalisées
-      if (pickupType === 'custom') {
+      // Gérer les adresses personnalisées ou GPS
+      if (pickupType === 'zone') {
+        delete payload.pickupCustomAddress
+        delete payload.pickupLatitude
+        delete payload.pickupLongitude
+      } else {
         payload.pickupCustomAddress = customPickupAddress
         delete payload.pickupZoneId
         if (pickupCoords) {
           payload.pickupLatitude = pickupCoords.lat
           payload.pickupLongitude = pickupCoords.lng
         }
-      } else {
-        delete payload.pickupCustomAddress
-        delete payload.pickupLatitude
-        delete payload.pickupLongitude
       }
       
-      if (dropoffType === 'custom') {
+      if (dropoffType === 'zone') {
+        delete payload.dropoffCustomAddress
+        delete payload.dropoffLatitude
+        delete payload.dropoffLongitude
+      } else {
         payload.dropoffCustomAddress = customDropoffAddress
         delete payload.dropoffZoneId
         if (dropoffCoords) {
           payload.dropoffLatitude = dropoffCoords.lat
           payload.dropoffLongitude = dropoffCoords.lng
         }
-      } else {
-        delete payload.dropoffCustomAddress
-        delete payload.dropoffLatitude
-        delete payload.dropoffLongitude
       }
       
       if (tripType !== 'ALLER_RETOUR') delete payload.returnDateTime
@@ -566,6 +622,7 @@ export function ReservationForm() {
       
       setSuccess(true)
       setReservationCode(data.code)
+      setPricePendingBooking(!!data.pricePending)
       try {
         localStorage.setItem('vtc_last_code', data.code)
       } catch {}
@@ -590,14 +647,30 @@ export function ReservationForm() {
     setStep(1)
     setError('')
     setEstimatedPrice(null)
+    setPricePendingBooking(false)
+    setPickupType('zone')
+    setDropoffType('zone')
+    setCustomPickupAddress('')
+    setCustomDropoffAddress('')
+    setPickupCoords(null)
+    setDropoffCoords(null)
+    setGpsPickupState('idle')
+    setGpsDropoffState('idle')
     setFormData({ clientFirstName: '', clientLastName: '', clientEmail: '', clientPhone: '', pickupZoneId: '', dropoffZoneId: '', pickupDateTime: '', returnDateTime: '', passengers: 1, flightNumber: '', airlineCompany: '', departureTime: '', landingTime: '', flightDetails: '', notes: '' })
   }
 
   /* ══════════════════════════════════════════════════════════════
      ÉCRAN DE SUCCÈS - Redirection vers confirmation paiement
   ══════════════════════════════════════════════════════════════ */
-  const pickupName  = pickupType === 'custom' ? customPickupAddress : (zones.find(z => z.id === formData.pickupZoneId)?.name ?? '')
-  const dropoffName = dropoffType === 'custom' ? customDropoffAddress : (zones.find(z => z.id === formData.dropoffZoneId)?.name ?? '')
+  const pickupName  = getPickupLabel()
+  const dropoffName = getDropoffLabel()
+  const isQuotePendingPreview = hasPickupLocation() && hasDropoffLocation() && !isAirportTrip({
+    zones,
+    pickupZoneId: formData.pickupZoneId,
+    dropoffZoneId: formData.dropoffZoneId,
+    pickupCustomAddress: pickupType !== 'zone' ? customPickupAddress : undefined,
+    dropoffCustomAddress: dropoffType !== 'zone' ? customDropoffAddress : undefined,
+  })
 
   if (success) {
     return (
@@ -621,9 +694,21 @@ export function ReservationForm() {
             <p className="text-4xl font-mono font-bold text-emerald-600 mb-4">{reservationCode}</p>
             <p className="text-sm text-gray-600 mb-4">
               {pickupName} → {dropoffName}
-              <span className="mx-2">•</span>
-              {estimatedPrice && formatPriceCurrency(estimatedPrice, currency)}
+              {!pricePendingBooking && estimatedPrice && (
+                <>
+                  <span className="mx-2">•</span>
+                  {formatPriceCurrency(estimatedPrice, currency)}
+                </>
+              )}
             </p>
+            {(pricePendingBooking || isQuotePendingPreview) && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-left">
+                <p className="text-sm text-blue-800">
+                  <span className="font-semibold">📬 Tarif sur devis</span><br/>
+                  Le prix de votre course interurbaine vous sera communiqué prochainement dans votre inbox (page Suivi).
+                </p>
+              </div>
+            )}
             <p className="text-xs text-gray-500 mb-2">
               {f.successSubtitle} {formData.clientEmail}
             </p>
@@ -756,42 +841,28 @@ export function ReservationForm() {
               </div>
 
               <Field label={f.departure}>
-                {/* Pour RETOUR_SIMPLE, le départ est forcé à AIBD */}
-                {tripType === 'RETOUR_SIMPLE' ? (
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600"><IconMapPin /></div>
-                    <input 
-                      type="text" 
-                      value="Aéroport International Blaise Diagne (AIBD)" 
-                      disabled 
-                      className={inputCls + ' pl-9 bg-emerald-50 border-emerald-200 text-emerald-700 cursor-not-allowed'}
-                    />
-                  </div>
-                ) : (
-                  <>
-                <div className="mb-2 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPickupType('zone')}
-                    className={`flex-1 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                      pickupType === 'zone'
-                        ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
-                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    Zone prédéfinie
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPickupType('custom')}
-                    className={`flex-1 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                      pickupType === 'custom'
-                        ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
-                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    Adresse personnalisée
-                  </button>
+                <div className="mb-2 grid grid-cols-3 gap-2">
+                  {([
+                    { value: 'zone' as LocationInputType, label: 'Zone' },
+                    { value: 'custom' as LocationInputType, label: 'Adresse' },
+                    { value: 'gps' as LocationInputType, label: 'GPS' },
+                  ]).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        setPickupType(opt.value)
+                        if (opt.value === 'gps') captureLocationGps('pickup')
+                      }}
+                      className={`py-2 px-2 rounded-lg border text-xs font-semibold transition-all ${
+                        pickupType === opt.value
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
                 
                 {pickupType === 'zone' ? (
@@ -802,33 +873,47 @@ export function ReservationForm() {
                       {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
                     </select>
                   </div>
-                ) : (
+                ) : pickupType === 'custom' ? (
                   <div>
                     <input
                       type="text"
                       value={customPickupAddress}
                       onChange={e => setCustomPickupAddress(e.target.value)}
-                      placeholder="Ex: Rue 10, Sicap Liberté, Dakar"
+                      placeholder="Ex: Rue 10, Sicap Liberté, Dakar — ou Thiès, Saint-Louis..."
                       className={inputCls}
                     />
                     {geocodingPickup && (
-                      <p className="text-xs text-blue-600 mt-1">
-                        🔍 Recherche de l'adresse...
-                      </p>
+                      <p className="text-xs text-blue-600 mt-1">🔍 Recherche de l'adresse...</p>
                     )}
                     {!geocodingPickup && pickupCoords && (
-                      <p className="text-xs text-emerald-600 mt-1">
-                        ✓ Adresse localisée
-                      </p>
-                    )}
-                    {!geocodingPickup && !pickupCoords && customPickupAddress.length > 10 && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        📍 Entrez l'adresse complète avec le quartier
-                      </p>
+                      <p className="text-xs text-emerald-600 mt-1">✓ Adresse localisée</p>
                     )}
                   </div>
-                )}
-                </>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-emerald-300 bg-emerald-50/50 p-3">
+                    {gpsPickupState === 'loading' && (
+                      <p className="text-xs text-blue-600 text-center">🔄 Localisation en cours…</p>
+                    )}
+                    {gpsPickupState === 'ok' && pickupCoords && (
+                      <div>
+                        <p className="text-xs text-emerald-700 font-semibold">✓ Position GPS enregistrée</p>
+                        <p className="text-xs text-gray-600 mt-1">{customPickupAddress}</p>
+                      </div>
+                    )}
+                    {gpsPickupState === 'denied' && (
+                      <p className="text-xs text-red-600 text-center">Localisation refusée — autorisez le GPS ou saisissez une adresse</p>
+                    )}
+                    {gpsPickupState === 'idle' && (
+                      <button type="button" onClick={() => captureLocationGps('pickup')} className="w-full text-xs font-semibold text-emerald-700">
+                        📍 Utiliser ma position actuelle
+                      </button>
+                    )}
+                    {(gpsPickupState === 'ok' || gpsPickupState === 'denied') && (
+                      <button type="button" onClick={() => captureLocationGps('pickup')} className="w-full mt-2 text-xs text-gray-500 underline">
+                        Actualiser la position
+                      </button>
+                    )}
+                  </div>
                 )}
               </Field>
 
@@ -839,42 +924,28 @@ export function ReservationForm() {
               </div>
 
               <Field label={f.arrival}>
-                {/* Pour ALLER_SIMPLE, la destination est forcée à AIBD */}
-                {tripType === 'ALLER_SIMPLE' ? (
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600"><IconMapPin /></div>
-                    <input 
-                      type="text" 
-                      value="Aéroport International Blaise Diagne (AIBD)" 
-                      disabled 
-                      className={inputCls + ' pl-9 bg-emerald-50 border-emerald-200 text-emerald-700 cursor-not-allowed'}
-                    />
-                  </div>
-                ) : (
-                  <>
-                <div className="mb-2 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDropoffType('zone')}
-                    className={`flex-1 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                      dropoffType === 'zone'
-                        ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
-                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    Zone prédéfinie
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDropoffType('custom')}
-                    className={`flex-1 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                      dropoffType === 'custom'
-                        ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
-                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    Adresse personnalisée
-                  </button>
+                <div className="mb-2 grid grid-cols-3 gap-2">
+                  {([
+                    { value: 'zone' as LocationInputType, label: 'Zone' },
+                    { value: 'custom' as LocationInputType, label: 'Adresse' },
+                    { value: 'gps' as LocationInputType, label: 'GPS' },
+                  ]).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        setDropoffType(opt.value)
+                        if (opt.value === 'gps') captureLocationGps('dropoff')
+                      }}
+                      className={`py-2 px-2 rounded-lg border text-xs font-semibold transition-all ${
+                        dropoffType === opt.value
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
                 
                 {dropoffType === 'zone' ? (
@@ -885,33 +956,47 @@ export function ReservationForm() {
                       {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
                     </select>
                   </div>
-                ) : (
+                ) : dropoffType === 'custom' ? (
                   <div>
                     <input
                       type="text"
                       value={customDropoffAddress}
                       onChange={e => setCustomDropoffAddress(e.target.value)}
-                      placeholder="Ex: Avenue Bourguiba, Plateau, Dakar"
+                      placeholder="Ex: Avenue Bourguiba, Plateau — ou Thiès, Touba..."
                       className={inputCls}
                     />
                     {geocodingDropoff && (
-                      <p className="text-xs text-blue-600 mt-1">
-                        🔍 Recherche de l'adresse...
-                      </p>
+                      <p className="text-xs text-blue-600 mt-1">🔍 Recherche de l'adresse...</p>
                     )}
                     {!geocodingDropoff && dropoffCoords && (
-                      <p className="text-xs text-emerald-600 mt-1">
-                        ✓ Adresse localisée
-                      </p>
-                    )}
-                    {!geocodingDropoff && !dropoffCoords && customDropoffAddress.length > 10 && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        📍 Entrez l'adresse complète avec le quartier
-                      </p>
+                      <p className="text-xs text-emerald-600 mt-1">✓ Adresse localisée</p>
                     )}
                   </div>
-                )}
-                </>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-emerald-300 bg-emerald-50/50 p-3">
+                    {gpsDropoffState === 'loading' && (
+                      <p className="text-xs text-blue-600 text-center">🔄 Localisation en cours…</p>
+                    )}
+                    {gpsDropoffState === 'ok' && dropoffCoords && (
+                      <div>
+                        <p className="text-xs text-emerald-700 font-semibold">✓ Position GPS enregistrée</p>
+                        <p className="text-xs text-gray-600 mt-1">{customDropoffAddress}</p>
+                      </div>
+                    )}
+                    {gpsDropoffState === 'denied' && (
+                      <p className="text-xs text-red-600 text-center">Localisation refusée — autorisez le GPS ou saisissez une adresse</p>
+                    )}
+                    {gpsDropoffState === 'idle' && (
+                      <button type="button" onClick={() => captureLocationGps('dropoff')} className="w-full text-xs font-semibold text-emerald-700">
+                        📍 Utiliser ma position actuelle
+                      </button>
+                    )}
+                    {(gpsDropoffState === 'ok' || gpsDropoffState === 'denied') && (
+                      <button type="button" onClick={() => captureLocationGps('dropoff')} className="w-full mt-2 text-xs text-gray-500 underline">
+                        Actualiser la position
+                      </button>
+                    )}
+                  </div>
                 )}
               </Field>
             </div>
@@ -973,14 +1058,23 @@ export function ReservationForm() {
               </Field>
             </div>
 
-            {estimatedPrice && (
+            {(estimatedPrice || isQuotePendingPreview) && (
               <div className="mx-5 mb-5 rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-gray-500 font-medium">{f.fixedRate}</p>
-                  {formData.passengers > 4 && (
-                    <p className="text-xs text-amber-600 mt-0.5">
-                      ⚠️ {getVehicleCount(formData.passengers)} vehicules necessaires
-                    </p>
+                  {isQuotePendingPreview ? (
+                    <>
+                      <p className="text-xs text-blue-600 font-medium">Course interurbaine</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Tarif communiqué par inbox après réservation</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs text-gray-500 font-medium">{f.fixedRate}</p>
+                      {formData.passengers > 4 && (
+                        <p className="text-xs text-amber-600 mt-0.5">
+                          ⚠️ {getVehicleCount(formData.passengers)} vehicules necessaires
+                        </p>
+                      )}
+                    </>
                   )}
                   {pickupName && dropoffName && (
                     <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
@@ -991,11 +1085,14 @@ export function ReservationForm() {
                   )}
                 </div>
                 <div className="text-right">
-                  <p className="text-xl font-bold text-gray-900">{formatPriceCurrency(estimatedPrice, currency)}</p>
-                  <p className="text-xs text-gray-400">{formatPriceDetail(estimatedPrice, currency)}</p>
-                  {formData.passengers > 4 && (
-                    <p className="text-xs text-amber-600">Prix double (2 vehicules)</p>
-                  )}
+                  {isQuotePendingPreview ? (
+                    <p className="text-sm font-bold text-blue-700">Sur devis</p>
+                  ) : estimatedPrice ? (
+                    <>
+                      <p className="text-xl font-bold text-gray-900">{formatPriceCurrency(estimatedPrice, currency)}</p>
+                      <p className="text-xs text-gray-400">{formatPriceDetail(estimatedPrice, currency)}</p>
+                    </>
+                  ) : null}
                 </div>
               </div>
             )}
@@ -1016,6 +1113,9 @@ export function ReservationForm() {
                 </div>
                 {estimatedPrice && (
                   <span className="text-emerald-300 font-bold text-sm flex-shrink-0 ml-3">{formatPriceCurrency(estimatedPrice, currency)}</span>
+                )}
+                {isQuotePendingPreview && (
+                  <span className="text-blue-200 font-bold text-sm flex-shrink-0 ml-3">Sur devis</span>
                 )}
               </div>
             )}
@@ -1204,6 +1304,7 @@ export function ReservationForm() {
               </Field>
 
               <Field label="Code promo (optionnel)">
+                {!isQuotePendingPreview ? (
                 <div className="space-y-2">
                   <input 
                     type="text" 
@@ -1219,6 +1320,9 @@ export function ReservationForm() {
                     <p className="text-xs text-red-600">{promoError}</p>
                   )}
                 </div>
+                ) : (
+                  <p className="text-xs text-gray-500">Non applicable aux courses interurbaines (tarif sur devis).</p>
+                )}
               </Field>
 
               {/* GPS client optionnel */}

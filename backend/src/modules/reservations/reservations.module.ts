@@ -7,7 +7,10 @@ import { MonthlyReportService } from './monthly-report.service';
 import { Reservation } from './entities/reservation.entity';
 import { ReservationArchive } from './entities/reservation-archive.entity';
 import { DriverProposal } from './entities/driver-proposal.entity';
+import { ClientInboxMessage } from './entities/client-inbox-message.entity';
 import { DriverLocation } from '../drivers/entities/driver-location.entity';
+import { Zone } from '../zones/entities/zone.entity';
+import { InboxService } from './inbox.service';
 import { TariffsModule } from '../tariffs/tariffs.module';
 import { SettingsModule } from '../settings/settings.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -19,7 +22,7 @@ import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Reservation, ReservationArchive, DriverLocation, DriverProposal]),
+    TypeOrmModule.forFeature([Reservation, ReservationArchive, DriverLocation, DriverProposal, ClientInboxMessage, Zone]),
     JwtModule,          // ← ajoute cette ligne
     TariffsModule,
     SettingsModule,
@@ -31,7 +34,7 @@ import { UsersModule } from '../users/users.module';
     UsersModule,
   ],
   controllers: [ReservationsController],
-  providers: [ReservationsService, MonthlyReportService],
-  exports: [ReservationsService, MonthlyReportService],
+  providers: [ReservationsService, MonthlyReportService, InboxService],
+  exports: [ReservationsService, MonthlyReportService, InboxService],
 })
 export class ReservationsModule {}

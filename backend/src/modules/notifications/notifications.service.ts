@@ -215,6 +215,9 @@ export class NotificationsService {
   };
 
   private formatClientAmount(reservation: Reservation): string {
+    if (reservation.pricePending) {
+      return this.t(reservation.language, 'Tarif à confirmer (inbox)', 'Price to be confirmed (inbox)');
+    }
     const amount = Number(reservation.amount);
     const currency = reservation.currency;
     if (currency && this.RATES[currency]) {
@@ -303,6 +306,16 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">${this.t(lang, 'Destination', 'To')}</td><td style="padding:8px;border-bottom:1px solid #eee;">${dropoff}</td></tr>
         <tr><td style="padding:8px;color:#666;font-weight:bold;">${this.t(lang, 'Montant', 'Amount')}</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${this.formatClientAmount(reservation)}</td></tr>
       </table>
+      ${reservation.pricePending ? `
+      <div style="margin:16px 0;padding:16px;background:#eff6ff;border-left:4px solid #2563eb;border-radius:6px;">
+        <p style="margin:0;font-size:14px;color:#1e40af;">
+          ${this.t(
+            lang,
+            'Pour cette course interurbaine, le tarif vous sera communiqué prochainement dans votre <strong>inbox</strong> sur la page Suivi.',
+            'For this interurban trip, the price will be communicated shortly in your <strong>inbox</strong> on the Tracking page.',
+          )}
+        </p>
+      </div>` : ''}
       ${reservation.cancelToken ? `
       <div style="margin:20px 0;padding:16px;background:#fff8e1;border:2px dashed #f59e0b;border-radius:8px;text-align:center;">
         <p style="margin:0 0 8px;font-size:12px;color:#92400e;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">
@@ -338,6 +351,46 @@ export class NotificationsService {
         `Votre réservation ${reservation.code} est confirmée.`,
         `Your booking ${reservation.code} is confirmed.`,
       ),
+      { reservationCode: reservation.code },
+    );
+  }
+
+  async sendPriceQuoteToClient(reservation: Reservation, amount: number): Promise<void> {
+    const lang = reservation.language;
+    const title = this.t(lang, 'Tarif de votre course', 'Your trip price');
+    const displayAmount = `${amount.toLocaleString('fr-FR')} FCFA`;
+    const body = `
+      <p>${this.t(lang, `Bonjour <strong>${reservation.clientFirstName}</strong>,`, `Hello <strong>${reservation.clientFirstName}</strong>,`)}</p>
+      <p>${this.t(
+        lang,
+        `Le tarif de votre réservation <strong>${reservation.code}</strong> a été fixé.`,
+        `The price for your booking <strong>${reservation.code}</strong> has been set.`,
+      )}</p>
+      <p style="font-size:24px;font-weight:bold;color:#15803d;margin:16px 0;">${displayAmount}</p>
+      <p>${this.t(
+        lang,
+        'Consultez votre inbox sur la page Suivi pour les détails et procédez au paiement.',
+        'Check your inbox on the Tracking page for details and proceed with payment.',
+      )}</p>
+      <p style="margin-top:16px;">
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:3001'}/suivi?code=${reservation.code}"
+           style="display:inline-block;padding:10px 20px;background:#1a1a2e;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">
+          ${this.t(lang, 'Voir mon inbox', 'View my inbox')}
+        </a>
+      </p>`;
+
+    await this.sendEmail(
+      reservation.clientEmail,
+      `${title} — #${reservation.code}`,
+      this.buildEmailHtml(reservation, title, body),
+      NotificationType.PRICE_QUOTE,
+      reservation.id,
+    );
+
+    await this.sendPushNotification(
+      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
+      title,
+      this.t(lang, `Tarif fixé : ${displayAmount}`, `Price set: ${displayAmount}`),
       { reservationCode: reservation.code },
     );
   }

@@ -17,6 +17,7 @@ import {
 import { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { ReservationsService } from './reservations.service';
+import { InboxService } from './inbox.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { CancelReservationDto } from './dto/cancel-reservation.dto';
@@ -35,12 +36,31 @@ export class ReservationsController {
   constructor(
     private reservationsService: ReservationsService,
     private driversService: DriversService,
+    private inboxService: InboxService,
   ) {}
 
   @Post()
   @Throttle({ default: { limit: 10, ttl: 3600000 } })
   create(@Body() dto: CreateReservationDto) {
     return this.reservationsService.create(dto);
+  }
+
+  @Get('code/:code/inbox')
+  getInbox(@Param('code') code: string, @Query('email') email: string) {
+    if (!email?.trim()) {
+      throw new BadRequestException('Email is required');
+    }
+    return this.inboxService.getMessagesForReservation(code, email);
+  }
+
+  @Post(':id/inbox/quote')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  sendPriceQuote(
+    @Param('id') id: string,
+    @Body() body: { amount: number; message?: string },
+  ) {
+    return this.inboxService.sendPriceQuote(id, body.amount, body.message);
   }
 
   @Get('code/:code')

@@ -11,6 +11,45 @@ const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
 
 // Cache pour éviter les requêtes répétées
 const geocodeCache = new Map<string, GeocodingResult>()
+const reverseGeocodeCache = new Map<string, GeocodingResult>()
+
+const NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse'
+
+export async function reverseGeocode(lat: number, lng: number): Promise<GeocodingResult | null> {
+  const cacheKey = `${lat.toFixed(5)},${lng.toFixed(5)}`
+  const cached = reverseGeocodeCache.get(cacheKey)
+  if (cached) return cached
+
+  try {
+    const params = new URLSearchParams({
+      lat: String(lat),
+      lon: String(lng),
+      format: 'json',
+      addressdetails: '1',
+    })
+
+    const response = await fetch(`${NOMINATIM_REVERSE_URL}?${params}`, {
+      headers: { 'User-Agent': 'VTC-Dakar-App/1.0' },
+    })
+
+    if (!response.ok) return null
+
+    const data = await response.json()
+    if (!data?.lat || !data?.lon) return null
+
+    const result: GeocodingResult = {
+      lat: parseFloat(data.lat),
+      lng: parseFloat(data.lon),
+      displayName: data.display_name || `Position GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+    }
+
+    reverseGeocodeCache.set(cacheKey, result)
+    return result
+  } catch (error) {
+    console.error('Reverse geocoding error:', error)
+    return null
+  }
+}
 
 export async function geocodeAddress(address: string): Promise<GeocodingResult | null> {
   // Vérifier le cache
@@ -18,10 +57,11 @@ export async function geocodeAddress(address: string): Promise<GeocodingResult |
   if (cached) return cached
 
   try {
-    // Ajouter "Dakar, Sénégal" si pas déjà présent
-    const searchQuery = address.toLowerCase().includes('dakar') 
-      ? address 
-      : `${address}, Dakar, Sénégal`
+    // Ajouter le pays si pas déjà présent (interurbain : Thiès, Saint-Louis, etc.)
+    const lower = address.toLowerCase()
+    const searchQuery = lower.includes('sénégal') || lower.includes('senegal')
+      ? address
+      : `${address}, Sénégal`
 
     const params = new URLSearchParams({
       q: searchQuery,

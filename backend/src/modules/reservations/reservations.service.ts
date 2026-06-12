@@ -28,6 +28,10 @@ import { Language } from '../../common/enums/language.enum';
 import { TripType } from '../../common/enums/trip-type.enum';
 import { createHash } from 'crypto';
 import * as ExcelJS from 'exceljs';
+import { isAirportTrip } from '../../common/utils/trip-pricing.util';
+import { InboxService } from './inbox.service';
+import { InboxMessageType } from './entities/client-inbox-message.entity';
+import { Zone } from '../zones/entities/zone.entity';
 
 export interface FindAllFilters {
   page?: number;
@@ -59,7 +63,10 @@ export class ReservationsService {
     private driverLocationRepository: Repository<DriverLocation>,
     @InjectRepository(DriverProposal)
     private driverProposalRepository: Repository<DriverProposal>,
+    @InjectRepository(Zone)
+    private zonesRepository: Repository<Zone>,
     private settingsService: SettingsService,
+    private inboxService: InboxService,
     private notificationsService: NotificationsService,
     private pdfService: PdfService,
     private driversService: DriversService,
@@ -90,13 +97,45 @@ export class ReservationsService {
     return passengers >= 5 ? 2 : 1;
   }
 
-  private getFixedBasePriceForTripType(tripType: TripType): number {
-    const fixedPrices: Record<TripType, number> = {
-      [TripType.ALLER_SIMPLE]: 30000,
-      [TripType.RETOUR_SIMPLE]: 30000,
-      [TripType.ALLER_RETOUR]: 40000,
-    };
-    return fixedPrices[tripType] ?? 30000;
+  private async recomputePricing(params: {
+    tripType: TripType;
+    passengers: number;
+    pickupZone?: Zone | null;
+    dropoffZone?: Zone | null;
+    pickupCustomAddress?: string | null;
+    dropoffCustomAddress?: string | null;
+  }): Promise<{ amount: number; pricePending: boolean; vehicleCount: number }> {
+    const vehicleCount = this.getVehicleCountByPassengers(params.passengers);
+    const involvesAirport = isAirportTrip({
+      pickupZone: params.pickupZone,
+      dropoffZone: params.dropoffZone,
+      pickupCustomAddress: params.pickupCustomAddress,
+      dropoffCustomAddress: params.dropoffCustomAddress,
+    });
+
+    if (!involvesAirport) {
+      return { amount: 0, pricePending: true, vehicleCount };
+    }
+
+    const basePrice = await this.getFixedBasePriceForTripType(params.tripType);
+    return { amount: basePrice * vehicleCount, pricePending: false, vehicleCount };
+  }
+
+  private async getFixedBasePriceForTripType(tripType: TripType): Promise<number> {
+    return this.settingsService.getPriceForTripType(tripType);
+  }
+
+  private async resolveTripZones(dto: CreateReservationDto): Promise<{
+    pickupZone: Zone | null;
+    dropoffZone: Zone | null;
+  }> {
+    const pickupZone = dto.pickupZoneId
+      ? await this.zonesRepository.findOne({ where: { id: dto.pickupZoneId } })
+      : null;
+    const dropoffZone = dto.dropoffZoneId
+      ? await this.zonesRepository.findOne({ where: { id: dto.dropoffZoneId } })
+      : null;
+    return { pickupZone, dropoffZone };
   }
 
   async create(dto: CreateReservationDto): Promise<Reservation> {
@@ -107,16 +146,33 @@ export class ReservationsService {
       throw new BadRequestException('Dropoff zone or custom address is required');
     }
 
-    const basePrice = this.getFixedBasePriceForTripType(dto.tripType);
-    
-    // A partir de 5 passagers, la course est facturee avec 2 vehicules
+    const { pickupZone, dropoffZone } = await this.resolveTripZones(dto);
+    const involvesAirport = isAirportTrip({
+      pickupZone,
+      dropoffZone,
+      pickupCustomAddress: dto.pickupCustomAddress,
+      dropoffCustomAddress: dto.dropoffCustomAddress,
+    });
+
     const passengers = dto.passengers || 1;
     const calculatedVehicleCount = this.getVehicleCountByPassengers(passengers);
     const vehicleCount = dto.vehicleCount || calculatedVehicleCount;
-    
-    // Prix final = prix de base × nombre de véhicules
-    const finalPrice = basePrice * vehicleCount;
-    this.logger.log(`Using fixed price for ${dto.tripType}: ${basePrice} FCFA x ${vehicleCount} vehicle(s) = ${finalPrice} FCFA`);
+
+    let finalPrice = 0;
+    let pricePending = false;
+
+    if (involvesAirport) {
+      const basePrice = await this.getFixedBasePriceForTripType(dto.tripType);
+      finalPrice = basePrice * vehicleCount;
+      this.logger.log(
+        `Airport trip — fixed price for ${dto.tripType}: ${basePrice} FCFA x ${vehicleCount} vehicle(s) = ${finalPrice} FCFA`,
+      );
+    } else {
+      pricePending = true;
+      this.logger.log(
+        `Non-airport / interurban trip — price pending, will be communicated via inbox (${dto.tripType})`,
+      );
+    }
 
     await this.checkDailyLimit(dto.clientEmail);
 
@@ -137,6 +193,9 @@ export class ReservationsService {
     let originalAmount = null;
 
     if (dto.promoCode) {
+      if (pricePending) {
+        throw new BadRequestException('Les codes promo ne sont pas applicables aux courses interurbaines');
+      }
       const promoResult = await this.promoCodesService.validateAndApply(dto.promoCode, finalPrice);
       if (promoResult.valid) {
         discount = promoResult.discount;
@@ -153,6 +212,7 @@ export class ReservationsService {
       ...dto,
       code,
       amount: finalAmount,
+      pricePending,
       originalAmount,
       discount,
       promoCode,
@@ -168,6 +228,18 @@ export class ReservationsService {
     });
 
     const saved = await this.reservationsRepository.save(reservation);
+
+    if (pricePending) {
+      const isFr = (dto.language || Language.FR) === Language.FR;
+      await this.inboxService.createMessage({
+        reservationId: saved.id,
+        clientEmail: dto.clientEmail,
+        message: isFr
+          ? 'Votre réservation interurbaine a bien été enregistrée. Le tarif de votre course vous sera communiqué prochainement dans cette inbox. Merci de votre patience.'
+          : 'Your interurban booking has been recorded. The price for your trip will be communicated shortly in this inbox. Thank you for your patience.',
+        messageType: InboxMessageType.SYSTEM,
+      });
+    }
 
     // ✅ FIX : recharger avec les relations pour que l'email ait accès aux zones et au cancelToken
     const savedWithRelations = await this.findById(saved.id);
@@ -519,18 +591,26 @@ export class ReservationsService {
     if (updates.passengers) updateData.passengers = updates.passengers;
     if (updates.notes !== undefined) updateData.notes = updates.notes;
 
-    if (updates.tripType || updates.pickupZoneId || updates.dropoffZoneId) {
-      const tripType = updates.tripType || reservation.tripType;
-      updateData.amount = this.getFixedBasePriceForTripType(tripType as TripType);
-    }
-
-    if (updates.passengers) {
-      const passengerCount = Number(updates.passengers) || reservation.passengers || 1;
-      const vehicleCount = this.getVehicleCountByPassengers(passengerCount);
+    if (updates.tripType || updates.pickupZoneId || updates.dropoffZoneId || updates.passengers) {
       const tripType = (updates.tripType || reservation.tripType) as TripType;
-      const basePrice = this.getFixedBasePriceForTripType(tripType);
-      updateData.vehicleCount = vehicleCount;
-      updateData.amount = basePrice * vehicleCount;
+      const passengerCount = Number(updates.passengers) || reservation.passengers || 1;
+      const pickupZone = updates.pickupZoneId
+        ? await this.zonesRepository.findOne({ where: { id: updates.pickupZoneId } })
+        : reservation.pickupZone;
+      const dropoffZone = updates.dropoffZoneId
+        ? await this.zonesRepository.findOne({ where: { id: updates.dropoffZoneId } })
+        : reservation.dropoffZone;
+      const pricing = await this.recomputePricing({
+        tripType,
+        passengers: passengerCount,
+        pickupZone,
+        dropoffZone,
+        pickupCustomAddress: reservation.pickupCustomAddress,
+        dropoffCustomAddress: reservation.dropoffCustomAddress,
+      });
+      updateData.vehicleCount = pricing.vehicleCount;
+      updateData.amount = pricing.amount;
+      updateData.pricePending = pricing.pricePending;
     }
 
     await this.reservationsRepository.update(reservation.id, updateData);
@@ -910,13 +990,26 @@ export class ReservationsService {
       updates.pickupZoneId !== undefined ||
       updates.dropoffZoneId !== undefined;
 
-    if (shouldRecomputeAmount) {
+    if (shouldRecomputeAmount && !reservation.pricePending) {
       const passengerCount = Number(updates.passengers) || reservation.passengers || 1;
-      const vehicleCount = this.getVehicleCountByPassengers(passengerCount);
       const tripType = (updates.tripType || reservation.tripType) as TripType;
-      const basePrice = this.getFixedBasePriceForTripType(tripType);
-      updateData.vehicleCount = vehicleCount;
-      updateData.amount = basePrice * vehicleCount;
+      const pickupZone = updates.pickupZoneId
+        ? await this.zonesRepository.findOne({ where: { id: updates.pickupZoneId } })
+        : reservation.pickupZone;
+      const dropoffZone = updates.dropoffZoneId
+        ? await this.zonesRepository.findOne({ where: { id: updates.dropoffZoneId } })
+        : reservation.dropoffZone;
+      const pricing = await this.recomputePricing({
+        tripType,
+        passengers: passengerCount,
+        pickupZone,
+        dropoffZone,
+        pickupCustomAddress: updates.pickupCustomAddress ?? reservation.pickupCustomAddress,
+        dropoffCustomAddress: updates.dropoffCustomAddress ?? reservation.dropoffCustomAddress,
+      });
+      updateData.vehicleCount = pricing.vehicleCount;
+      updateData.amount = pricing.amount;
+      updateData.pricePending = pricing.pricePending;
     }
 
     await this.reservationsRepository.update(id, updateData);

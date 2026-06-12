@@ -134,6 +134,10 @@ export class Reservation {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   amount: number;
 
+  /** true = tarif interurbain / hors aéroport, communiqué plus tard via inbox */
+  @Column({ default: false })
+  pricePending: boolean;
+
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   originalAmount: number;
 

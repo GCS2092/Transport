@@ -31,7 +31,8 @@ export function formatReservationAmount(amount: number, currency?: string | null
   return target === 'EUR' ? `€${converted}` : `$${converted}`
 }
 
-export function formatClientAmount(amount: number, currency?: string | null): string {
+export function formatClientAmount(amount: number, currency?: string | null, pricePending?: boolean): string {
+  if (pricePending) return 'Tarif à confirmer'
   const { currency: target, converted } = convertFromXof(amount, currency)
   return target === 'EUR' ? `€${converted}` : `$${converted}`
 }

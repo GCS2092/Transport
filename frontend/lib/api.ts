@@ -212,6 +212,7 @@ export interface Reservation {
   landingTime?: string
   flightDetails?: string
   currency?: string
+  pricePending?: boolean
   paymentUpdatedBy?: 'DRIVER' | 'ADMIN' | null
   paymentUpdatedByName?: string | null
   paymentUpdatedAt?: string | null
@@ -413,6 +414,26 @@ export const reservationsApi = {
 
   updateReservation: (id: string, updates: Partial<CreateReservationDto>) =>
     api.patch<Reservation>(`/reservations/${id}`, updates),
+
+  getInbox: (code: string, email: string) =>
+    api.get<ClientInboxMessage[]>(`/reservations/code/${code}/inbox`, { params: { email } }),
+
+  sendPriceQuote: (id: string, amount: number, message?: string) =>
+    api.post<{ reservation: Reservation; inboxMessage: ClientInboxMessage }>(
+      `/reservations/${id}/inbox/quote`,
+      { amount, message },
+    ),
+}
+
+export interface ClientInboxMessage {
+  id: string
+  reservationId: string
+  clientEmail: string
+  message: string
+  messageType: 'SYSTEM' | 'PRICE_QUOTE' | 'ADMIN'
+  quotedAmount?: number | null
+  isFromAdmin: boolean
+  createdAt: string
 }
 
 export interface DriverLocation {

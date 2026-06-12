@@ -40,6 +40,10 @@ export default function AdminReservations() {
   const [searchType, setSearchType] = useState<'code' | 'client'>('code')
   const [showEditModal, setShowEditModal] = useState(false)
   const [editForm, setEditForm] = useState<Partial<Reservation>>({})
+  const [showQuoteModal, setShowQuoteModal] = useState(false)
+  const [quoteAmount, setQuoteAmount] = useState('')
+  const [quoteMessage, setQuoteMessage] = useState('')
+  const [quoteSending, setQuoteSending] = useState(false)
   // Seulement assignation externe (partenaires) - pas de chauffeurs plateforme internes
   const [externalDriver, setExternalDriver] = useState({
     name: '',
@@ -233,6 +237,38 @@ export default function AdminReservations() {
     } catch (err) {
       console.error('Failed to update reservation', err)
       alert('Erreur lors de la modification')
+    }
+  }
+
+  const handleOpenQuoteModal = (res: Reservation) => {
+    setSelectedReservation(res)
+    setQuoteAmount('')
+    setQuoteMessage('')
+    setShowQuoteModal(true)
+  }
+
+  const handleSendPriceQuote = async () => {
+    if (!selectedReservation) return
+    const amount = parseInt(quoteAmount.replace(/\s/g, ''), 10)
+    if (!amount || amount <= 0) {
+      alert('Veuillez saisir un montant valide')
+      return
+    }
+    setQuoteSending(true)
+    try {
+      await reservationsApi.sendPriceQuote(
+        selectedReservation.id,
+        amount,
+        quoteMessage.trim() || undefined,
+      )
+      setShowQuoteModal(false)
+      setSelectedReservation(null)
+      loadData()
+      alert('Tarif envoyé au client via inbox')
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Erreur lors de l\'envoi du tarif')
+    } finally {
+      setQuoteSending(false)
     }
   }
 
@@ -531,7 +567,9 @@ export default function AdminReservations() {
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
                           <div className="text-right">
-                            <p className="text-sm font-bold text-gray-900">{formatCurrency(res.amount)}</p>
+                            <p className="text-sm font-bold text-gray-900">
+                              {res.pricePending ? 'Sur devis' : formatCurrency(res.amount)}
+                            </p>
                             <p className="text-[10px] text-gray-500">{format(new Date(res.pickupDateTime), 'dd MMM HH:mm', { locale: fr })}</p>
                           </div>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -617,6 +655,12 @@ export default function AdminReservations() {
 
                         {/* Actions */}
                         <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                          {res.pricePending && (
+                            <button
+                              onClick={() => handleOpenQuoteModal(res)}
+                              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors"
+                            >📬 Envoyer tarif (inbox)</button>
+                          )}
                           {['EN_ATTENTE', 'ASSIGNEE'].includes(res.status) && (
                             <button
                               onClick={() => { setSelectedReservation(res); setShowAssignModal(true) }}
@@ -974,6 +1018,60 @@ export default function AdminReservations() {
                   className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
                 >
                   Enregistrer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal envoi tarif inbox */}
+        {showQuoteModal && selectedReservation && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Envoyer le tarif — {selectedReservation.code}</h3>
+                <button onClick={() => setShowQuoteModal(false)} className="text-gray-400 hover:text-gray-600">
+                  <IconX />
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Le client recevra le tarif dans son inbox (page Suivi) et par email.
+              </p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Montant (FCFA)</label>
+                  <input
+                    type="number"
+                    value={quoteAmount}
+                    onChange={e => setQuoteAmount(e.target.value)}
+                    placeholder="Ex: 45000"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Message (optionnel)</label>
+                  <textarea
+                    value={quoteMessage}
+                    onChange={e => setQuoteMessage(e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    placeholder="Message personnalisé pour le client..."
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowQuoteModal(false)}
+                  className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleSendPriceQuote}
+                  disabled={quoteSending}
+                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold disabled:opacity-60"
+                >
+                  {quoteSending ? 'Envoi...' : 'Envoyer'}
                 </button>
               </div>
             </div>

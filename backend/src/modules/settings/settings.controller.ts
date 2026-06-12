@@ -14,7 +14,21 @@ export class SettingsController {
 
   // Chemins statiques avant @Get(':key') pour éviter que "contacts" soit pris pour une clé.
 
-  /** Public — contacts actifs (page Contact, paiement, etc.). */
+  /** Public — tarifs fixes aéroport par type de trajet */
+  @Get('prices')
+  async getPublicPrices() {
+    const [allerSimple, retourSimple, allerRetour] = await Promise.all([
+      this.settingsService.getPriceForTripType('ALLER_SIMPLE'),
+      this.settingsService.getPriceForTripType('RETOUR_SIMPLE'),
+      this.settingsService.getPriceForTripType('ALLER_RETOUR'),
+    ]);
+    return {
+      ALLER_SIMPLE: allerSimple,
+      RETOUR_SIMPLE: retourSimple,
+      ALLER_RETOUR: allerRetour,
+    };
+  }
+
   @Get('contacts')
   getPublicContacts() {
     return this.settingsService.getPublicContacts();
