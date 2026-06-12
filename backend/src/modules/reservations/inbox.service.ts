@@ -25,7 +25,7 @@ export class InboxService {
   }): Promise<ClientInboxMessage> {
     const msg = this.inboxRepository.create({
       reservationId: params.reservationId,
-      clientEmail: params.clientEmail.trim().toLowerCase(),
+      clientEmail: params.clientEmail?.trim().toLowerCase() || null,
       message: params.message,
       messageType: params.messageType ?? InboxMessageType.SYSTEM,
       quotedAmount: params.quotedAmount ?? null,
@@ -34,13 +34,16 @@ export class InboxService {
     return this.inboxRepository.save(msg);
   }
 
-  async getMessagesForReservation(code: string, email: string): Promise<ClientInboxMessage[]> {
+  async getMessagesForReservation(code: string, email?: string): Promise<ClientInboxMessage[]> {
     const reservation = await this.reservationsRepository.findOne({ where: { code } });
     if (!reservation) throw new NotFoundException('Reservation not found');
 
-    const normalizedEmail = email.trim().toLowerCase();
-    if (reservation.clientEmail.trim().toLowerCase() !== normalizedEmail) {
-      throw new ForbiddenException('Email does not match this reservation');
+    const reservationEmail = reservation.clientEmail?.trim().toLowerCase() || '';
+    if (reservationEmail) {
+      const normalizedEmail = email?.trim().toLowerCase() || '';
+      if (!normalizedEmail || reservationEmail !== normalizedEmail) {
+        throw new ForbiddenException('Email does not match this reservation');
+      }
     }
 
     return this.inboxRepository.find({
@@ -76,7 +79,7 @@ export class InboxService {
 
     const inboxMessage = await this.createMessage({
       reservationId,
-      clientEmail: reservation.clientEmail,
+      clientEmail: reservation.clientEmail?.trim().toLowerCase() || '',
       message: message?.trim() || defaultMessage,
       messageType: InboxMessageType.PRICE_QUOTE,
       quotedAmount: amount,

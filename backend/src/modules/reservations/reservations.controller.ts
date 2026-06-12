@@ -46,10 +46,7 @@ export class ReservationsController {
   }
 
   @Get('code/:code/inbox')
-  getInbox(@Param('code') code: string, @Query('email') email: string) {
-    if (!email?.trim()) {
-      throw new BadRequestException('Email is required');
-    }
+  getInbox(@Param('code') code: string, @Query('email') email?: string) {
     return this.inboxService.getMessagesForReservation(code, email);
   }
 

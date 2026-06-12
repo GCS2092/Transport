@@ -114,13 +114,14 @@ function SuiviContent() {
       const { data } = await reservationsApi.getByCode(c.trim())
       setReservation(data)
 
-      if (data.clientEmail) {
-        try {
-          const inboxRes = await reservationsApi.getInbox(data.code, data.clientEmail)
-          setInboxMessages(inboxRes.data)
-        } catch {
-          setInboxMessages([])
-        }
+      try {
+        const inboxRes = await reservationsApi.getInbox(
+          data.code,
+          data.clientEmail?.trim() || undefined,
+        )
+        setInboxMessages(inboxRes.data)
+      } catch {
+        setInboxMessages([])
       }
 
       // ✅ Nettoyer le code local si course terminée ou annulée
@@ -520,22 +521,24 @@ function SuiviContent() {
                     </div>
 
                     {/* ─── Bouton renvoyer le code ───────────────────────── */}
-                    <div className="text-center">
-                      {resendSent ? (
-                        <p className="text-xs text-emerald-600 font-medium">
-                          ✓ Code envoyé par email à l'adresse de réservation
-                        </p>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handleResendCancelToken}
-                          disabled={resendLoading}
-                          className="text-xs text-[var(--muted)] underline hover:text-[var(--ink)] transition-colors disabled:opacity-50"
-                        >
-                          {resendLoading ? 'Envoi…' : 'Code non reçu ? Renvoyer par email'}
-                        </button>
-                      )}
-                    </div>
+                    {reservation?.clientEmail?.trim() && (
+                      <div className="text-center">
+                        {resendSent ? (
+                          <p className="text-xs text-emerald-600 font-medium">
+                            ✓ Code envoyé par email à l'adresse de réservation
+                          </p>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleResendCancelToken}
+                            disabled={resendLoading}
+                            className="text-xs text-[var(--muted)] underline hover:text-[var(--ink)] transition-colors disabled:opacity-50"
+                          >
+                            {resendLoading ? 'Envoi…' : 'Code non reçu ? Renvoyer par email'}
+                          </button>
+                        )}
+                      </div>
+                    )}
 
                     <div className="flex gap-2">
                       <button

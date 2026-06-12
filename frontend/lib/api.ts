@@ -150,7 +150,7 @@ export interface Tariff {
 export interface CreateReservationDto {
   clientFirstName: string
   clientLastName: string
-  clientEmail: string
+  clientEmail?: string
   clientPhone: string
   tripType: 'ALLER_SIMPLE' | 'RETOUR_SIMPLE' | 'ALLER_RETOUR'
   pickupZoneId: string
@@ -169,7 +169,7 @@ export interface Reservation {
   status: 'EN_ATTENTE' | 'ASSIGNEE' | 'EN_COURS' | 'TERMINEE' | 'ANNULEE'
   clientFirstName: string
   clientLastName: string
-  clientEmail: string
+  clientEmail?: string | null
   clientPhone: string
   tripType: string
   pickupDateTime: string
@@ -415,8 +415,10 @@ export const reservationsApi = {
   updateReservation: (id: string, updates: Partial<CreateReservationDto>) =>
     api.patch<Reservation>(`/reservations/${id}`, updates),
 
-  getInbox: (code: string, email: string) =>
-    api.get<ClientInboxMessage[]>(`/reservations/code/${code}/inbox`, { params: { email } }),
+  getInbox: (code: string, email?: string) =>
+    api.get<ClientInboxMessage[]>(`/reservations/code/${code}/inbox`, {
+      params: email?.trim() ? { email } : {},
+    }),
 
   sendPriceQuote: (id: string, amount: number, message?: string) =>
     api.post<{ reservation: Reservation; inboxMessage: ClientInboxMessage }>(

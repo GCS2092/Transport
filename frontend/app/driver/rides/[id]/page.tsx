@@ -434,7 +434,7 @@ export default function RideDetail() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-bold text-gray-900">{ride.clientFirstName} {ride.clientLastName}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{ride.clientEmail}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{ride.clientEmail || '—'}</p>
           </div>
           <a href={`tel:${ride.clientPhone}`}
             className="flex items-center gap-1.5 bg-[var(--primary)] text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-[var(--primary-hover)] transition-colors"

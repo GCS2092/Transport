@@ -178,7 +178,7 @@ export default function PaymentSupervisionPage() {
     const query = searchQuery.toLowerCase()
     return (
       r.code.toLowerCase().includes(query) ||
-      r.clientEmail.toLowerCase().includes(query) ||
+      (r.clientEmail || '').toLowerCase().includes(query) ||
       `${r.clientFirstName} ${r.clientLastName}`.toLowerCase().includes(query) ||
       r.clientPhone.includes(query) ||
       r.pickupZone?.name?.toLowerCase().includes(query) ||

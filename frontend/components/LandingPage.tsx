@@ -100,7 +100,7 @@ export function LandingPage({ onEnter }: Props) {
             <path d="M5 17H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1l2-4h10l2 4h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/>
             <circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
           </svg>
-          {fr ? 'Réserver un transfert' : 'Book a transfer'}
+          {fr ? 'Réserver un trajet' : 'Book a ride'}
         </button>
 
         <p className="text-white/30 text-xs text-center mt-3">

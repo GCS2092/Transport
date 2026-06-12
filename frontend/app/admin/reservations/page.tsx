@@ -325,7 +325,7 @@ export default function AdminReservations() {
     } else {
       // Recherche par client (email ou téléphone)
       return (
-        r.clientEmail.toLowerCase().includes(query) ||
+        (r.clientEmail || '').toLowerCase().includes(query) ||
         r.clientPhone.includes(query) ||
         `${r.clientFirstName} ${r.clientLastName}`.toLowerCase().includes(query)
       )
@@ -335,7 +335,7 @@ export default function AdminReservations() {
     const query = searchQuery.toLowerCase()
     return (
       res.code.toLowerCase().includes(query) ||
-      res.clientEmail.toLowerCase().includes(query) ||
+      (res.clientEmail || '').toLowerCase().includes(query) ||
       `${res.clientFirstName} ${res.clientLastName}`.toLowerCase().includes(query) ||
       res.clientPhone.includes(query) ||
       res.pickupZone?.name.toLowerCase().includes(query) ||
@@ -596,7 +596,7 @@ export default function AdminReservations() {
                         {/* Infos client */}
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
                           <span>📞 {res.clientPhone}</span>
-                          <span className="truncate max-w-[200px]">✉ {res.clientEmail}</span>
+                          <span className="truncate max-w-[200px]">✉ {res.clientEmail || '—'}</span>
                           <span>👥 {res.passengers} passager{res.passengers > 1 ? 's' : ''}{res.vehicleCount && res.vehicleCount > 1 ? ` · ${res.vehicleCount} véhicules` : ''}</span>
                           {res.currency && <span className="text-blue-600 font-semibold">Devise: {res.currency}</span>}
                         </div>

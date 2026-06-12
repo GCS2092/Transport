@@ -80,6 +80,40 @@ export class NotificationsService {
     return email.trim().toLowerCase();
   }
 
+  private getClientEmail(reservation: Reservation): string | null {
+    const email = reservation.clientEmail?.trim();
+    return email || null;
+  }
+
+  private async sendClientEmail(
+    reservation: Reservation,
+    subject: string,
+    html: string,
+    type: NotificationType,
+    attachments: { filename: string; content: string }[] = [],
+  ): Promise<void> {
+    const email = this.getClientEmail(reservation);
+    if (!email) {
+      this.logger.log(`Skipping client email [${type}] for ${reservation.code} — no email on file`);
+      return;
+    }
+    await this.sendEmail(email, subject, html, type, reservation.id, attachments);
+  }
+
+  private async sendClientPush(
+    reservation: Reservation,
+    title: string,
+    message: string,
+    data: Record<string, string> = {},
+  ): Promise<void> {
+    await this.sendPushNotification(
+      [this.normalizeExternalId(this.getClientEmail(reservation))].filter(Boolean) as string[],
+      title,
+      message,
+      data,
+    );
+  }
+
   private async sendPushNotification(
     externalUserIds: string[],
     title: string,
@@ -335,16 +369,15 @@ export class NotificationsService {
         </a>
       </p>`;
 
-    await this.sendEmail(
-      reservation.clientEmail,
+    await this.sendClientEmail(
+      reservation,
       `${title} — #${reservation.code}`,
       this.buildEmailHtml(reservation, title, body, waLink),
       NotificationType.RESERVATION_CONFIRMED,
-      reservation.id,
     );
 
-    await this.sendPushNotification(
-      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
+    await this.sendClientPush(
+      reservation,
       this.t(lang, 'Réservation confirmée', 'Booking confirmed'),
       this.t(
         lang,
@@ -379,16 +412,15 @@ export class NotificationsService {
         </a>
       </p>`;
 
-    await this.sendEmail(
-      reservation.clientEmail,
+    await this.sendClientEmail(
+      reservation,
       `${title} — #${reservation.code}`,
       this.buildEmailHtml(reservation, title, body),
       NotificationType.PRICE_QUOTE,
-      reservation.id,
     );
 
-    await this.sendPushNotification(
-      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
+    await this.sendClientPush(
+      reservation,
       title,
       this.t(lang, `Tarif fixé : ${displayAmount}`, `Price set: ${displayAmount}`),
       { reservationCode: reservation.code },
@@ -426,12 +458,11 @@ export class NotificationsService {
         </a>
       </p>`;
 
-    await this.sendEmail(
-      reservation.clientEmail,
+    await this.sendClientEmail(
+      reservation,
       `${title} — #${reservation.code}`,
       this.buildEmailHtml(reservation, title, body),
       NotificationType.CANCEL_TOKEN_REMINDER,
-      reservation.id,
     );
   }
 
@@ -453,16 +484,15 @@ export class NotificationsService {
       </table>
       <p><strong>${this.t(lang, 'Montant confirmé :', 'Confirmed amount:')} ${this.formatClientAmount(reservation)}</strong></p>`;
 
-    await this.sendEmail(
-      reservation.clientEmail,
+    await this.sendClientEmail(
+      reservation,
       `${title} — #${reservation.code}`,
       this.buildEmailHtml(reservation, title, body, waLink),
       NotificationType.DRIVER_ASSIGNED,
-      reservation.id,
     );
 
-    await this.sendPushNotification(
-      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
+    await this.sendClientPush(
+      reservation,
       this.t(lang, 'Chauffeur assigné', 'Driver assigned'),
       this.t(
         lang,
@@ -487,16 +517,15 @@ export class NotificationsService {
         <tr><td style="padding:8px;color:#666;font-weight:bold;">${this.t(lang, 'Montant', 'Amount')}</td><td style="padding:8px;font-weight:bold;color:#1a1a2e;">${this.formatClientAmount(reservation)}</td></tr>
       </table>`;
 
-    await this.sendEmail(
-      reservation.clientEmail,
+    await this.sendClientEmail(
+      reservation,
       `${title} — #${reservation.code}`,
       this.buildEmailHtml(reservation, title, body, waLink),
       NotificationType.REMINDER_J1,
-      reservation.id,
     );
 
-    await this.sendPushNotification(
-      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
+    await this.sendClientPush(
+      reservation,
       title,
       this.t(
         lang,
@@ -523,16 +552,15 @@ export class NotificationsService {
         <tr><td style="padding:8px;color:#666;">${this.t(lang, 'Heure', 'Time')}</td><td style="padding:8px;">${new Date(reservation.pickupDateTime).toLocaleString(lang === Language.EN ? 'en-GB' : 'fr-FR')}</td></tr>
       </table>`;
 
-    await this.sendEmail(
-      reservation.clientEmail,
+    await this.sendClientEmail(
+      reservation,
       `${title} — #${reservation.code}`,
       this.buildEmailHtml(reservation, title, body),
       NotificationType.REMINDER_H1,
-      reservation.id,
     );
 
-    await this.sendPushNotification(
-      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
+    await this.sendClientPush(
+      reservation,
       title,
       this.t(
         lang,
@@ -552,16 +580,15 @@ export class NotificationsService {
       <p>${this.t(lang, `Votre réservation <strong>${reservation.code}</strong> a été annulée.`, `Your booking <strong>${reservation.code}</strong> has been cancelled.`)}</p>
       <p>${this.t(lang, "Si vous pensez qu'il s'agit d'une erreur, contactez-nous.", 'If you believe this is an error, please contact us.')}</p>`;
 
-    await this.sendEmail(
-      reservation.clientEmail,
+    await this.sendClientEmail(
+      reservation,
       `${title} — #${reservation.code}`,
       this.buildEmailHtml(reservation, title, body),
       NotificationType.RESERVATION_CANCELLED,
-      reservation.id,
     );
 
-    await this.sendPushNotification(
-      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
+    await this.sendClientPush(
+      reservation,
       title,
       this.t(
         lang,
@@ -732,16 +759,15 @@ export class NotificationsService {
       </table>
       <p style="font-size:13px;color:#888;">${this.t(lang, 'Bon voyage !', 'Have a safe trip!')}</p>`;
 
-    await this.sendEmail(
-      reservation.clientEmail,
+    await this.sendClientEmail(
+      reservation,
       `${title} — #${reservation.code}`,
       this.buildEmailHtml(reservation, title, body),
       NotificationType.RIDE_STARTED,
-      reservation.id,
     );
 
-    await this.sendPushNotification(
-      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
+    await this.sendClientPush(
+      reservation,
       title,
       this.t(
         lang,
@@ -772,17 +798,16 @@ export class NotificationsService {
       content: pdfBuffer.toString('base64'),
     }] : [];
 
-    await this.sendEmail(
-      reservation.clientEmail,
+    await this.sendClientEmail(
+      reservation,
       `${title} — #${reservation.code}`,
       this.buildEmailHtml(reservation, title, body),
       NotificationType.RIDE_COMPLETED,
-      reservation.id,
       attachments,
     );
 
-    await this.sendPushNotification(
-      [this.normalizeExternalId(reservation.clientEmail)].filter(Boolean),
+    await this.sendClientPush(
+      reservation,
       this.t(lang, 'Reçu disponible', 'Receipt available'),
       this.t(
         lang,
@@ -844,7 +869,7 @@ export class NotificationsService {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Code</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${reservation.code}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Client</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientFirstName} ${reservation.clientLastName}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Téléphone</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientPhone}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Email</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientEmail}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Email</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.clientEmail || 'Non renseigné'}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Trajet</td><td style="padding:8px;border-bottom:1px solid #eee;">${pickup} → ${dropoff}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Date & Heure</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">${new Date(reservation.pickupDateTime).toLocaleString('fr-FR')}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Type</td><td style="padding:8px;border-bottom:1px solid #eee;">${reservation.tripType}</td></tr>

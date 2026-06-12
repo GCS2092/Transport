@@ -26,8 +26,8 @@ export class ClientInboxMessage {
   @JoinColumn({ name: 'reservationId' })
   reservation: Reservation;
 
-  @Column()
-  clientEmail: string;
+  @Column({ nullable: true })
+  clientEmail: string | null;
 
   @Column({ type: 'text' })
   message: string;

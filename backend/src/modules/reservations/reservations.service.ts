@@ -161,7 +161,12 @@ export class ReservationsService {
     let finalPrice = 0;
     let pricePending = false;
 
+    const normalizedEmail = dto.clientEmail?.trim().toLowerCase() || null;
+
     if (involvesAirport) {
+      if (!normalizedEmail) {
+        throw new BadRequestException('L\'adresse email est requise pour les transferts aéroport');
+      }
       const basePrice = await this.getFixedBasePriceForTripType(dto.tripType);
       finalPrice = basePrice * vehicleCount;
       this.logger.log(
@@ -174,7 +179,7 @@ export class ReservationsService {
       );
     }
 
-    await this.checkDailyLimit(dto.clientEmail);
+    await this.checkDailyLimit(normalizedEmail, dto.clientPhone);
 
     let code: string;
     let codeExists = true;
@@ -210,6 +215,7 @@ export class ReservationsService {
 
     const reservation = this.reservationsRepository.create({
       ...dto,
+      clientEmail: normalizedEmail,
       code,
       amount: finalAmount,
       pricePending,
@@ -233,7 +239,7 @@ export class ReservationsService {
       const isFr = (dto.language || Language.FR) === Language.FR;
       await this.inboxService.createMessage({
         reservationId: saved.id,
-        clientEmail: dto.clientEmail,
+        clientEmail: normalizedEmail || '',
         message: isFr
           ? 'Votre réservation interurbaine a bien été enregistrée. Le tarif de votre course vous sera communiqué prochainement dans cette inbox. Merci de votre patience.'
           : 'Your interurban booking has been recorded. The price for your trip will be communicated shortly in this inbox. Thank you for your patience.',
@@ -269,22 +275,32 @@ export class ReservationsService {
     return savedWithRelations;
   }
 
-  private async checkDailyLimit(email: string): Promise<void> {
+  private async checkDailyLimit(email: string | null, phone: string): Promise<void> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const count = await this.reservationsRepository
+    const qb = this.reservationsRepository
       .createQueryBuilder('r')
-      .where('r.clientEmail = :email', { email })
-      .andWhere('r.createdAt >= :today', { today })
+      .where('r.createdAt >= :today', { today })
       .andWhere('r.createdAt < :tomorrow', { tomorrow })
-      .andWhere('r.status != :cancelled', { cancelled: ReservationStatus.ANNULEE })
-      .getCount();
+      .andWhere('r.status != :cancelled', { cancelled: ReservationStatus.ANNULEE });
+
+    if (email) {
+      qb.andWhere('LOWER(r.clientEmail) = :email', { email });
+    } else {
+      qb.andWhere('r.clientPhone = :phone', { phone });
+    }
+
+    const count = await qb.getCount();
 
     if (count >= 3) {
-      throw new BadRequestException('Maximum 3 reservations per email per day');
+      throw new BadRequestException(
+        email
+          ? 'Maximum 3 reservations per email per day'
+          : 'Maximum 3 reservations per phone number per day',
+      );
     }
   }
 
@@ -620,6 +636,12 @@ export class ReservationsService {
   // ─── Renvoi du code d'annulation par email ────────────────────────────────
   async resendCancelToken(code: string): Promise<{ message: string }> {
     const reservation = await this.findByCode(code);
+
+    if (!reservation.clientEmail?.trim()) {
+      throw new BadRequestException(
+        'Aucune adresse email associée à cette réservation. Consultez la page Suivi pour gérer votre course.',
+      );
+    }
 
     if (reservation.status === ReservationStatus.ANNULEE) {
       throw new BadRequestException('Cette réservation est déjà annulée');

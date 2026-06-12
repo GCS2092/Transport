@@ -22,8 +22,9 @@ export class CreateReservationDto {
   @IsString()
   clientLastName: string;
 
+  @IsOptional()
   @IsEmail()
-  clientEmail: string;
+  clientEmail?: string;
 
   @Matches(/^\+[1-9]\d{6,14}$/, { message: 'Invalid international phone format' })
   clientPhone: string;

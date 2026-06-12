@@ -28,8 +28,8 @@ export class Reservation {
   @Column()
   clientLastName: string;
 
-  @Column()
-  clientEmail: string;
+  @Column({ nullable: true })
+  clientEmail: string | null;
 
   @Column()
   clientPhone: string;

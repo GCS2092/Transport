@@ -93,6 +93,7 @@ export function ReservationForm() {
   const [tripType, setTripType] = useState<'ALLER_SIMPLE' | 'RETOUR_SIMPLE' | 'ALLER_RETOUR'>('ALLER_SIMPLE')
   const [success, setSuccess] = useState(false)
   const [reservationCode, setReservationCode] = useState('')
+  const [cancelToken, setCancelToken] = useState('')
   const [error, setError] = useState('')
   const [promoCode, setPromoCode] = useState('')
   const [promoDiscount, setPromoDiscount] = useState(0)
@@ -518,10 +519,27 @@ export function ReservationForm() {
     return ''
   }
 
+  const isInterurbanTrip = () => {
+    if (!hasPickupLocation() || !hasDropoffLocation()) return false
+    return !isAirportTrip({
+      zones,
+      pickupZoneId: formData.pickupZoneId,
+      dropoffZoneId: formData.dropoffZoneId,
+      pickupCustomAddress: pickupType !== 'zone' ? customPickupAddress : undefined,
+      dropoffCustomAddress: dropoffType !== 'zone' ? customDropoffAddress : undefined,
+    })
+  }
+
   const validateStep2 = () => {
     if (!formData.clientFirstName.trim()) return f.firstNameRequired
     if (!formData.clientLastName.trim()) return f.lastNameRequired
-    if (!formData.clientEmail.trim() || !formData.clientEmail.includes('@')) return f.emailInvalid
+
+    const email = formData.clientEmail.trim()
+    if (!isInterurbanTrip()) {
+      if (!email || !email.includes('@')) return f.emailInvalid
+    } else if (email && !email.includes('@')) {
+      return f.emailInvalid
+    }
     
     // Validation téléphone avec indicatif pays - format spécifique par pays
     const phoneDigitsOnly = formData.clientPhone.replace(/\s/g, '').replace(/[^0-9]/g, '')
@@ -608,6 +626,20 @@ export function ReservationForm() {
         payload.clientLongitude = clientGps.lng
       }
 
+      if (!formData.clientEmail.trim()) {
+        delete payload.clientEmail
+      }
+
+      if (isInterurbanTrip()) {
+        delete payload.flightNumber
+        delete payload.airlineCompany
+        delete payload.departureTime
+        delete payload.landingTime
+        delete payload.flightDetails
+        delete payload.notes
+        delete payload.promoCode
+      }
+
       // Supprimer tous les champs vides ou invalides pour éviter les erreurs de validation
       if (!payload.pickupZoneId) delete payload.pickupZoneId
       if (!payload.dropoffZoneId) delete payload.dropoffZoneId
@@ -658,6 +690,7 @@ export function ReservationForm() {
       
       setSuccess(true)
       setReservationCode(data.code)
+      setCancelToken(data.cancelToken || '')
       setPricePendingBooking(!!data.pricePending)
       try {
         localStorage.setItem('vtc_last_code', data.code)
@@ -668,8 +701,11 @@ export function ReservationForm() {
       let errorMsg = Array.isArray(msg) ? msg[0] : typeof msg === 'string' ? msg : (f.genericError || 'Une erreur est survenue')
       
       // Message spécifique pour la limite de réservations
-      if (typeof errorMsg === 'string' && errorMsg.includes('Maximum 3 reservations')) {
+      if (typeof errorMsg === 'string' && errorMsg.includes('Maximum 3 reservations per email')) {
         errorMsg = '⚠️ Limite atteinte : Maximum 3 réservations par jour et par email. Veuillez réessayer demain ou utiliser une autre adresse email.'
+      }
+      if (typeof errorMsg === 'string' && errorMsg.includes('Maximum 3 reservations per phone')) {
+        errorMsg = '⚠️ Limite atteinte : Maximum 3 réservations par jour et par numéro de téléphone. Veuillez réessayer demain.'
       }
       
       setError(errorMsg)
@@ -684,6 +720,7 @@ export function ReservationForm() {
     setError('')
     setEstimatedPrice(null)
     setPricePendingBooking(false)
+    setCancelToken('')
     setPickupType('zone')
     setDropoffType('zone')
     setCustomPickupAddress('')
@@ -700,13 +737,7 @@ export function ReservationForm() {
   ══════════════════════════════════════════════════════════════ */
   const pickupName  = getPickupLabel()
   const dropoffName = getDropoffLabel()
-  const isQuotePendingPreview = hasPickupLocation() && hasDropoffLocation() && !isAirportTrip({
-    zones,
-    pickupZoneId: formData.pickupZoneId,
-    dropoffZoneId: formData.dropoffZoneId,
-    pickupCustomAddress: pickupType !== 'zone' ? customPickupAddress : undefined,
-    dropoffCustomAddress: dropoffType !== 'zone' ? customDropoffAddress : undefined,
-  })
+  const isQuotePendingPreview = isInterurbanTrip()
 
   if (success) {
     return (
@@ -745,15 +776,35 @@ export function ReservationForm() {
                 </p>
               </div>
             )}
-            <p className="text-xs text-gray-500 mb-2">
-              {f.successSubtitle} {formData.clientEmail}
-            </p>
+            {formData.clientEmail.trim() ? (
+              <p className="text-xs text-gray-500 mb-2">
+                {f.successSubtitle} {formData.clientEmail}
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500 mb-2">
+                {f.successNoEmail}
+              </p>
+            )}
+
+            {cancelToken && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-center">
+                <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1">
+                  {f.cancelTokenTitle}
+                </p>
+                <p className="text-2xl font-mono font-bold text-gray-900 tracking-[0.3em] mb-1">
+                  {cancelToken}
+                </p>
+                <p className="text-xs text-amber-700">{f.cancelTokenHint}</p>
+              </div>
+            )}
 
             {/* Message de validation */}
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-6">
               <p className="text-sm text-amber-800">
                 <span className="font-semibold">⏳ En cours de validation</span><br/>
-                Vous recevrez un email de confirmation avec les détails du chauffeur sous peu.
+                {formData.clientEmail.trim()
+                  ? 'Vous recevrez un email de confirmation avec les détails du chauffeur sous peu.'
+                  : 'Consultez la page Suivi pour suivre votre réservation et recevoir le tarif dans votre inbox.'}
               </p>
             </div>
 
@@ -1033,7 +1084,14 @@ export function ReservationForm() {
             )}
 
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{f.yourDetails}</p>
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  {isQuotePendingPreview ? f.interurbanDetails : f.yourDetails}
+                </p>
+                {isQuotePendingPreview && (
+                  <p className="text-xs text-gray-500 mt-1">{f.interurbanDetailsHint}</p>
+                )}
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <Field label={f.firstName}>
@@ -1043,10 +1101,6 @@ export function ReservationForm() {
                   <input type="text" value={formData.clientLastName} onChange={e => set('clientLastName', e.target.value)} className={inputCls} placeholder="Diallo" />
                 </Field>
               </div>
-
-              <Field label={f.emailField}>
-                <input type="email" value={formData.clientEmail} onChange={e => set('clientEmail', e.target.value)} className={inputCls} placeholder="moussa@gmail.com" />
-              </Field>
 
               <Field label={f.phoneField} hint={currentCountry.hint}>
                 <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
@@ -1190,51 +1244,8 @@ export function ReservationForm() {
                 </div>
               </Field>
 
-              <Field label={f.flightNumber}>
-                <input type="text" value={formData.flightNumber} onChange={e => set('flightNumber', e.target.value)} className={inputCls} placeholder="AF718" />
-              </Field>
-
-              <Field label="Compagnie aérienne">
-                <input type="text" value={formData.airlineCompany} onChange={e => set('airlineCompany', e.target.value)} className={inputCls} placeholder="Air France, Royal Air Maroc..." />
-              </Field>
-
-              <div className={`grid gap-3 ${tripType === 'ALLER_RETOUR' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                {(tripType === 'ALLER_SIMPLE' || tripType === 'ALLER_RETOUR') && (
-                  <Field label={lang === 'en' ? 'Departure time (flight)' : 'Heure de décollage'}>
-                    <input type="time" value={formData.departureTime} onChange={e => set('departureTime', e.target.value)} className={inputCls} />
-                  </Field>
-                )}
-                {(tripType === 'RETOUR_SIMPLE' || tripType === 'ALLER_RETOUR') && (
-                  <Field label={lang === 'en' ? 'Landing time' : "Heure d'atterrissage"}>
-                    <input type="time" value={formData.landingTime} onChange={e => set('landingTime', e.target.value)} className={inputCls} />
-                  </Field>
-                )}
-              </div>
-
-              <Field label="Détails du vol (terminal, porte, etc.)">
-                <textarea value={formData.flightDetails} onChange={e => set('flightDetails', e.target.value)} className={inputCls + ' resize-none'} placeholder="Terminal 2E, Porte L52, bagages en salle 4..." rows={2} />
-              </Field>
-
-              <Field label="Code promo (optionnel)">
-                {!isQuotePendingPreview ? (
-                <div className="space-y-2">
-                  <input 
-                    type="text" 
-                    value={promoCode} 
-                    onChange={e => {
-                      setPromoCode(e.target.value.toUpperCase())
-                      setPromoError('')
-                    }} 
-                    className={inputCls} 
-                    placeholder="PROMO2024" 
-                  />
-                  {promoError && (
-                    <p className="text-xs text-red-600">{promoError}</p>
-                  )}
-                </div>
-                ) : (
-                  <p className="text-xs text-gray-500">Non applicable aux courses interurbaines (tarif sur devis).</p>
-                )}
+              <Field label={isQuotePendingPreview ? f.emailOptional : f.emailField}>
+                <input type="email" value={formData.clientEmail} onChange={e => set('clientEmail', e.target.value)} className={inputCls} placeholder="moussa@gmail.com" />
               </Field>
 
               {/* GPS client optionnel */}
@@ -1265,9 +1276,56 @@ export function ReservationForm() {
                 )}
               </div>
 
-              <Field label={f.notes}>
-                <textarea value={formData.notes} onChange={e => set('notes', e.target.value)} className={inputCls + ' resize-none'} placeholder={f.notesPlaceholder} rows={2} />
-              </Field>
+              {!isQuotePendingPreview && (
+                <>
+                  <Field label={f.flightNumber}>
+                    <input type="text" value={formData.flightNumber} onChange={e => set('flightNumber', e.target.value)} className={inputCls} placeholder="AF718" />
+                  </Field>
+
+                  <Field label="Compagnie aérienne">
+                    <input type="text" value={formData.airlineCompany} onChange={e => set('airlineCompany', e.target.value)} className={inputCls} placeholder="Air France, Royal Air Maroc..." />
+                  </Field>
+
+                  <div className={`grid gap-3 ${tripType === 'ALLER_RETOUR' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                    {(tripType === 'ALLER_SIMPLE' || tripType === 'ALLER_RETOUR') && (
+                      <Field label={lang === 'en' ? 'Departure time (flight)' : 'Heure de décollage'}>
+                        <input type="time" value={formData.departureTime} onChange={e => set('departureTime', e.target.value)} className={inputCls} />
+                      </Field>
+                    )}
+                    {(tripType === 'RETOUR_SIMPLE' || tripType === 'ALLER_RETOUR') && (
+                      <Field label={lang === 'en' ? 'Landing time' : "Heure d'atterrissage"}>
+                        <input type="time" value={formData.landingTime} onChange={e => set('landingTime', e.target.value)} className={inputCls} />
+                      </Field>
+                    )}
+                  </div>
+
+                  <Field label="Détails du vol (terminal, porte, etc.)">
+                    <textarea value={formData.flightDetails} onChange={e => set('flightDetails', e.target.value)} className={inputCls + ' resize-none'} placeholder="Terminal 2E, Porte L52, bagages en salle 4..." rows={2} />
+                  </Field>
+
+                  <Field label="Code promo (optionnel)">
+                    <div className="space-y-2">
+                      <input 
+                        type="text" 
+                        value={promoCode} 
+                        onChange={e => {
+                          setPromoCode(e.target.value.toUpperCase())
+                          setPromoError('')
+                        }} 
+                        className={inputCls} 
+                        placeholder="PROMO2024" 
+                      />
+                      {promoError && (
+                        <p className="text-xs text-red-600">{promoError}</p>
+                      )}
+                    </div>
+                  </Field>
+
+                  <Field label={f.notes}>
+                    <textarea value={formData.notes} onChange={e => set('notes', e.target.value)} className={inputCls + ' resize-none'} placeholder={f.notesPlaceholder} rows={2} />
+                  </Field>
+                </>
+              )}
             </div>
           </div>
         )}

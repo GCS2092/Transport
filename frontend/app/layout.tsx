@@ -121,7 +121,7 @@ const jsonLd = {
       potentialAction: {
         '@type': 'ReserveAction',
         target: 'https://wenddtransport.com',
-        name: 'Réserver un transfert',
+        name: 'Réserver un trajet',
       },
     },
   ],
